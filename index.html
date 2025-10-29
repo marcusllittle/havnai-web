@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HavnAI — Own Your Intelligence</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600&display=swap');
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at center, #000 60%, #00141A 100%);
+      color: #fff;
+      font-family: 'Exo 2', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .hero {
+      text-align: center;
+      margin-top: 8vh;
+    }
+
+    .logo-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    .logo-container::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 260px;
+      height: 260px;
+      background: radial-gradient(circle, rgba(0,217,255,0.25) 0%, rgba(0,0,0,0) 70%);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      animation: pulse 4s infinite ease-in-out;
+      z-index: 0;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+      50% { opacity: 0.9; transform: translate(-50%, -50%) scale(1.2); }
+    }
+
+    .logo-container img {
+      position: relative;
+      z-index: 1;
+      width: 240px;
+      height: auto;
+      display: block;
+    }
+
+    h1 {
+      font-size: 3.5rem;
+      color: #00D9FF;
+      margin: 1.2rem 0 0.5rem 0;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      color: #ffffff;
+      margin-bottom: 1.5rem;
+      letter-spacing: 0.5px;
+    }
+
+    p {
+      max-width: 720px;
+      text-align: center;
+      line-height: 1.7;
+      color: #cfcfcf;
+      margin: 0 auto 1.5rem auto;
+      font-size: 1rem;
+    }
+
+    section {
+      width: 90%;
+      max-width: 900px;
+      margin: 5rem auto;
+      text-align: center;
+    }
+
+    h3 {
+      color: #00D9FF;
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem 0;
+      font-size: 0.9rem;
+      color: #666;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      width: 100%;
+    }
+
+    @media (max-width: 768px) {
+      h1 { font-size: 2.5rem; }
+      h2 { font-size: 1.2rem; }
+      section { margin: 3rem auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <div class="logo-container">
+      <img src="HavnAI-logo.png" alt="HavnAI Logo" />
+    </div>
+    <h1>HavnAI</h1>
+    <h2>Own Your Intelligence.</h2>
+    <p><strong>Build once. Earn forever.</strong></p>
+    <p>AI is creating wealth — it's time creators share in it. HavnAI is building the royalty layer for the intelligent economy, where every workflow and model becomes a revenue-earning digital asset.</p>
+  </div>
+
+  <section>
+    <h3>The Problem</h3>
+    <p>AI platforms profit endlessly from creators’ work, but builders rarely share in the value. HavnAI changes that by turning every AI workflow into a verifiable, rewardable contribution. Ownership and income return to the hands of the people who make intelligence possible.</p>
+  </section>
+
+  <section>
+    <h3>The $HAI Token</h3>
+    <p>$HAI powers the HavnAI ecosystem — rewarding creators, node operators, and validators while giving users access to verified AI intelligence. It transforms creativity into a living, tradable asset.</p>
+  </section>
+
+  <section>
+    <h3>For Creators, Builders & Operators</h3>
+    <p>Everyone contributes. Everyone earns. Whether you design, deploy, or run AI workflows, HavnAI ensures your work is recognized and rewarded — forever.</p>
+  </section>
+
+  <footer>
+    © 2025 HavnAI · joinhavn.io · Powered by $HAI
+  </footer>
+</body>
+</html>
