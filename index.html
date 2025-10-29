@@ -251,7 +251,7 @@
     © 2025 HavnAI · joinhavn.io · @joinHAVNAI · team@joinhavn.io · Powered by $HAI
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js" integrity="sha384-ZDCdZk90un0nLBKBPXn1HULICwhf66A1VpzwuWdlxeqmoeZaZX6mE6oPD58Ll35H" crossorigin="anonymous"></script>
+  <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js"></script>
   <script>
     (function () {
       const tokenAddress = "0x8aaa7f1075de91b2103542379BFD3B889c89105f";
@@ -292,6 +292,10 @@
       }
 
       async function connectWallet() {
+        if (typeof window.ethers === "undefined") {
+          setStatus("Unable to load ethers.js. Check your connection and refresh.");
+          return;
+        }
         if (!window.ethereum) {
           setStatus("MetaMask is required to connect. Install it to continue.");
           return;
