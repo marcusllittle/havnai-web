@@ -120,71 +120,10 @@
       margin-top: 4rem;
     }
 
-    .wallet-section {
-      background: rgba(0, 17, 26, 0.7);
-      border: 1px solid rgba(0, 217, 255, 0.2);
-      border-radius: 18px;
-      padding: 2.5rem 2rem;
-      box-shadow: 0 16px 40px rgba(0, 217, 255, 0.05);
-      margin-top: 3rem;
-    }
-
-    .wallet-header {
-      font-size: 2rem;
-      color: #00d9ff;
-      margin-bottom: 0.75rem;
-    }
-
-    .wallet-info {
-      display: flex;
-      flex-direction: column;
-      gap: 0.9rem;
-      align-items: center;
-    }
-
-    .wallet-info p {
-      margin: 0;
-      font-size: 0.95rem;
-      color: #d6f2ff;
-      word-break: break-all;
-    }
-
-    .wallet-info strong {
-      color: #00d9ff;
-      font-weight: 600;
-    }
-
-    .wallet-button {
-      margin-top: 1.5rem;
-      padding: 0.9rem 1.8rem;
-      border-radius: 999px;
-      border: none;
-      background: linear-gradient(135deg, #00d9ff, #007a9e);
-      color: #00141a;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .wallet-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 30px rgba(0, 217, 255, 0.25);
-    }
-
-    .status-message {
-      margin-top: 1rem;
-      font-size: 0.85rem;
-      color: #ff9b6a;
-      min-height: 1.2rem;
-    }
-
     @media (max-width: 768px) {
       h1 { font-size: 2.5rem; }
       h2 { font-size: 1.2rem; }
       section { margin: 3rem auto; }
-      .wallet-section { padding: 2rem 1.25rem; }
-      .wallet-header { font-size: 1.6rem; }
     }
   </style>
 </head>
@@ -207,17 +146,6 @@
         Read the HavnAI Whitepaper →
       </a>
     </p>
-
-    <div class="wallet-section">
-      <div class="wallet-header">$HAI is Live on Sepolia 🚀</div>
-      <div class="wallet-info">
-        <p><strong>Wallet:</strong> <span id="walletAddress">Not connected</span></p>
-        <p><strong>Network:</strong> <span id="networkName">—</span></p>
-        <p><strong>HAI Balance:</strong> <span id="haiBalance">0</span></p>
-      </div>
-      <button class="wallet-button" id="connectButton">Connect MetaMask</button>
-      <div class="status-message" id="statusMessage"></div>
-    </div>
   </div>
 
   <section>
@@ -250,113 +178,5 @@
   <footer>
     © 2025 HavnAI · joinhavn.io · @joinHAVNAI · team@joinhavn.io · Powered by $HAI
   </footer>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
-  <script>
-    (function () {
-      const tokenAddress = "0x8aaa7f1075de91b2103542379BFD3B889c89105f";
-      const tokenAbi = [
-        "function balanceOf(address owner) view returns (uint256)",
-        "function decimals() view returns (uint8)",
-        "function symbol() view returns (string)"
-      ];
-      const connectButton = document.getElementById("connectButton");
-      const walletAddressEl = document.getElementById("walletAddress");
-      const networkNameEl = document.getElementById("networkName");
-      const haiBalanceEl = document.getElementById("haiBalance");
-      const statusMessageEl = document.getElementById("statusMessage");
-
-      let provider;
-      let tokenContract;
-      let decimals = 18;
-      let symbol = "HAI";
-
-      async function initializeContract(currentProvider) {
-        tokenContract = new ethers.Contract(tokenAddress, tokenAbi, currentProvider);
-        try {
-          decimals = await tokenContract.decimals();
-        } catch (error) {
-          console.warn("Unable to fetch decimals, defaulting to 18", error);
-          decimals = 18;
-        }
-        try {
-          symbol = await tokenContract.symbol();
-        } catch (error) {
-          symbol = "HAI";
-        }
-      }
-
-      function setStatus(message, tone = "warning") {
-        statusMessageEl.textContent = message || "";
-        statusMessageEl.style.color = tone === "success" ? "#79ffb5" : "#ff9b6a";
-      }
-
-      async function connectWallet() {
-        if (typeof window.ethers === "undefined") {
-          setStatus("Unable to load ethers.js. Check your connection and refresh.");
-          return;
-        }
-        if (!window.ethereum) {
-          setStatus("MetaMask is required to connect. Install it to continue.");
-          return;
-        }
-
-        try {
-          provider = new ethers.providers.Web3Provider(window.ethereum, "any");
-          await provider.send("eth_requestAccounts", []);
-          const signer = provider.getSigner();
-          const address = await signer.getAddress();
-          const network = await provider.getNetwork();
-
-          await initializeContract(provider);
-          walletAddressEl.textContent = address;
-          networkNameEl.textContent = network?.name ? `${network.name} (chain ${network.chainId})` : `chain ${network.chainId}`;
-
-          const chainIdNumber = typeof network.chainId === "bigint" ? Number(network.chainId) : network.chainId;
-          if (chainIdNumber !== 11155111) {
-            setStatus("Please switch MetaMask to the Sepolia network to view $HAI balance.");
-          } else {
-            setStatus("Connected to Sepolia. Fetching balance...", "success");
-            await updateBalance(address);
-            setStatus("Connected successfully.", "success");
-          }
-        } catch (error) {
-          console.error("Connection failed", error);
-          setStatus(error?.message || "Failed to connect wallet.");
-        }
-      }
-
-      async function updateBalance(address) {
-        if (!tokenContract) return;
-        try {
-          const rawBalance = await tokenContract.balanceOf(address);
-          const formatted = ethers.utils.formatUnits(rawBalance, decimals);
-          haiBalanceEl.textContent = `${formatted} ${symbol}`;
-        } catch (error) {
-          console.error("Unable to fetch balance", error);
-          setStatus("Unable to read $HAI balance.", "warning");
-        }
-      }
-
-      if (window.ethereum) {
-        window.ethereum.on("accountsChanged", (accounts) => {
-          if (!accounts.length) {
-            walletAddressEl.textContent = "Not connected";
-            haiBalanceEl.textContent = "0";
-            setStatus("Wallet disconnected.");
-            return;
-          }
-          walletAddressEl.textContent = accounts[0];
-          updateBalance(accounts[0]);
-        });
-
-        window.ethereum.on("chainChanged", () => {
-          window.location.reload();
-        });
-      }
-
-      connectButton.addEventListener("click", connectWallet);
-    })();
-  </script>
 </body>
 </html>
