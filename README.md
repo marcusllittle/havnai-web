@@ -60,3 +60,26 @@ Email → team@joinhavn.io
 > _HavnAI is built for economic freedom — a future where intelligence pays its creators._
 
 ---
+
+## 🚦 Private Alpha Status
+
+| Capability | State |
+|------------|-------|
+| 🧠 Core Coordinator | ✅ Operational |
+| 🖥️ Creator Node Installer | ✅ Working (Private Alpha) |
+| 🧩 Model Registry | ✅ Hosting verified models |
+| 💰 Reward Engine | ⚙️ Testing |
+| 🪄 Dashboard UI | 🧱 In Development |
+| 🌍 Public Node Join | 🚧 Coming Soon |
+
+## 🔭 Current Focus
+
+Validating the complete Creator Node image-generation pipeline across multiple GPUs. We are focused on reliability, model verification, and reward balancing before opening public onboarding.
+
+## 🛠️ For Developers
+
+- [havnai-core](https://github.com/marcusllittle/havnai-core)
+- [havnai-node](https://github.com/marcusllittle/havnai-node)
+- [havnai-web](https://github.com/marcusllittle/havnai-web)
+
+> Network status: **Private Alpha** — GPU grid operational internally.

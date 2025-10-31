@@ -6,11 +6,21 @@
   <title>HavnAI — Own Your Intelligence</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap');
+
+    :root {
+      --cyan: #00d9ff;
+      --dark-bg: radial-gradient(circle at center, #000 60%, #00141A 100%);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       margin: 0;
       padding: 0;
-      background: radial-gradient(circle at center, #000 60%, #00141A 100%);
+      background: var(--dark-bg);
       color: #fff;
       font-family: 'Exo 2', sans-serif;
       display: flex;
@@ -22,11 +32,12 @@
     }
 
     a {
-      color: #00D9FF;
+      color: var(--cyan);
       text-decoration: none;
     }
 
-    a:hover {
+    a:hover,
+    a:focus {
       text-decoration: underline;
     }
 
@@ -35,6 +46,9 @@
       margin-top: 8vh;
       padding: 0 1.5rem;
       max-width: 900px;
+      animation: fadeInUp 0.8s ease forwards;
+      opacity: 0;
+      animation-delay: 0.05s;
     }
 
     .logo-container {
@@ -71,15 +85,22 @@
 
     h1 {
       font-size: 3.5rem;
-      color: #00D9FF;
-      margin: 1.2rem 0 0.5rem 0;
+      color: var(--cyan);
+      margin: 1.4rem 0 0.75rem 0;
+      line-height: 1.2;
     }
 
     h2 {
-      font-size: 1.5rem;
-      color: #ffffff;
-      margin-bottom: 1rem;
+      font-size: 1.9rem;
+      color: var(--cyan);
+      margin: 0 0 1.5rem 0;
       letter-spacing: 0.5px;
+    }
+
+    h3 {
+      color: var(--cyan);
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
     }
 
     p {
@@ -87,43 +108,151 @@
       color: #cfcfcf;
       margin: 0 auto 1.5rem auto;
       font-size: 1rem;
+      max-width: 720px;
     }
 
     .whitepaper-link {
       font-size: 0.95rem;
-      color: #00D9FF;
+      color: var(--cyan);
       margin-top: 1rem;
       font-weight: 600;
+    }
+
+    .subhead {
+      font-size: 1.15rem;
+      margin: 0 0 1.35rem 0;
+      color: #e2f9ff;
+    }
+
+    .alpha-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(0, 217, 255, 0.6);
+      color: var(--cyan);
+      padding: 0.25rem 0.9rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      background: rgba(0, 217, 255, 0.08);
     }
 
     section {
       width: 90%;
       max-width: 900px;
-      margin: 5rem auto;
+      margin: 4.5rem auto;
       text-align: center;
       padding: 0 1.5rem;
+      opacity: 0;
+      transform: translateY(18px);
+      animation: fadeInUp 0.8s ease forwards;
     }
 
-    h3 {
-      color: #00D9FF;
-      font-size: 1.8rem;
-      margin-bottom: 1rem;
+    #status {
+      margin-top: 4rem;
+    }
+
+    .status-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 2rem;
+      border: 1px solid rgba(0, 217, 255, 0.35);
+      background: rgba(3, 28, 38, 0.6);
+      font-family: 'Roboto Mono', 'Courier New', monospace;
+    }
+
+    .status-table td {
+      padding: 0.9rem 1.1rem;
+      border-bottom: 1px solid rgba(0, 217, 255, 0.2);
+      color: #e6f6ff;
+      text-align: left;
+      font-size: 0.95rem;
+    }
+
+    .status-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .status-table td:first-child {
+      color: var(--cyan);
+      width: 60%;
+      font-weight: 600;
+    }
+
+    .status-table td:last-child {
+      text-align: right;
+    }
+
+    #developers ul {
+      list-style: none;
+      padding: 0;
+      margin: 1.5rem 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    #developers li a {
+      color: var(--cyan);
+      font-weight: 600;
+      border-bottom: 1px solid transparent;
+      padding-bottom: 0.1rem;
+    }
+
+    #developers li a:hover,
+    #developers li a:focus {
+      border-bottom: 1px solid rgba(0, 217, 255, 0.6);
+    }
+
+    .note {
+      color: #c1dfef;
+      font-size: 0.92rem;
+      margin-top: 0.75rem;
     }
 
     footer {
       text-align: center;
-      padding: 2rem 0;
+      padding: 2.5rem 1rem;
       font-size: 0.9rem;
-      color: #666;
-      border-top: 1px solid rgba(255,255,255,0.1);
+      color: #9ab3c2;
+      border-top: 1px solid rgba(255,255,255,0.08);
       width: 100%;
       margin-top: 4rem;
+      opacity: 0;
+      transform: translateY(18px);
+      animation: fadeInUp 0.8s ease forwards;
+      animation-delay: 0.75s;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(18px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     @media (max-width: 768px) {
-      h1 { font-size: 2.5rem; }
-      h2 { font-size: 1.2rem; }
-      section { margin: 3rem auto; }
+      h1 { font-size: 2.6rem; }
+      section { margin: 3.5rem auto; }
+      .status-table td {
+        display: block;
+        width: 100%;
+        text-align: left !important;
+      }
+      .status-table tr {
+        display: block;
+        margin-bottom: 1rem;
+      }
+      .status-table tr:last-child {
+        margin-bottom: 0;
+      }
     }
   </style>
 </head>
@@ -132,9 +261,9 @@
     <div class="logo-container">
       <img src="HavnAI-logo.png" alt="HavnAI Logo" />
     </div>
-    <h1>HavnAI</h1>
-    <h2>Own Your Intelligence.</h2>
-    <p><strong>Build once. Earn forever.</strong></p>
+    <span class="alpha-badge">Private Alpha • Active</span>
+    <h1>Own Your Intelligence.<br>Build once. Earn forever.</h1>
+    <p class="subhead">The HavnAI grid is live in private testing — real GPUs, real models, real rewards.</p>
     <p>
       AI is creating wealth — it's time creators share in it.
       HavnAI is building the royalty layer for the intelligent economy, where every
@@ -148,7 +277,38 @@
     </p>
   </div>
 
-  <section>
+  <section id="status" style="animation-delay: 0.15s;">
+    <h2>What’s Working</h2>
+    <table class="status-table" aria-label="HavnAI private alpha status">
+      <tr><td>🧠 Core Coordinator</td><td>✅ Operational</td></tr>
+      <tr><td>🖥️ Creator Node Installer</td><td>✅ Working (Private Alpha)</td></tr>
+      <tr><td>🧩 Model Registry</td><td>✅ Hosting verified models</td></tr>
+      <tr><td>💰 Reward Engine</td><td>⚙️ Testing</td></tr>
+      <tr><td>🪄 Dashboard UI</td><td>🧱 In Development</td></tr>
+      <tr><td>🌍 Public Node Join</td><td>🚧 Coming Soon</td></tr>
+    </table>
+  </section>
+
+  <section id="focus" style="animation-delay: 0.25s;">
+    <h2>Current Focus</h2>
+    <p>
+      We’re validating the full Creator Node install and image-generation pipeline across multiple GPUs.
+      Once stable, we’ll open public onboarding.
+      This phase ensures reliability, verified models, and fair reward distribution before launch.
+    </p>
+  </section>
+
+  <section id="developers" style="animation-delay: 0.35s;">
+    <h2>For Developers</h2>
+    <ul>
+      <li><a href="https://github.com/marcusllittle/havnai-core" target="_blank" rel="noopener noreferrer">havnai-core</a></li>
+      <li><a href="https://github.com/marcusllittle/havnai-node" target="_blank" rel="noopener noreferrer">havnai-node</a></li>
+      <li><a href="https://github.com/marcusllittle/havnai-web" target="_blank" rel="noopener noreferrer">havnai-web</a></li>
+    </ul>
+    <p class="note">Current network status: Private Alpha – GPU grid operational internally.</p>
+  </section>
+
+  <section style="animation-delay: 0.45s;">
     <h3>The Problem</h3>
     <p>
       AI platforms profit endlessly from creators’ work, but builders rarely share in the value.
@@ -157,7 +317,7 @@
     </p>
   </section>
 
-  <section>
+  <section style="animation-delay: 0.55s;">
     <h3>The $HAI Token</h3>
     <p>
       $HAI powers the HavnAI ecosystem — rewarding creators, node operators, and validators
@@ -166,7 +326,7 @@
     </p>
   </section>
 
-  <section>
+  <section style="animation-delay: 0.65s;">
     <h3>For Creators, Builders & Operators</h3>
     <p>
       Everyone contributes. Everyone earns.
@@ -176,7 +336,8 @@
   </section>
 
   <footer>
-    © 2025 HavnAI · joinhavn.io · @joinHAVNAI · team@joinhavn.io · Powered by $HAI
+    <p>⚡ HavnAI is evolving — private grid online, public grid coming soon.</p>
+    <p>© 2025 HavnAI · joinhavn.io · @joinHAVNAI · team@joinhavn.io · Powered by $HAI</p>
   </footer>
 </body>
 </html>
