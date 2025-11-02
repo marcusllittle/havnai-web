@@ -41,6 +41,30 @@
       text-decoration: underline;
     }
 
+    .cta-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.85rem 1.8rem;
+      background: linear-gradient(135deg, rgba(0,217,255,0.95), rgba(0,140,255,0.85));
+      color: #041922;
+      font-weight: 700;
+      border-radius: 999px;
+      margin-top: 1.2rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.85rem;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 8px 22px rgba(0,217,255,0.25);
+    }
+
+    .cta-button:hover,
+    .cta-button:focus {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 32px rgba(0,217,255,0.35);
+      text-decoration: none;
+    }
+
     .hero {
       text-align: center;
       margin-top: 8vh;
@@ -190,32 +214,124 @@
       text-align: right;
     }
 
-    #developers ul {
-      list-style: none;
-      padding: 0;
-      margin: 1.5rem 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      align-items: center;
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
     }
 
-    #developers li a {
+    .feature-card {
+      background: rgba(3, 28, 38, 0.6);
+      border: 1px solid rgba(0, 217, 255, 0.24);
+      border-radius: 16px;
+      padding: 1.4rem;
+      text-align: left;
+      color: #cff5ff;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+    }
+
+    .feature-card h4 {
+      margin: 0 0 0.6rem 0;
+      font-size: 1.1rem;
       color: var(--cyan);
-      font-weight: 600;
-      border-bottom: 1px solid transparent;
-      padding-bottom: 0.1rem;
+      font-family: 'Roboto Mono', 'Courier New', monospace;
     }
 
-    #developers li a:hover,
-    #developers li a:focus {
-      border-bottom: 1px solid rgba(0, 217, 255, 0.6);
+    .feature-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: #d1edf6;
     }
 
-    .note {
-      color: #c1dfef;
+    .doc-callouts {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+      text-align: left;
+    }
+
+    .doc-card {
+      padding: 1.5rem;
+      background: rgba(3, 28, 38, 0.55);
+      border: 1px solid rgba(0, 217, 255, 0.22);
+      border-radius: 16px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .doc-card::after {
+      content: '';
+      position: absolute;
+      top: -60px;
+      right: -60px;
+      width: 160px;
+      height: 160px;
+      background: radial-gradient(circle, rgba(0,217,255,0.25) 0%, rgba(0,0,0,0) 70%);
+      transform: rotate(25deg);
+      pointer-events: none;
+    }
+
+    .doc-card h4 {
+      margin: 0 0 0.75rem 0;
+      font-size: 1.05rem;
+      color: var(--cyan);
+    }
+
+    .doc-card p {
+      margin: 0 0 1.1rem 0;
       font-size: 0.92rem;
-      margin-top: 0.75rem;
+      color: #c6e7f4;
+    }
+
+    .doc-card a {
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+    }
+
+    .timeline {
+      margin-top: 2rem;
+      border-left: 2px solid rgba(0, 217, 255, 0.35);
+      padding-left: 1.5rem;
+      display: grid;
+      gap: 1.4rem;
+      text-align: left;
+    }
+
+    .timeline-item {
+      position: relative;
+      padding-left: 1rem;
+    }
+
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -1.7rem;
+      top: 0.35rem;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 14px rgba(0,217,255,0.6);
+    }
+
+    .timeline-item h4 {
+      margin: 0;
+      font-size: 1rem;
+      color: var(--cyan);
+      letter-spacing: 0.04em;
+    }
+
+    .timeline-item p {
+      margin: 0.35rem 0 0 0;
+      color: #d8f2ff;
+      font-size: 0.92rem;
+      line-height: 1.6;
     }
 
     footer {
@@ -280,6 +396,7 @@
         Read the HavnAI Whitepaper →
       </a>
     </p>
+    <a class="cta-button" href="https://joinhavn.io/waitlist" target="_blank" rel="noopener noreferrer">Join the Private Alpha</a>
   </div>
 
   <section id="status" style="animation-delay: 0.15s;">
@@ -301,6 +418,63 @@
       Once stable, we’ll open public onboarding.
       This phase ensures reliability, verified models, and fair reward distribution before launch.
     </p>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <h4>🛠️ Real Workflows</h4>
+        <p>End-to-end GPU jobs run in the private grid today, validating the path from model submission to rewarded inference.</p>
+      </div>
+      <div class="feature-card">
+        <h4>🔐 Verified Models</h4>
+        <p>Registry-backed attestations keep supply reliable and protect creators with traceable configurations.</p>
+      </div>
+      <div class="feature-card">
+        <h4>⚖️ Reward Calibration</h4>
+        <p>Usage telemetry feeds the reward engine so creators, operators, and validators get paid for actual contribution.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="resources" style="animation-delay: 0.35s;">
+    <h2>Resources to Explore</h2>
+    <div class="doc-callouts">
+      <article class="doc-card">
+        <h4>WHITEPAPER</h4>
+        <p>See how ownership-driven incentives align creators, node operators, and demand-side users.</p>
+        <a href="https://github.com/marcusllittle/havnai-web/blob/main/WHITEPAPER.md" target="_blank" rel="noopener noreferrer">Dive In →</a>
+      </article>
+      <article class="doc-card">
+        <h4>TOKENOMICS</h4>
+        <p>Get the full $HAI supply design, release schedule, and value capture model for active participants.</p>
+        <a href="https://github.com/marcusllittle/havnai-web/blob/main/TOKENOMICS.md" target="_blank" rel="noopener noreferrer">Read Breakdown →</a>
+      </article>
+      <article class="doc-card">
+        <h4>ARCHITECTURE</h4>
+        <p>Understand how the coordinator, registry, and node agents ship trust-minimized inference at scale.</p>
+        <a href="https://github.com/marcusllittle/havnai-web/blob/main/ARCHITECTURE.md" target="_blank" rel="noopener noreferrer">See the Stack →</a>
+      </article>
+    </div>
+  </section>
+
+  <section id="timeline" style="animation-delay: 0.4s;">
+    <h2>Roadmap to Public Launch</h2>
+    <div class="timeline">
+      <div class="timeline-item">
+        <h4>Private Alpha • Live</h4>
+        <p>Core coordinator orchestrates verified image models with managed GPU supply and tracked rewards.</p>
+      </div>
+      <div class="timeline-item">
+        <h4>Creator Node Expansion • Q2</h4>
+        <p>Opening installs to vetted partners, broadening hardware coverage, and stress-testing payout flows.</p>
+      </div>
+      <div class="timeline-item">
+        <h4>Public Onboarding • Q3</h4>
+        <p>Self-serve node installer, user dashboards, and on-chain settlement go live for the broader community.</p>
+      </div>
+      <div class="timeline-item">
+        <h4>Open Grid • Q4</h4>
+        <p>Permissionless model submissions with automated verification and transparent marketplace pricing.</p>
+      </div>
+    </div>
   </section>
 
   <section style="animation-delay: 0.45s;">
