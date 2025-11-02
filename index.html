@@ -41,30 +41,6 @@
       text-decoration: underline;
     }
 
-    .cta-button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.85rem 1.8rem;
-      background: linear-gradient(135deg, rgba(0,217,255,0.95), rgba(0,140,255,0.85));
-      color: #041922;
-      font-weight: 700;
-      border-radius: 999px;
-      margin-top: 1.2rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 0.85rem;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      box-shadow: 0 8px 22px rgba(0,217,255,0.25);
-    }
-
-    .cta-button:hover,
-    .cta-button:focus {
-      transform: translateY(-2px);
-      box-shadow: 0 14px 32px rgba(0,217,255,0.35);
-      text-decoration: none;
-    }
-
     .hero {
       text-align: center;
       margin-top: 8vh;
@@ -294,46 +270,6 @@
       letter-spacing: 0.1em;
     }
 
-    .timeline {
-      margin-top: 2rem;
-      border-left: 2px solid rgba(0, 217, 255, 0.35);
-      padding-left: 1.5rem;
-      display: grid;
-      gap: 1.4rem;
-      text-align: left;
-    }
-
-    .timeline-item {
-      position: relative;
-      padding-left: 1rem;
-    }
-
-    .timeline-item::before {
-      content: '';
-      position: absolute;
-      left: -1.7rem;
-      top: 0.35rem;
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: var(--cyan);
-      box-shadow: 0 0 14px rgba(0,217,255,0.6);
-    }
-
-    .timeline-item h4 {
-      margin: 0;
-      font-size: 1rem;
-      color: var(--cyan);
-      letter-spacing: 0.04em;
-    }
-
-    .timeline-item p {
-      margin: 0.35rem 0 0 0;
-      color: #d8f2ff;
-      font-size: 0.92rem;
-      line-height: 1.6;
-    }
-
     footer {
       text-align: center;
       padding: 2.5rem 1rem;
@@ -396,7 +332,6 @@
         Read the HavnAI Whitepaper →
       </a>
     </p>
-    <a class="cta-button" href="https://joinhavn.io/waitlist" target="_blank" rel="noopener noreferrer">Join the Private Alpha</a>
   </div>
 
   <section id="status" style="animation-delay: 0.15s;">
@@ -452,28 +387,6 @@
         <p>Understand how the coordinator, registry, and node agents ship trust-minimized inference at scale.</p>
         <a href="https://github.com/marcusllittle/havnai-web/blob/main/ARCHITECTURE.md" target="_blank" rel="noopener noreferrer">See the Stack →</a>
       </article>
-    </div>
-  </section>
-
-  <section id="timeline" style="animation-delay: 0.4s;">
-    <h2>Roadmap to Public Launch</h2>
-    <div class="timeline">
-      <div class="timeline-item">
-        <h4>Private Alpha • Live</h4>
-        <p>Core coordinator orchestrates verified image models with managed GPU supply and tracked rewards.</p>
-      </div>
-      <div class="timeline-item">
-        <h4>Creator Node Expansion • Q2</h4>
-        <p>Opening installs to vetted partners, broadening hardware coverage, and stress-testing payout flows.</p>
-      </div>
-      <div class="timeline-item">
-        <h4>Public Onboarding • Q3</h4>
-        <p>Self-serve node installer, user dashboards, and on-chain settlement go live for the broader community.</p>
-      </div>
-      <div class="timeline-item">
-        <h4>Open Grid • Q4</h4>
-        <p>Permissionless model submissions with automated verification and transparent marketplace pricing.</p>
-      </div>
     </div>
   </section>
 
