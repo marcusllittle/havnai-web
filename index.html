@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="HavnAI Grid — Stage 6 Live • Real creators, real jobs, real outputs." />
   <title>HavnAI — Own Your Intelligence</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600&display=swap');
@@ -39,6 +40,20 @@
     a:hover,
     a:focus {
       text-decoration: underline;
+    }
+
+    .version-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid rgba(0, 217, 255, 0.4);
+      color: var(--cyan);
+      font-size: 0.78rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      background: rgba(0, 20, 28, 0.65);
     }
 
     .hero {
@@ -190,6 +205,31 @@
       text-align: right;
     }
 
+    .progress-block {
+      margin-top: 2.5rem;
+    }
+
+    .progress-block h3 {
+      color: var(--cyan);
+      margin-bottom: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-size: 1rem;
+    }
+
+    .progress-list {
+      list-style: none;
+      padding-left: 0;
+      margin: 0 auto;
+      color: #d6f4ff;
+      font-family: 'Roboto Mono', 'Courier New', monospace;
+      font-size: 0.92rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.35rem 1.5rem;
+      text-align: left;
+    }
+
     .feature-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -318,6 +358,7 @@
     <div class="logo-container">
       <img src="HavnAI-logo.png" alt="HavnAI Logo" />
     </div>
+    <span class="version-badge">Stage 6 • Creator Validation</span>
     <span class="alpha-badge">Private Alpha • Active</span>
     <h1>Own Your Intelligence.</h1>
     <p class="subhead">The HavnAI grid is live in private testing — real GPUs, real models, real rewards.</p>
@@ -339,6 +380,17 @@
       <tr><td>🪄 Dashboard UI</td><td>✅ Live leaderboard & telemetry</td></tr>
       <tr><td>🌍 Public Node Join</td><td>✅ Token-gated access live</td></tr>
     </table>
+    <div class="progress-block">
+      <h3>Progress</h3>
+      <ul class="progress-list">
+        <li>✅ Core Coordinator</li>
+        <li>✅ Node Installer</li>
+        <li>✅ Model Registry</li>
+        <li>✅ Dashboard Telemetry</li>
+        <li>⚙️ Reward Engine (mocked Sepolia)</li>
+        <li>🧠 Image Generation (local models functional)</li>
+      </ul>
+    </div>
   </section>
 
   <section id="focus" style="animation-delay: 0.25s;">
