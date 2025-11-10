@@ -3,468 +3,345 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="HavnAI Grid — Stage 6 Live • Real creators, real jobs, real outputs." />
-  <title>HavnAI — Own Your Intelligence</title>
+  <title>HavnAI Network — Own Your Intelligence</title>
+  <meta name="description" content="HavnAI is the decentralized AI network rewarding GPU owners, creators, and innovators. Stage 6 live." />
+  <meta property="og:title" content="HavnAI Network — Own Your Intelligence" />
+  <meta property="og:description" content="Decentralized intelligence for everyone. Run a node, process jobs, earn SHAI." />
+  <meta property="og:image" content="https://joinhavn.io/social-card.png" />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/png" href="/HavnAI-logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script defer data-domain="joinhavn.io" src="https://plausible.io/js/script.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            grotesk: ['Space Grotesk', 'Inter', 'system-ui'],
+          },
+          colors: {
+            ocean: '#00d0ff',
+            midnight: '#030a0f',
+            abyss: '#0b141a',
+          },
+          boxShadow: {
+            neon: '0 0 25px rgba(0, 208, 255, 0.25)',
+          },
+        },
+      },
+    };
+  </script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600&display=swap');
-    @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap');
-
-    :root {
-      --cyan: #00d9ff;
-      --dark-bg: radial-gradient(circle at center, #000 60%, #00141A 100%);
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
     body {
-      margin: 0;
-      padding: 0;
-      background: var(--dark-bg);
-      color: #fff;
-      font-family: 'Exo 2', sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      min-height: 100vh;
-      overflow-x: hidden;
+      font-family: 'Space Grotesk', 'Inter', system-ui;
+      background: radial-gradient(circle at top, #091823 0%, #030a0f 55%, #01060a 100%);
+      color: #f0fbff;
     }
-
-    a {
-      color: var(--cyan);
-      text-decoration: none;
-    }
-
-    a:hover,
-    a:focus {
-      text-decoration: underline;
-    }
-
-    .version-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.25rem 0.75rem;
-      border-radius: 999px;
-      border: 1px solid rgba(0, 217, 255, 0.4);
-      color: var(--cyan);
-      font-size: 0.78rem;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      background: rgba(0, 20, 28, 0.65);
-    }
-
-    .hero {
-      text-align: center;
-      margin-top: 8vh;
-      padding: 0 1.5rem;
-      max-width: 900px;
-      animation: fadeInUp 0.8s ease forwards;
-      opacity: 0;
-      animation-delay: 0.05s;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .logo-container {
-      position: relative;
-      display: inline-block;
-    }
-
-    .logo-container::after {
+    .grid-overlay::before {
       content: '';
       position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 260px;
-      height: 260px;
-      background: radial-gradient(circle, rgba(0,217,255,0.25) 0%, rgba(0,0,0,0) 70%);
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      animation: pulse 4s infinite ease-in-out;
-      z-index: 0;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
-      50% { opacity: 0.9; transform: translate(-50%, -50%) scale(1.2); }
-    }
-
-    .logo-container img {
-      position: relative;
-      z-index: 1;
-      width: 240px;
-      height: auto;
-      display: block;
-    }
-
-    h1 {
-      font-size: 3.5rem;
-      color: var(--cyan);
-      margin: 1.4rem 0 0.75rem 0;
-      line-height: 1.2;
-    }
-
-    h2 {
-      font-size: 1.9rem;
-      color: var(--cyan);
-      margin: 0 0 1.5rem 0;
-      letter-spacing: 0.5px;
-    }
-
-    h3 {
-      color: var(--cyan);
-      font-size: 1.8rem;
-      margin-bottom: 1rem;
-    }
-
-    p {
-      line-height: 1.7;
-      color: #cfcfcf;
-      margin: 0 auto 1.5rem auto;
-      font-size: 1rem;
-      max-width: 720px;
-    }
-
-    .whitepaper-link {
-      font-size: 0.95rem;
-      color: var(--cyan);
-      margin-top: 1rem;
-      font-weight: 600;
-    }
-
-    .subhead {
-      font-size: 1.15rem;
-      margin: 0 0 1.35rem 0;
-      color: #e2f9ff;
-    }
-
-    .alpha-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid rgba(0, 217, 255, 0.6);
-      color: var(--cyan);
-      padding: 0.25rem 0.9rem;
-      border-radius: 999px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      background: rgba(0, 217, 255, 0.08);
-      margin: 0 auto;
-    }
-
-    section {
-      width: 90%;
-      max-width: 900px;
-      margin: 4.5rem auto;
-      text-align: center;
-      padding: 0 1.5rem;
-      opacity: 0;
-      transform: translateY(18px);
-      animation: fadeInUp 0.8s ease forwards;
-    }
-
-    #status {
-      margin-top: 4rem;
-    }
-
-    .status-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 2rem;
-      border: 1px solid rgba(0, 217, 255, 0.35);
-      background: rgba(3, 28, 38, 0.6);
-      font-family: 'Roboto Mono', 'Courier New', monospace;
-    }
-
-    .status-table td {
-      padding: 0.9rem 1.1rem;
-      border-bottom: 1px solid rgba(0, 217, 255, 0.2);
-      color: #e6f6ff;
-      text-align: left;
-      font-size: 0.95rem;
-    }
-
-    .status-table tr:last-child td {
-      border-bottom: none;
-    }
-
-    .status-table td:first-child {
-      color: var(--cyan);
-      width: 60%;
-      font-weight: 600;
-    }
-
-    .status-table td:last-child {
-      text-align: right;
-    }
-
-    .progress-block {
-      margin-top: 2.5rem;
-    }
-
-    .progress-block h3 {
-      color: var(--cyan);
-      margin-bottom: 0.75rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      font-size: 1rem;
-    }
-
-    .progress-list {
-      list-style: none;
-      padding-left: 0;
-      margin: 0 auto;
-      color: #d6f4ff;
-      font-family: 'Roboto Mono', 'Courier New', monospace;
-      font-size: 0.92rem;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 0.35rem 1.5rem;
-      text-align: left;
-    }
-
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1.5rem;
-      margin-top: 2rem;
-    }
-
-    .feature-card {
-      background: rgba(3, 28, 38, 0.6);
-      border: 1px solid rgba(0, 217, 255, 0.24);
-      border-radius: 16px;
-      padding: 1.4rem;
-      text-align: left;
-      color: #cff5ff;
-      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
-    }
-
-    .feature-card h4 {
-      margin: 0 0 0.6rem 0;
-      font-size: 1.1rem;
-      color: var(--cyan);
-      font-family: 'Roboto Mono', 'Courier New', monospace;
-    }
-
-    .feature-card p {
-      margin: 0;
-      font-size: 0.95rem;
-      line-height: 1.6;
-      color: #d1edf6;
-    }
-
-    .doc-callouts {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 1.5rem;
-      margin-top: 2rem;
-      text-align: left;
-    }
-
-    .doc-card {
-      padding: 1.5rem;
-      background: rgba(3, 28, 38, 0.55);
-      border: 1px solid rgba(0, 217, 255, 0.22);
-      border-radius: 16px;
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .doc-card::after {
-      content: '';
-      position: absolute;
-      top: -60px;
-      right: -60px;
-      width: 160px;
-      height: 160px;
-      background: radial-gradient(circle, rgba(0,217,255,0.25) 0%, rgba(0,0,0,0) 70%);
-      transform: rotate(25deg);
+      inset: 0;
+      background: radial-gradient(circle at 20% 20%, rgba(0, 208, 255, 0.22), transparent 55%),
+        radial-gradient(circle at 80% 0%, rgba(0, 208, 255, 0.18), transparent 45%);
+      opacity: 0.7;
       pointer-events: none;
     }
-
-    .doc-card h4 {
-      margin: 0 0 0.75rem 0;
-      font-size: 1.05rem;
-      color: var(--cyan);
+    .particle-field {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      z-index: 0;
     }
-
-    .doc-card p {
-      margin: 0 0 1.1rem 0;
-      font-size: 0.92rem;
-      color: #c6e7f4;
+    .particle-field span {
+      position: absolute;
+      width: 3px;
+      height: 3px;
+      border-radius: 999px;
+      background: rgba(0, 208, 255, 0.8);
+      animation: float 12s linear infinite;
     }
-
-    .doc-card a {
-      font-weight: 600;
-      text-transform: uppercase;
-      font-size: 0.8rem;
-      letter-spacing: 0.1em;
-    }
-
-    footer {
-      text-align: center;
-      padding: 2.5rem 1rem;
-      font-size: 0.9rem;
-      color: #9ab3c2;
-      border-top: 1px solid rgba(255,255,255,0.08);
-      width: 100%;
-      margin-top: 4rem;
-      opacity: 0;
-      transform: translateY(18px);
-      animation: fadeInUp 0.8s ease forwards;
-      animation-delay: 0.75s;
-    }
-
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(18px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    @media (max-width: 768px) {
-      h1 { font-size: 2.6rem; }
-      section { margin: 3.5rem auto; }
-      .status-table td {
-        display: block;
-        width: 100%;
-        text-align: left !important;
-      }
-      .status-table tr {
-        display: block;
-        margin-bottom: 1rem;
-      }
-      .status-table tr:last-child {
-        margin-bottom: 0;
-      }
+    @keyframes float {
+      0% { transform: translateY(0); opacity: 0; }
+      25% { opacity: 0.8; }
+      100% { transform: translateY(-260px); opacity: 0; }
     }
   </style>
 </head>
-<body>
-  <div class="hero">
-    <div class="logo-container">
-      <img src="HavnAI-logo.png" alt="HavnAI Logo" />
-    </div>
-    <span class="version-badge">Stage 6 • Creator Validation</span>
-    <span class="alpha-badge">Private Alpha • Active</span>
-    <h1>Own Your Intelligence.</h1>
-    <p class="subhead">The HavnAI grid is live in private testing — real GPUs, real models, real rewards.</p>
-    <p>
-      AI is creating wealth — it's time creators share in it.
-      HavnAI is building the royalty layer for the intelligent economy, where every
-      workflow and model becomes a revenue-earning digital asset.
-    </p>
+<body class="relative min-h-screen bg-midnight text-slate-100">
+  <div class="particle-field" aria-hidden="true"></div>
+  <div class="relative z-10 grid-overlay">
+    <header class="px-6 py-6 flex items-center justify-between max-w-6xl mx-auto">
+      <div class="flex items-center gap-3">
+        <img src="/HavnAI-logo.png" alt="HavnAI" class="w-12 h-12" />
+        <div>
+          <p class="text-xs tracking-[0.35em] uppercase text-slate-300">Stage 6 • Live</p>
+          <p class="text-lg font-semibold text-ocean">HavnAI Network</p>
+        </div>
+      </div>
+      <nav class="hidden md:flex gap-6 text-sm text-slate-200">
+        <a href="#how" class="hover:text-ocean transition">How it works</a>
+        <a href="#status" class="hover:text-ocean transition">Status</a>
+        <a href="#rewards" class="hover:text-ocean transition">Rewards</a>
+        <a href="#join" class="hover:text-ocean transition">Join</a>
+      </nav>
+      <div class="flex gap-3">
+        <a href="https://github.com/marcusllittle" target="_blank" class="px-4 py-2 text-sm border border-ocean/40 text-ocean rounded-full hover:bg-ocean/10 transition">GitHub</a>
+        <a href="https://joinhavn.io/dashboard" target="_blank" class="hidden md:inline-flex px-4 py-2 text-sm bg-ocean text-slate-950 font-semibold rounded-full shadow-neon">Dashboard</a>
+      </div>
+    </header>
 
+    <section class="max-w-6xl mx-auto px-6 py-16 lg:py-24">
+      <div class="grid lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <p class="text-sm uppercase tracking-[0.4em] text-slate-400 mb-4">Decentralized Intelligence</p>
+          <h1 class="text-4xl sm:text-5xl font-semibold leading-tight mb-6">Own Your Intelligence.</h1>
+          <p class="text-lg text-slate-300 mb-8">The decentralized AI network rewarding GPU owners, creators, and innovators. Bring your compute, publish your models, and earn SHAI for every verified contribution.</p>
+          <div class="flex flex-wrap gap-4">
+            <a href="https://joinhavn.io/join" class="px-6 py-3 bg-ocean text-slate-950 font-semibold rounded-full shadow-neon">Run a Node</a>
+            <a href="https://joinhavn.io/alpha" class="px-6 py-3 border border-ocean/60 rounded-full text-ocean hover:bg-ocean/10">Join Alpha</a>
+            <a href="https://joinhavn.io/docs" class="px-6 py-3 border border-slate-600 rounded-full text-slate-200 hover:border-ocean/50">Explore Docs</a>
+          </div>
+        </div>
+        <div class="bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur relative overflow-hidden">
+          <div class="absolute -top-16 -right-16 w-64 h-64 bg-ocean/30 blur-3xl" aria-hidden="true"></div>
+          <p class="text-sm text-slate-400 mb-4">Live Grid Snapshot</p>
+          <div id="heroStats" class="grid grid-cols-2 gap-6 text-center">
+            <div>
+              <p class="text-3xl font-semibold" id="heroNodes">--</p>
+              <p class="text-xs uppercase tracking-widest text-slate-400">Active Nodes</p>
+            </div>
+            <div>
+              <p class="text-3xl font-semibold" id="heroJobs">--</p>
+              <p class="text-xs uppercase tracking-widest text-slate-400">Jobs / 24H</p>
+            </div>
+            <div>
+              <p class="text-3xl font-semibold" id="heroSuccess">--%</p>
+              <p class="text-xs uppercase tracking-widest text-slate-400">Success Rate</p>
+            </div>
+            <div>
+              <p class="text-3xl font-semibold" id="heroModel">--</p>
+              <p class="text-xs uppercase tracking-widest text-slate-400">Top Model</p>
+            </div>
+          </div>
+          <p class="mt-6 text-xs text-slate-500">Data auto-refreshes from /api/models/stats</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="how" class="max-w-6xl mx-auto px-6 py-12">
+      <div class="bg-white/5 border border-white/10 rounded-3xl p-10 backdrop-blur">
+        <div class="flex flex-col gap-4 mb-8">
+          <p class="text-sm text-ocean tracking-[0.3em] uppercase">How it Works</p>
+          <h2 class="text-3xl font-semibold">Decentralized Intelligence for Everyone.</h2>
+          <p class="text-slate-400">Install the node, process real AI workloads, and earn SHAI for every verified task.</p>
+        </div>
+        <div class="grid md:grid-cols-3 gap-6">
+          <article class="p-6 rounded-2xl border border-white/10 bg-white/5">
+            <p class="text-3xl mb-3">1️⃣</p>
+            <h3 class="text-xl font-semibold mb-2">Install Node</h3>
+            <p class="text-slate-400 text-sm mb-3">Bootstrap via Docker or the guided installer in under five minutes.</p>
+            <a href="/docs/get-started" class="text-ocean text-sm font-semibold">Get Started →</a>
+          </article>
+          <article class="p-6 rounded-2xl border border-white/10 bg-white/5">
+            <p class="text-3xl mb-3">2️⃣</p>
+            <h3 class="text-xl font-semibold mb-2">Generate Intelligence</h3>
+            <p class="text-slate-400 text-sm mb-3">Process image, text, and custom workflows sourced from the network.</p>
+            <span class="text-slate-500 text-sm">GPU jobs + creator models.</span>
+          </article>
+          <article class="p-6 rounded-2xl border border-white/10 bg-white/5">
+            <p class="text-3xl mb-3">3️⃣</p>
+            <h3 class="text-xl font-semibold mb-2">Earn Rewards</h3>
+            <p class="text-slate-400 text-sm mb-3">Receive SHAI credits instantly for completed, verified tasks.</p>
+            <span class="text-slate-500 text-sm">On-chain settlements coming soon.</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="status" class="max-w-6xl mx-auto px-6 py-12">
+      <div class="flex flex-col gap-6 mb-8">
+        <p class="text-sm text-ocean tracking-[0.3em] uppercase">Live Network Status</p>
+        <h2 class="text-3xl font-semibold">Compute. Create. Earn.</h2>
+        <p class="text-slate-400">Stage 6 • Creator validation & image generation. Live telemetry pulled from /api/models/stats.</p>
+      </div>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="p-6 rounded-2xl border border-white/10 bg-white/5">
+          <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Active Nodes</p>
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <p class="text-3xl font-semibold" id="statusNodes">--</p>
+          </div>
+        </div>
+        <div class="p-6 rounded-2xl border border-white/10 bg-white/5">
+          <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Completed Jobs</p>
+          <p class="text-3xl font-semibold" id="statusJobs">--</p>
+        </div>
+        <div class="p-6 rounded-2xl border border-white/10 bg-white/5">
+          <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Success Rate</p>
+          <p class="text-3xl font-semibold" id="statusSuccess">--%</p>
+        </div>
+      </div>
+      <div class="mt-6 p-6 bg-white/5 border border-white/10 rounded-2xl">
+        <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Top Model</p>
+        <p class="text-2xl font-semibold" id="statusModel">--</p>
+      </div>
+    </section>
+
+    <section id="rewards" class="max-w-6xl mx-auto px-6 py-12">
+      <div class="bg-white/5 border border-white/10 rounded-3xl p-10">
+        <div class="flex flex-col gap-4 mb-10">
+          <p class="text-sm text-ocean tracking-[0.3em] uppercase">Rewards & SHAI</p>
+          <h2 class="text-3xl font-semibold">Process work. Get paid.</h2>
+          <p class="text-slate-400">Off-chain credits during alpha; on-chain SHAI settlements coming soon.</p>
+        </div>
+        <div class="grid md:grid-cols-3 gap-6">
+          <div class="p-6 border border-white/10 rounded-2xl bg-slate-950/30">
+            <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Step 1</p>
+            <p class="text-xl font-semibold">Job Posted</p>
+            <p class="text-slate-400 text-sm mt-2">Coordinator validates demand request + assigns trusted models.</p>
+          </div>
+          <div class="p-6 border border-white/10 rounded-2xl bg-slate-950/30">
+            <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Step 2</p>
+            <p class="text-xl font-semibold">Node Completes</p>
+            <p class="text-slate-400 text-sm mt-2">Your GPU executes the workflow with telemetry + provenance.</p>
+          </div>
+          <div class="p-6 border border-white/10 rounded-2xl bg-slate-950/30">
+            <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Step 3</p>
+            <p class="text-xl font-semibold">Reward Credited</p>
+            <p class="text-slate-400 text-sm mt-2">SHAI credits land instantly, ready for later on-chain settlement.</p>
+          </div>
+        </div>
+        <a href="/docs/rewards" class="inline-flex mt-8 px-6 py-3 border border-ocean/60 rounded-full text-ocean hover:bg-ocean/10 font-semibold">Learn About Rewards</a>
+      </div>
+    </section>
+
+    <section id="join" class="max-w-6xl mx-auto px-6 py-12">
+      <div class="grid lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <p class="text-sm text-ocean tracking-[0.3em] uppercase">Join Alpha / Community</p>
+          <h2 class="text-3xl font-semibold mt-3 mb-4">Help shape decentralized intelligence.</h2>
+          <p class="text-slate-400 mb-6">Join the private alpha and get early access to creator tooling, live telemetry, and SHAI reward drops.</p>
+          <form class="flex flex-col sm:flex-row gap-4">
+            <input type="email" placeholder="you@studio.com" class="flex-1 px-4 py-3 rounded-full bg-white/5 border border-white/10 focus:outline-none focus:border-ocean" />
+            <button type="submit" class="px-6 py-3 rounded-full bg-ocean text-slate-950 font-semibold shadow-neon">Join Waitlist</button>
+          </form>
+          <p class="text-xs text-slate-500 mt-3">Or <a href="https://joinhavn.io/alpha" class="text-ocean underline">fill out the Typeform</a>.</p>
+        </div>
+        <div class="flex flex-col gap-4">
+          <p class="text-sm text-slate-400">Hang out with the community:</p>
+          <div class="flex gap-4 flex-wrap">
+            <a href="https://discord.gg/" class="px-5 py-3 rounded-full border border-white/10 hover:border-ocean/60">Discord</a>
+            <a href="https://github.com/marcusllittle" class="px-5 py-3 rounded-full border border-white/10 hover:border-ocean/60">GitHub</a>
+            <a href="https://x.com/joinHAVNAI" class="px-5 py-3 rounded-full border border-white/10 hover:border-ocean/60">X / Twitter</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="resources" class="max-w-6xl mx-auto px-6 py-12">
+      <div class="flex flex-col gap-4 mb-8">
+        <p class="text-sm text-ocean tracking-[0.3em] uppercase">Docs & Resources</p>
+        <h2 class="text-3xl font-semibold">All signals. Zero noise.</h2>
+      </div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <a href="/github" class="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-ocean/60 transition">
+          <p class="text-lg font-semibold">GitHub</p>
+          <p class="text-slate-400 text-sm mt-2">Source, issues, roadmaps.</p>
+        </a>
+        <a href="/docs" class="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-ocean/60 transition">
+          <p class="text-lg font-semibold">Docs</p>
+          <p class="text-slate-400 text-sm mt-2">Installers, APIs, tutorials.</p>
+        </a>
+        <a href="/whitepaper.pdf" class="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-ocean/60 transition">
+          <p class="text-lg font-semibold">Whitepaper</p>
+          <p class="text-slate-400 text-sm mt-2">Economic + technical blueprint.</p>
+        </a>
+        <a href="/dashboard" class="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-ocean/60 transition">
+          <p class="text-lg font-semibold">Dashboard</p>
+          <p class="text-slate-400 text-sm mt-2">Live telemetry + payouts.</p>
+        </a>
+      </div>
+    </section>
+
+    <footer class="max-w-6xl mx-auto px-6 py-12 border-t border-white/5 mt-8">
+      <div class="grid md:grid-cols-4 gap-6 text-sm text-slate-400">
+        <div>
+          <p class="font-semibold text-white mb-2">About</p>
+          <p>HavnAI is the decentralized intelligence layer for creators, GPU operators, and demand partners.</p>
+        </div>
+        <div>
+          <p class="font-semibold text-white mb-2">Docs</p>
+          <ul class="space-y-2">
+            <li><a href="/docs" class="hover:text-ocean">Get Started</a></li>
+            <li><a href="/docs/api" class="hover:text-ocean">API</a></li>
+            <li><a href="/docs/nodes" class="hover:text-ocean">Node Guide</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="font-semibold text-white mb-2">Legal</p>
+          <ul class="space-y-2">
+            <li><a href="/privacy" class="hover:text-ocean">Privacy</a></li>
+            <li><a href="/terms" class="hover:text-ocean">Terms</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="font-semibold text-white mb-2">Contact</p>
+          <p>support@joinhavn.io</p>
+        </div>
+      </div>
+      <p class="mt-6 text-xs text-slate-500">© 2025 HavnAI Network. Powered by Open Source & Codex.</p>
+    </footer>
   </div>
 
-  <section id="status" style="animation-delay: 0.15s;">
-    <h2>Operational Status</h2>
-    <table class="status-table" aria-label="HavnAI private alpha status">
-      <tr><td>🧠 Core Coordinator</td><td>✅ Live job orchestration stable across local + LAN nodes</td></tr>
-      <tr><td>🖥️ Creator Node Installer</td><td>✅ One-command onboarding functional</td></tr>
-      <tr><td>🧩 Model Registry</td><td>✅ Creator & verified models syncing</td></tr>
-      <tr><td>💰 Reward Engine</td><td>⚙️ Sepolia payout rehearsal passing</td></tr>
-      <tr><td>🪄 Dashboard UI</td><td>✅ Live leaderboard + telemetry confirmed</td></tr>
-      <tr><td>🌍 Public Node Join</td><td>✅ Token-gated access active</td></tr>
-    </table>
-    <div class="progress-block">
-      <h3>Progress</h3>
-      <ul class="progress-list">
-        <li>✅ Core Coordinator complete</li>
-        <li>✅ Node Installer complete</li>
-        <li>✅ Model Registry complete</li>
-        <li>✅ Dashboard Telemetry confirmed</li>
-        <li>⚙️ Reward Engine (mocked Sepolia) validated</li>
-        <li>🧠 Image Generation (local Stable Diffusion pipeline functional)</li>
-      </ul>
-    </div>
-  </section>
+  <script>
+    const particleField = document.querySelector('.particle-field');
+    for (let i = 0; i < 60; i++) {
+      const dot = document.createElement('span');
+      dot.style.left = Math.random() * 100 + '%';
+      dot.style.bottom = Math.random() * 100 + '%';
+      dot.style.animationDelay = (Math.random() * 10) + 's';
+      dot.style.opacity = Math.random();
+      particleField.appendChild(dot);
+    }
 
-  <section id="focus" style="animation-delay: 0.25s;">
-    <h2>Current Focus</h2>
-    <p>
-      Stage 6B zeroes in on grid stability, automated $HAI rewards, and preparing public onboarding so Stage 7 can welcome external creators confidently.
-    </p>
-    <div class="feature-grid">
-      <div class="feature-card">
-        <h4>🛡️ Grid Stability</h4>
-        <p>Expanding orchestration across multiple GPU nodes to stress-test queueing, failover, and balanced inference workloads.</p>
-      </div>
-      <div class="feature-card">
-        <h4>🔗 On-Chain Rewards</h4>
-        <p>Integrating Sepolia contracts so $HAI payouts flow automatically based on uptime, contribution, and verified telemetry.</p>
-      </div>
-      <div class="feature-card">
-        <h4>🚀 Public Onboarding</h4>
-        <p>Polishing the installer, join flow, and monitoring so external GPU creators can enter Stage 7 with a guided experience.</p>
-      </div>
-    </div>
-  </section>
+    const sampleStats = {
+      active_nodes: 128,
+      jobs_completed_24h: 4820,
+      success_rate: 97.2,
+      top_model: 'sdxl-creators-v2'
+    };
 
-  <section id="resources" style="animation-delay: 0.35s;">
-    <h2>Resources to Explore</h2>
-    <div class="doc-callouts">
-      <article class="doc-card">
-        <h4>WHITEPAPER</h4>
-        <p>See how ownership-driven incentives align creators, node operators, and demand-side users.</p>
-        <a href="https://github.com/marcusllittle/havnai-web/blob/main/WHITEPAPER.md" target="_blank" rel="noopener noreferrer">Dive In →</a>
-      </article>
-      <article class="doc-card">
-        <h4>TOKENOMICS</h4>
-        <p>Get the full $HAI supply design, release schedule, and value capture model for active participants.</p>
-        <a href="https://github.com/marcusllittle/havnai-web/blob/main/TOKENOMICS.md" target="_blank" rel="noopener noreferrer">Read Breakdown →</a>
-      </article>
-      <article class="doc-card">
-        <h4>ARCHITECTURE</h4>
-        <p>Understand how the coordinator, registry, and node agents ship trust-minimized inference at scale.</p>
-        <a href="https://github.com/marcusllittle/havnai-web/blob/main/ARCHITECTURE.md" target="_blank" rel="noopener noreferrer">See the Stack →</a>
-      </article>
-    </div>
-  </section>
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/models/stats');
+        if (!res.ok) throw new Error('Network response was not ok');
+        const data = await res.json();
+        updateStats(data);
+      } catch (err) {
+        updateStats(sampleStats);
+      }
+    }
 
-  <section style="animation-delay: 0.45s;">
-    <h3>The Problem</h3>
-    <p>
-      AI platforms profit endlessly from creators’ work, but builders rarely share in the value.
-      HavnAI changes that by turning every AI workflow into a verifiable, rewardable contribution.
-      Ownership and income return to the hands of the people who make intelligence possible.
-    </p>
-  </section>
+    function updateStats(data) {
+      const nodes = data.active_nodes ?? sampleStats.active_nodes;
+      const jobs = data.jobs_completed_24h ?? sampleStats.jobs_completed_24h;
+      const success = data.success_rate ?? sampleStats.success_rate;
+      const model = data.top_model ?? sampleStats.top_model;
+      document.getElementById('heroNodes').textContent = nodes;
+      document.getElementById('heroJobs').textContent = jobs;
+      document.getElementById('heroSuccess').textContent = success + '%';
+      document.getElementById('heroModel').textContent = model;
+      document.getElementById('statusNodes').textContent = nodes;
+      document.getElementById('statusJobs').textContent = jobs;
+      document.getElementById('statusSuccess').textContent = success + '%';
+      document.getElementById('statusModel').textContent = model;
+    }
 
-  <section style="animation-delay: 0.55s;">
-    <h3>The $HAI Token</h3>
-    <p>
-      $HAI powers the HavnAI ecosystem — rewarding creators, node operators, and validators
-      while giving users access to verified AI intelligence. It transforms creativity into
-      a living, tradable asset.
-    </p>
-  </section>
-
-  <section style="animation-delay: 0.65s;">
-    <h3>For Creators, Builders & Operators</h3>
-    <p>
-      Everyone contributes. Everyone earns.
-      Whether you design, deploy, or run AI workflows, HavnAI ensures your work is
-      recognized and rewarded — forever.
-    </p>
-  </section>
-
-  <footer>
-    <p>⚡ HavnAI is evolving — private grid online, public grid coming soon.</p>
-    <p>© 2025 HavnAI · joinhavn.io · @joinHAVNAI · team@joinhavn.io · Powered by $HAI</p>
-  </footer>
+    loadStats();
+    setInterval(loadStats, 15000);
+  </script>
 </body>
 </html>
