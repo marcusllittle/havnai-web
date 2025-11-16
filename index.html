@@ -38,13 +38,6 @@
       },
     };
   </script>
-  <script type="importmap">
-    {
-      "imports": {
-        "@/lib/api": "./lib/api.js"
-      }
-    }
-  </script>
   <style>
     body {
       font-family: 'Space Grotesk', 'Inter', system-ui;
@@ -308,7 +301,7 @@
   </div>
 
   <script type="module">
-    import { apiGet } from "@/lib/api";
+    import { apiGet } from "./lib/api.js";
 
     const particleField = document.querySelector('.particle-field');
     for (let i = 0; i < 60; i++) {
