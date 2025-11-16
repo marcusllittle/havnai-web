@@ -1,9 +1,8 @@
 {
-  "version": 2,
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://api.joinhavn.io:5001/:path*"
+      "destination": "https://api.joinhavn.io/:path*"
     }
   ]
 }
