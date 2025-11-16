@@ -34,6 +34,13 @@
       },
     };
   </script>
+  <script type="importmap">
+    {
+      "imports": {
+        "@/lib/api": "./lib/api.js"
+      }
+    }
+  </script>
   <style>
     body {
       font-family: 'Space Grotesk', 'Inter', system-ui;
@@ -296,7 +303,9 @@
     </footer>
   </div>
 
-  <script>
+  <script type="module">
+    import { apiGet } from "@/lib/api";
+
     const particleField = document.querySelector('.particle-field');
     for (let i = 0; i < 60; i++) {
       const dot = document.createElement('span');
@@ -316,9 +325,8 @@
 
     async function loadStats() {
       try {
-        const res = await fetch('/api/models/stats');
-        if (!res.ok) throw new Error('Network response was not ok');
-        const data = await res.json();
+        const data = await apiGet('/models/stats');
+        if (!data) throw new Error('No data returned');
         updateStats(data);
       } catch (err) {
         updateStats(sampleStats);
