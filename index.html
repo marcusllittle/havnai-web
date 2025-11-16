@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <script>
-    // Inject environment variable for static deployment on Vercel
-    window.NEXT_PUBLIC_API_BASE_URL = "http://api.joinhavn.io:5001";
+    // Inject environment variable for static deployment on Vercel (use relative path to avoid mixed content)
+    window.NEXT_PUBLIC_API_BASE_URL = "/api";
   </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
