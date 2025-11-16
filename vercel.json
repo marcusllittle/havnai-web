@@ -1,8 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://api.joinhavn.io/:path*"
+      "source": "/api/models/(.*)",
+      "destination": "http://api.joinhavn.io:5001/models/$1"
     }
   ]
 }
