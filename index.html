@@ -303,6 +303,10 @@
     </footer>
   </div>
 
+  <script>
+    // Inject environment variable for static deployment on Vercel
+    window.NEXT_PUBLIC_API_BASE_URL = "https://api.joinhavn.io:5001";
+  </script>
   <script type="module">
     import { apiGet } from "@/lib/api";
 
