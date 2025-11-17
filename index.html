@@ -334,7 +334,7 @@
       const nodes = data.active_nodes ?? sampleStats.active_nodes;
       const jobs = data.jobs_completed_24h ?? sampleStats.jobs_completed_24h;
       const success = data.success_rate ?? sampleStats.success_rate;
-      const model = data.top_model ?? sampleStats.top_model;
+      const model = data.top_model_display ?? data.top_model ?? sampleStats.top_model;
       document.getElementById('heroNodes').textContent = nodes;
       document.getElementById('heroJobs').textContent = jobs;
       document.getElementById('heroSuccess').textContent = success + '%';
