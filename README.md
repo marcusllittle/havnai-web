@@ -76,6 +76,46 @@ Email → team@joinhavn.io
 
 Validating the complete Creator Node image-generation pipeline across multiple GPUs. We are focused on reliability, model verification, and reward balancing before opening public onboarding.
 
+### 🎞️ AnimateDiff Video Engine (12 GB Edition)
+
+The HavnAI grid now supports an **SD 1.5 + AnimateDiff** video job type designed to fit comfortably on a **12 GB RTX 3060** class GPU.
+
+- New job type: `animatediff`
+- Base models (SD 1.5 checkpoints):
+  - `realisticVision_v51.safetensors`
+  - `perfectDeliberate_v5.safetensors`
+  - `uberrealistic_pornmerge_v23.safetensors`
+- Motion controls via LoRAs: `zoom-in`, `pan-left`, `tilt-up`, etc.
+- VRAM-aware execution:
+  - For `<14 GB` GPUs: force 512×512, ≤24 frames, DDIM/Euler schedulers, and AnimateDiff Lightning–style settings.
+- Outputs are MP4 files stored under `static/outputs/videos/<job_id>.mp4`.
+
+Submit an AnimateDiff job via the coordinator:
+
+```bash
+curl -X POST "$SERVER_URL/submit-job" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "wallet": "0xYOUR_WALLET_ADDRESS",
+    "model": "animatediff",
+    "prompt": "a cinematic tracking shot through a neon-lit alley, ultra realistic",
+    "negative_prompt": "lowres, blurry, watermark, text, bad anatomy",
+    "frames": 24,
+    "fps": 8,
+    "motion": "zoom-in",
+    "base_model": "realisticVision",
+    "width": 512,
+    "height": 512,
+    "scheduler": "DDIM"
+  }'
+```
+
+Then fetch the result metadata (including MP4 URL) with:
+
+```bash
+curl "$SERVER_URL/result/<job_id>"
+```
+
 ## 🛠️ For Developers
 
 - [havnai-core](https://github.com/marcusllittle/havnai-core)
