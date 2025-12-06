@@ -138,6 +138,23 @@ main,
   width: 100%;
 }
 
+.nav-links .nav-patreon {
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid #00d4ff;
+  color: #00d4ff;
+  margin-left: 0.4rem;
+}
+
+.nav-links .nav-patreon::after {
+  display: none;
+}
+
+.nav-links .nav-patreon:hover {
+  background: rgba(0, 212, 255, 0.14);
+  color: #ffffff;
+}
+
 .nav-toggle {
   display: none;
   border: none;
