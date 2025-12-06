@@ -8,6 +8,20 @@ import { submitAutoJob, fetchJob, fetchResult } from "../lib/havnai";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
+const MODEL_OPTIONS: { id: string; label: string }[] = [
+  { id: "auto", label: "Auto (let grid choose best)" },
+  { id: "majicmixRealistic_v7", label: "majicmixRealistic_v7 · all‑round realism" },
+  { id: "lazymixRealAmateur_v40", label: "lazymixRealAmateur_v40 · phone-photo realism" },
+  { id: "juggernautXL_ragnarokBy", label: "juggernautXL_ragnarokBy · SDXL studio" },
+  { id: "epicrealismXL_vxviiCrystalclear", label: "epicrealismXL_vxviiCrystalclear · SDXL daylight" },
+  { id: "perfectdeliberate_v5SD15", label: "perfectdeliberate_v5SD15 · portraits" },
+  { id: "uberRealisticPornMerge_v23Final", label: "uberRealisticPornMerge_v23Final · glossy studio" },
+  { id: "triomerge_v10", label: "triomerge_v10 · fantasy stylized" },
+  { id: "unstablePornhwa_beta", label: "unstablePornhwa_beta · manhwa" },
+  { id: "disneyPixarCartoon_v10", label: "disneyPixarCartoon_v10 · cartoon" },
+  { id: "kizukiAnimeHentai_animeHentaiV4", label: "kizukiAnimeHentai_animeHentaiV4 · anime" },
+];
+
 const TestPage: React.FC = () => {
   const [prompt, setPrompt] = useState("");
   const [jobId, setJobId] = useState<string | undefined>();
@@ -17,6 +31,8 @@ const TestPage: React.FC = () => {
   const [model, setModel] = useState<string | undefined>();
   const [runtimeSeconds, setRuntimeSeconds] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<string>("auto");
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -51,7 +67,10 @@ const TestPage: React.FC = () => {
     setJobId(undefined);
 
     try {
-      const id = await submitAutoJob(trimmed);
+      const id = await submitAutoJob(
+        trimmed,
+        selectedModel === "auto" ? undefined : selectedModel
+      );
       setJobId(id);
       setStatusMessage("Waiting for GPU node…");
       await pollJob(id, trimmed);
@@ -132,94 +151,146 @@ const TestPage: React.FC = () => {
     setModel(item.model);
     setRuntimeSeconds(null);
     setJobId(item.jobId);
-    setPrompt(item.prompt);
     setStatusMessage("Showing from history. Generate again to refresh.");
   };
 
-  // Simple particle field like the homepage
+  const handleHistoryClear = () => {
+    saveHistory([]);
+    setImageUrl(undefined);
+    setModel(undefined);
+    setRuntimeSeconds(null);
+    setJobId(undefined);
+    setStatusMessage(undefined);
+  };
+
+  // Mobile nav toggle (reuse behavior from index.html)
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const container = document.querySelector(".particle-field") as HTMLElement | null;
-    if (!container) return;
-    if (container.childElementCount > 0) return;
-    for (let i = 0; i < 60; i += 1) {
-      const dot = document.createElement("span");
-      dot.style.position = "absolute";
-      dot.style.width = "3px";
-      dot.style.height = "3px";
-      dot.style.borderRadius = "999px";
-      dot.style.background = "rgba(0,208,255,0.8)";
-      dot.style.left = `${Math.random() * 100}%`;
-      dot.style.bottom = `${Math.random() * 100}%`;
-      dot.style.opacity = String(Math.random());
-      dot.style.animation = `float ${10 + Math.random() * 12}s linear infinite`;
-      dot.style.animationDelay = `${Math.random() * 10}s`;
-      container.appendChild(dot);
-    }
+    const navToggle = document.getElementById("navToggle");
+    const primaryNav = document.getElementById("primaryNav");
+    if (!navToggle || !primaryNav) return;
+    const handler = () => {
+      primaryNav.classList.toggle("nav-open");
+      navToggle.classList.toggle("nav-open");
+    };
+    navToggle.addEventListener("click", handler);
+    return () => navToggle.removeEventListener("click", handler);
   }, []);
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-b from-[#091823] via-[#030a0f] to-[#01060a] text-slate-100">
-      <style jsx global>{`
-        @keyframes float {
-          0% {
-            transform: translateY(0);
-            opacity: 0;
-          }
-          25% {
-            opacity: 0.8;
-          }
-          100% {
-            transform: translateY(-260px);
-            opacity: 0;
-          }
-        }
-      `}</style>
-      <div className="particle-field absolute inset-0 pointer-events-none" />
-
-      <div className="relative z-10 px-6 pt-20 pb-10 max-w-md mx-auto">
-        {/* Header */}
-        <div className="text-center">
-          <h1 className="text-3xl font-semibold text-white tracking-wide">
-            Create Something Amazing.
-          </h1>
-          <p className="text-center text-slate-300 text-sm mt-2">
-            Type a description and let the HavnAI grid bring it to life.
-          </p>
+    <>
+      <header className="site-header">
+        <div className="header-inner">
+          <a href="#home" className="brand">
+            <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
+            <div className="brand-text">
+              <span className="brand-stage">Stage 6 → 7 Alpha</span>
+              <span className="brand-name">HavnAI Network</span>
+            </div>
+          </a>
+          <button className="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+            <span />
+            <span />
+          </button>
+          <nav className="nav-links" id="primaryNav">
+            <a href="/">Home</a>
+            <a href="https://joinhavn.io#how">How It Works</a>
+            <a href="https://joinhavn.io#smart-routing">Smart Routing</a>
+            <a href="https://joinhavn.io#rewards">Rewards</a>
+            <a href="https://joinhavn.io#models">Models</a>
+            <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" rel="noreferrer">
+              Dashboard
+            </a>
+            <a href="https://joinhavn.io#join">Join Alpha</a>
+          </nav>
         </div>
+      </header>
 
-        {/* Prompt + Button */}
-        <HavnAIPrompt
-          value={prompt}
-          onChange={setPrompt}
-          onSubmit={handleSubmit}
-          disabled={loading}
-        />
+      <main>
+        <section className="generator-hero" id="home">
+          <div className="generator-hero-inner">
+            <p className="hero-kicker">Creator Playground</p>
+            <h1 className="generator-hero-title">Create Something Amazing.</h1>
+            <p className="generator-hero-subtitle">
+              Type a description, optionally pick a model, and let the HavnAI grid render it using the same weighted routing as the live network.
+            </p>
+          </div>
+        </section>
 
-        <HavnAIButton
-          label="Generate"
-          loading={loading}
-          disabled={!prompt.trim()}
-          onClick={handleSubmit}
-        />
+        <section className="generator-section">
+          <div className="generator-card">
+            <div className="generator-grid">
+              <div className="generator-left">
+                <label className="generator-label" htmlFor="prompt">
+                  Prompt
+                </label>
+                <HavnAIPrompt
+                  value={prompt}
+                  onChange={setPrompt}
+                  onSubmit={handleSubmit}
+                  disabled={loading}
+                />
 
-        {/* Status */}
-        <StatusBox message={statusMessage} />
+                <div className="generator-controls">
+                  <HavnAIButton
+                    label="Generate"
+                    loading={loading}
+                    disabled={!prompt.trim()}
+                    onClick={handleSubmit}
+                  />
+                  <button
+                    type="button"
+                    className="generator-advanced-toggle"
+                    onClick={() => setAdvancedOpen((v) => !v)}
+                  >
+                    {advancedOpen ? "Hide advanced options" : "Show advanced options"}
+                  </button>
+                </div>
 
-        {/* Output */}
-        <OutputCard
-          imageUrl={imageUrl}
-          model={model}
-          runtimeSeconds={runtimeSeconds || null}
-          jobId={jobId}
-        />
+                {advancedOpen && (
+                  <div className="generator-advanced">
+                    <span className="generator-label">Model</span>
+                    <select
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      className="generator-select"
+                    >
+                      {MODEL_OPTIONS.map((opt) => (
+                        <option key={opt.id} value={opt.id}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="generator-help">
+                      Auto routes to the highest-performing model based on weight and pipeline. Choosing a specific model overrides auto routing for this job only.
+                    </p>
+                  </div>
+                )}
 
-        {/* History */}
-        <HistoryFeed items={history} onSelect={handleHistorySelect} />
-      </div>
-    </div>
+                <StatusBox message={statusMessage} />
+              </div>
+
+              <div className="generator-right">
+                <label className="generator-label">Output</label>
+                <OutputCard
+                  imageUrl={imageUrl}
+                  model={model}
+                  runtimeSeconds={runtimeSeconds || null}
+                  jobId={jobId}
+                />
+              </div>
+            </div>
+
+            <HistoryFeed
+              items={history}
+              onSelect={handleHistorySelect}
+              onClear={handleHistoryClear}
+            />
+          </div>
+        </section>
+      </main>
+    </>
   );
 };
 
 export default TestPage;
-

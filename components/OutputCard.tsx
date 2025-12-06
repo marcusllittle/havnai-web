@@ -20,34 +20,21 @@ export const OutputCard: React.FC<OutputCardProps> = ({
       : undefined;
 
   return (
-    <div
-      className="
-        mt-8 p-4 rounded-2xl
-        bg-[rgba(255,255,255,0.08)]
-        border border-[rgba(255,255,255,0.15)]
-        shadow-xl backdrop-blur-lg
-      "
-    >
-      <img
-        className="rounded-xl w-full"
-        src={imageUrl}
-        alt={jobId || "Generated image"}
-      />
+    <div className="generator-output-card">
+      <img src={imageUrl} alt={jobId || "Generated image"} />
 
-      <p className="text-slate-300 text-xs mt-3">
-        Generated using{" "}
-        <span className="font-semibold text-white">
-          {model || "auto-selected model"}
-        </span>{" "}
-        {runtimeDisplay && <>in {runtimeDisplay} seconds.</>}
-      </p>
-
-      {jobId && (
-        <p className="text-slate-400 text-[11px] mt-1">
-          Job ID: <span className="font-mono text-slate-300">{jobId}</span>
-        </p>
-      )}
+      <div className="generator-output-meta">
+        <span>
+          Generated using{" "}
+          <strong>{model || "auto-selected model"}</strong>
+        </span>
+        {runtimeDisplay && <span>{` · ${runtimeDisplay}s`}</span>}
+        {jobId && (
+          <span>{` · Job ID: `}
+            <code>{jobId}</code>
+          </span>
+        )}
+      </div>
     </div>
   );
 };
-

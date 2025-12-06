@@ -11,29 +11,42 @@ export interface HistoryItem {
 interface HistoryFeedProps {
   items: HistoryItem[];
   onSelect?: (item: HistoryItem) => void;
+  onClear?: () => void;
 }
 
-export const HistoryFeed: React.FC<HistoryFeedProps> = ({ items, onSelect }) => {
+export const HistoryFeed: React.FC<HistoryFeedProps> = ({
+  items,
+  onSelect,
+  onClear,
+}) => {
   if (!items.length) return null;
 
   return (
-    <div className="mt-10">
-      <h2 className="text-slate-200 text-sm font-semibold">
-        Your Recent Creations
-      </h2>
-      <div className="mt-3 grid grid-cols-3 gap-3">
+    <div className="generator-history">
+      <div className="generator-history-header">
+        <h3>Your Recent Creations</h3>
+        {onClear && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="generator-history-clear"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="generator-history-grid">
         {items.slice(0, 9).map((item) => (
           <button
             key={item.jobId}
             type="button"
             onClick={() => onSelect?.(item)}
-            className="block focus:outline-none"
+            className="generator-history-thumb"
             title={item.prompt}
           >
             <img
               src={item.imageUrl}
               alt={item.prompt}
-              className="rounded-lg opacity-80 hover:opacity-100 transition w-full h-full object-cover"
             />
           </button>
         ))}
@@ -41,4 +54,3 @@ export const HistoryFeed: React.FC<HistoryFeedProps> = ({ items, onSelect }) => 
     </div>
   );
 };
-

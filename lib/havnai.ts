@@ -30,22 +30,45 @@ export interface ResultResponse {
   error?: string;
 }
 
+// Single source of truth for the coordinator base URL.
+// - In production you can set NEXT_PUBLIC_HAVNAI_API_BASE to "https://api.joinhavn.io:5001"
+// - By default we assume the frontend is behind a proxy that exposes the core at /api.
 const API_BASE =
-  typeof window === "undefined"
-    ? process.env.NEXT_PUBLIC_HAVNAI_API_BASE || ""
-    : "";
+  process.env.NEXT_PUBLIC_HAVNAI_API_BASE && process.env.NEXT_PUBLIC_HAVNAI_API_BASE.length > 0
+    ? process.env.NEXT_PUBLIC_HAVNAI_API_BASE
+    : "/api";
+
+// Wallet used when submitting jobs from the /test page.
+// Configure NEXT_PUBLIC_HAVNAI_WALLET in .env.local to point to your real EVM address.
+const WALLET =
+  process.env.NEXT_PUBLIC_HAVNAI_WALLET && process.env.NEXT_PUBLIC_HAVNAI_WALLET.length > 0
+    ? process.env.NEXT_PUBLIC_HAVNAI_WALLET
+    : "0x0000000000000000000000000000000000000000";
 
 function apiUrl(path: string): string {
-  if (API_BASE) {
-    return `${API_BASE}${path}`;
-  }
-  return path;
+  return `${API_BASE}${path}`;
 }
 
-export async function submitAutoJob(prompt: string): Promise<string> {
+function resolveAssetUrl(path: string | undefined | null): string | undefined {
+  if (!path) return undefined;
+  // If already absolute (http/https), return as-is.
+  if (/^https?:\/\//i.test(path)) return path;
+  // Otherwise, prefix with API_BASE so we hit the coordinator, not the Next dev server.
+  return `${API_BASE}${path}`;
+}
+
+export async function submitAutoJob(
+  prompt: string,
+  modelOverride?: string
+): Promise<string> {
+  const model =
+    modelOverride && modelOverride.trim().length > 0
+      ? modelOverride.trim()
+      : "auto";
+
   const body = {
-    wallet: "test_user",
-    model: "auto",
+    wallet: WALLET,
+    model,
     prompt,
     negative_prompt: "low quality, blurry",
     width: 832,
@@ -93,6 +116,9 @@ export async function fetchResult(jobId: string): Promise<ResultResponse> {
     throw new Error(`fetch result failed: ${res.status} ${text}`);
   }
   const json = (await res.json()) as ResultResponse;
-  return json;
+  return {
+    ...json,
+    image_url: resolveAssetUrl(json.image_url),
+    video_url: resolveAssetUrl(json.video_url),
+  };
 }
-
