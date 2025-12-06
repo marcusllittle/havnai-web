@@ -1,352 +1,557 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <script>
-    // Inject environment variable for static deployment on Vercel (use relative path to avoid mixed content)
-    window.NEXT_PUBLIC_API_BASE_URL = "/api";
-  </script>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HavnAI Network — Own Your Intelligence</title>
-  <meta name="description" content="HavnAI is the decentralized AI network rewarding GPU owners, creators, and innovators. Stage 6 live." />
-  <meta property="og:title" content="HavnAI Network — Own Your Intelligence" />
-  <meta property="og:description" content="Decentralized intelligence for everyone. Run a node, process jobs, earn $HAI." />
-  <meta property="og:image" content="https://joinhavn.io/social-card.png" />
-  <meta property="og:type" content="website" />
-  <link rel="icon" type="image/png" href="/HavnAI-logo.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <script defer data-domain="joinhavn.io" src="https://plausible.io/js/script.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            grotesk: ['Space Grotesk', 'Inter', 'system-ui'],
-          },
-          colors: {
-            ocean: '#00d0ff',
-            midnight: '#030a0f',
-            abyss: '#0b141a',
-          },
-          boxShadow: {
-            neon: '0 0 25px rgba(0, 208, 255, 0.25)',
-          },
-        },
-      },
-    };
-  </script>
-  <style>
-    body {
-      font-family: 'Space Grotesk', 'Inter', system-ui;
-      background: radial-gradient(circle at top, #091823 0%, #030a0f 55%, #01060a 100%);
-      color: #f0fbff;
-    }
-    .grid-overlay::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at 20% 20%, rgba(0, 208, 255, 0.22), transparent 55%),
-        radial-gradient(circle at 80% 0%, rgba(0, 208, 255, 0.18), transparent 45%);
-      opacity: 0.7;
-      pointer-events: none;
-    }
-    .particle-field {
-      position: absolute;
-      inset: 0;
-      overflow: hidden;
-      z-index: 0;
-    }
-    .particle-field span {
-      position: absolute;
-      width: 3px;
-      height: 3px;
-      border-radius: 999px;
-      background: rgba(0, 208, 255, 0.8);
-      animation: float 12s linear infinite;
-    }
-    @keyframes float {
-      0% { transform: translateY(0); opacity: 0; }
-      25% { opacity: 0.8; }
-      100% { transform: translateY(-260px); opacity: 0; }
-    }
-  </style>
-</head>
-<body class="relative min-h-screen bg-midnight text-slate-100">
-  <div class="particle-field" aria-hidden="true"></div>
-  <div class="relative z-10 grid-overlay">
-    <header class="px-6 py-6 flex items-center justify-between max-w-6xl mx-auto">
-      <div class="flex items-center gap-3">
-        <img src="/HavnAI-logo.png" alt="HavnAI" class="w-12 h-12" />
-        <div>
-          <p class="text-xs tracking-[0.35em] uppercase text-slate-300">Stage 6 • Live</p>
-          <p class="text-lg font-semibold text-ocean">HavnAI Network</p>
-        </div>
-      </div>
-      <nav class="hidden md:flex gap-6 text-sm text-slate-200">
-        <a href="#how" class="hover:text-ocean transition">How it works</a>
-        <a href="#status" class="hover:text-ocean transition">Status</a>
-        <a href="#rewards" class="hover:text-ocean transition">Rewards</a>
-        <a href="#join" class="hover:text-ocean transition">Join</a>
-      </nav>
-      <div class="flex gap-3">
-        <a href="https://github.com/marcusllittle/havnai-core" target="_blank" class="px-4 py-2 text-sm border border-ocean/40 text-ocean rounded-full hover:bg-ocean/10 transition">GitHub</a>
-        <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" class="inline-flex px-4 py-2 text-sm bg-ocean text-slate-950 font-semibold rounded-full shadow-neon">Dashboard</a>
+  <head>
+    <script>
+      // Expose API base for static deployments (matches Next.js env)
+      window.NEXT_PUBLIC_API_BASE_URL = "/api";
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HavnAI Network — Own Your Intelligence</title>
+    <meta
+      name="description"
+      content="HavnAI is a decentralized GPU network where creators earn $HAI running AI models."
+    />
+    <meta property="og:title" content="HavnAI Network — Own Your Intelligence" />
+    <meta
+      property="og:description"
+      content="A decentralized GPU network with weighted model routing and dynamic $HAI rewards."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="icon" type="image/png" href="/HavnAI-logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Exo+2:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="site-body">
+    <div class="bg-aurora"></div>
+    <header class="site-header">
+      <div class="header-inner">
+        <a href="#home" class="brand">
+          <img src="/HavnAI-logo.png" alt="HavnAI" class="brand-logo" />
+          <div class="brand-text">
+            <span class="brand-stage">Stage 6 → 7 Alpha</span>
+            <span class="brand-name">HavnAI Network</span>
+          </div>
+        </a>
+        <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+          <span></span><span></span>
+        </button>
+        <nav class="nav-links" id="primaryNav">
+          <a href="#home">Home</a>
+          <a href="#how">How It Works</a>
+          <a href="#smart-routing">Smart Routing</a>
+          <a href="#rewards">Rewards</a>
+          <a href="#models">Models</a>
+          <a href="/dashboard">Dashboard</a>
+          <a href="#join">Join Alpha</a>
+        </nav>
       </div>
     </header>
 
-    <section class="max-w-6xl mx-auto px-6 py-16 lg:py-24">
-      <div class="grid lg:grid-cols-2 gap-12 items-center">
-        <div>
-          <p class="text-sm uppercase tracking-[0.4em] text-slate-400 mb-4">Decentralized Intelligence</p>
-          <h1 class="text-4xl sm:text-5xl font-semibold leading-tight mb-6">Own Your Intelligence.</h1>
-          <p class="text-lg text-slate-300 mb-8">The decentralized AI network rewarding GPU owners, creators, and innovators. Bring your compute, publish your models, and earn $HAI for every verified contribution.</p>
-          <div class="flex flex-wrap gap-4">
-            <a href="http://api.joinhavn.io:5001/installers/install-node.sh" class="px-6 py-3 bg-ocean text-slate-950 font-semibold rounded-full shadow-neon">Run a Node</a>
-            <a href="https://joinhavn.io/alpha" class="px-6 py-3 border border-ocean/60 rounded-full text-ocean hover:bg-ocean/10">Join Alpha</a>
-            <a href="https://github.com/marcusllittle/havnai-web/tree/main/docs" class="px-6 py-3 border border-slate-600 rounded-full text-slate-200 hover:border-ocean/50">Explore Docs</a>
-          </div>
-        </div>
-        <div class="bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur relative overflow-hidden">
-          <div class="absolute -top-16 -right-16 w-64 h-64 bg-ocean/30 blur-3xl" aria-hidden="true"></div>
-          <p class="text-sm text-slate-400 mb-4">Live Grid Snapshot</p>
-          <div id="heroStats" class="grid grid-cols-2 gap-6 text-center">
-            <div>
-              <p class="text-3xl font-semibold" id="heroNodes">--</p>
-              <p class="text-xs uppercase tracking-widest text-slate-400">Active Nodes</p>
+    <main>
+      <!-- HERO -->
+      <section id="home" class="hero">
+        <div class="hero-inner">
+          <div class="hero-content">
+            <p class="hero-kicker">Decentralized GPU Intelligence</p>
+            <h1 class="hero-title">OWN YOUR INTELLIGENCE</h1>
+            <p class="hero-subtitle">
+              A decentralized GPU network where creators earn
+              <strong>$HAI</strong> running AI models. Weighted routing, benchmark-driven
+              model tiers, and live rewards.
+            </p>
+            <div class="hero-cta">
+              <a href="https://joinhavn.io/alpha" class="btn primary">Join Alpha</a>
+              <a href="/dashboard" class="btn secondary">View Dashboard</a>
             </div>
-            <div>
-              <p class="text-3xl font-semibold" id="heroJobs">--</p>
-              <p class="text-xs uppercase tracking-widest text-slate-400">Jobs / 24H</p>
-            </div>
-            <div>
-              <p class="text-3xl font-semibold" id="heroSuccess">--%</p>
-              <p class="text-xs uppercase tracking-widest text-slate-400">Success Rate</p>
-            </div>
-            <div>
-            <p class="text-3xl font-semibold break-words" id="heroModel" style="word-break: break-word;">--</p>
-              <p class="text-xs uppercase tracking-widest text-slate-400">Top Model</p>
+            <div class="hero-install-note">
+              <h3>Getting a node online (what actually worked)</h3>
+              <ol>
+                <li>Install NVIDIA drivers + CUDA on a 12–24&nbsp;GB GPU box.</li>
+                <li>Clone <code>havnai-node</code>, create a Python 3.11 venv, and install <code>requirements.txt</code>.</li>
+                <li>Set <code>SERVER_URL</code>, <code>WALLET</code>, and <code>CREATOR_MODE=true</code> in <code>~/.havnai/.env</code>.</li>
+                <li>Run <code>python client/client.py</code> and watch it register in the dashboard.</li>
+              </ol>
+              <p>
+                These are the exact steps we hardened after a lot of trial and error—no magic, just
+                a clean path from GPU to live jobs.
+              </p>
             </div>
           </div>
-          <p class="mt-6 text-xs text-slate-500">Data auto-refreshes from /api/models/stats</p>
+          <div class="hero-panel">
+            <div class="stat-grid">
+              <div class="stat-card">
+                <span class="stat-label">Active Nodes</span>
+                <span class="stat-value" id="heroActiveNodes">--</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Jobs (24h)</span>
+                <span class="stat-value" id="heroJobs24h">--</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Success Rate</span>
+                <span class="stat-value" id="heroSuccessRate">--%</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Top Model</span>
+                <span class="stat-value small" id="heroTopModel">--</span>
+              </div>
+            </div>
+            <div class="stat-footnote">
+              Backed by <code>/api/models/stats</code> from the live coordinator.
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section id="how" class="max-w-6xl mx-auto px-6 py-12">
-      <div class="bg-white/5 border border-white/10 rounded-3xl p-10 backdrop-blur">
-        <div class="flex flex-col gap-4 mb-8">
-          <p class="text-sm text-ocean tracking-[0.3em] uppercase">How it Works</p>
-          <h2 class="text-3xl font-semibold">Decentralized Intelligence for Everyone.</h2>
-          <p class="text-slate-400">Install the node, process real AI workloads, and earn $HAI for every verified task.</p>
+      <!-- HOW IT WORKS -->
+      <section id="how" class="section">
+        <div class="section-header">
+          <h2>How It Works</h2>
+          <p>From GPU to $HAI rewards in four concrete steps.</p>
         </div>
-        <div class="grid md:grid-cols-3 gap-6">
-          <article class="p-6 rounded-2xl border border-white/10 bg-white/5">
-            <p class="text-3xl mb-3">1️⃣</p>
-            <h3 class="text-xl font-semibold mb-2">Install Node</h3>
-            <p class="text-slate-400 text-sm mb-3">Bootstrap via Docker or the guided installer in under five minutes.</p>
-            <a href="https://github.com/marcusllittle/havnai-web/tree/main/docs#get-started" class="text-ocean text-sm font-semibold">Get Started →</a>
+        <div class="steps-grid">
+          <article class="step-card">
+            <div class="step-icon">1</div>
+            <h3>Connect Your GPU Node</h3>
+            <p>
+              Point the HavnAI node client at the coordinator, set your wallet, and enable
+              <code>CREATOR_MODE</code> to accept image/video jobs.
+            </p>
           </article>
-          <article class="p-6 rounded-2xl border border-white/10 bg-white/5">
-            <p class="text-3xl mb-3">2️⃣</p>
-            <h3 class="text-xl font-semibold mb-2">Generate Intelligence</h3>
-            <p class="text-slate-400 text-sm mb-3">Process image, text, and custom workflows sourced from the network.</p>
-            <span class="text-slate-500 text-sm">GPU jobs + creator models.</span>
+          <article class="step-card">
+            <div class="step-icon">2</div>
+            <h3>Receive AI Jobs</h3>
+            <p>
+              The coordinator queues jobs submitted to <code>/submit-job</code> and assigns them
+              only to compatible, healthy nodes.
+            </p>
           </article>
-          <article class="p-6 rounded-2xl border border-white/10 bg-white/5">
-            <p class="text-3xl mb-3">3️⃣</p>
-            <h3 class="text-xl font-semibold mb-2">Earn Rewards</h3>
-            <p class="text-slate-400 text-sm mb-3">Receive $HAI credits instantly for completed, verified tasks.</p>
-            <span class="text-slate-500 text-sm">On-chain settlements coming soon.</span>
+          <article class="step-card">
+            <div class="step-icon">3</div>
+            <h3>Run Models with Weighted Routing</h3>
+            <p>
+              Models are chosen with weighted random routing, favoring higher-tier, benchmarked
+              checkpoints.
+            </p>
+          </article>
+          <article class="step-card">
+            <div class="step-icon">4</div>
+            <h3>Earn $HAI Automatically</h3>
+            <p>
+              Each completed job records runtime, model weight, and quality tier to scale your
+              $HAI rewards.
+            </p>
           </article>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section id="status" class="max-w-6xl mx-auto px-6 py-12">
-      <div class="flex flex-col gap-6 mb-8">
-        <p class="text-sm text-ocean tracking-[0.3em] uppercase">Live Network Status</p>
-        <h2 class="text-3xl font-semibold">Compute. Create. Earn.</h2>
-        <p class="text-slate-400">Stage 6 • Creator validation & image generation. Live telemetry pulled from /api/models/stats.</p>
-      </div>
-      <div class="grid md:grid-cols-3 gap-6">
-        <div class="p-6 rounded-2xl border border-white/10 bg-white/5">
-          <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Active Nodes</p>
-          <div class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <p class="text-3xl font-semibold" id="statusNodes">--</p>
+      <!-- SMART ROUTING -->
+      <section id="smart-routing" class="section section-alt">
+        <div class="section-header">
+          <h2>Smart Routing · Weighted Models</h2>
+          <p>
+            Identical prompts, benchmark scores, and a registry-backed weight for every creator model.
+          </p>
+        </div>
+        <div class="routing-layout">
+          <div class="routing-copy">
+            <p>
+              When a user hits <code>/submit-job</code> with <code>"model": "auto"</code>, the
+              coordinator selects a model using weighted random routing. Weights are derived from a
+              benchmark → scoring → registry workflow:
+            </p>
+            <ul>
+              <li>Standardized prompts per domain (realism, anime, motion, text).</li>
+              <li>Rubric scoring → tier assignment (Tier 5 → Tier 1).</li>
+              <li>Tier ↔ target weight ↔ reward multiplier.</li>
+            </ul>
+            <p>
+              The result: more reliable, higher-quality models are chosen more often and rewarded more
+              aggressively in $HAI.
+            </p>
+          </div>
+          <div class="json-card">
+            <div class="json-card-label">Example routing weights</div>
+            <pre><code>{
+  "juggernautxl_ragnarokby": 77,
+  "majicmixRealistic_v7": 70,
+  "lazymixRealAmateur_v40": 55,
+  "perfectdeliberate_v5SD15": 50,
+  "epicrealismxl_vxviicrystalclear": 45
+}</code></pre>
           </div>
         </div>
-        <div class="p-6 rounded-2xl border border-white/10 bg-white/5">
-          <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Completed Jobs</p>
-          <p class="text-3xl font-semibold" id="statusJobs">--</p>
-        </div>
-        <div class="p-6 rounded-2xl border border-white/10 bg-white/5">
-          <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Success Rate</p>
-          <p class="text-3xl font-semibold" id="statusSuccess">--%</p>
-        </div>
-      </div>
-      <div class="mt-6 p-6 bg-white/5 border border-white/10 rounded-2xl">
-        <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Top Model</p>
-        <p class="text-2xl font-semibold break-words" id="statusModel" style="word-break: break-word;">--</p>
-      </div>
-    </section>
+      </section>
 
-    <section id="rewards" class="max-w-6xl mx-auto px-6 py-12">
-      <div class="bg-white/5 border border-white/10 rounded-3xl p-10">
-        <div class="flex flex-col gap-4 mb-10">
-          <p class="text-sm text-ocean tracking-[0.3em] uppercase">Rewards & $HAI</p>
-          <h2 class="text-3xl font-semibold">Process work. Get paid.</h2>
-          <p class="text-slate-400">Off-chain credits during alpha; on-chain $HAI settlements coming soon.</p>
+      <!-- REWARDS -->
+      <section id="rewards" class="section">
+        <div class="section-header">
+          <h2>Dynamic $HAI Rewards</h2>
+          <p>Weight tiers drive multipliers. Better models, bigger payouts.</p>
         </div>
-        <div class="grid md:grid-cols-3 gap-6">
-          <div class="p-6 border border-white/10 rounded-2xl bg-slate-950/30">
-            <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Step 1</p>
-            <p class="text-xl font-semibold">Job Posted</p>
-            <p class="text-slate-400 text-sm mt-2">Coordinator validates demand request + assigns trusted models.</p>
-          </div>
-          <div class="p-6 border border-white/10 rounded-2xl bg-slate-950/30">
-            <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Step 2</p>
-            <p class="text-xl font-semibold">Node Completes</p>
-            <p class="text-slate-400 text-sm mt-2">Your GPU executes the workflow with telemetry + provenance.</p>
-          </div>
-          <div class="p-6 border border-white/10 rounded-2xl bg-slate-950/30">
-            <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Step 3</p>
-            <p class="text-xl font-semibold">Reward Credited</p>
-            <p class="text-slate-400 text-sm mt-2">$HAI credits land instantly, ready for later on-chain settlement.</p>
-          </div>
+        <div class="table-wrapper">
+          <table class="rewards-table">
+            <thead>
+              <tr>
+                <th>Tier</th>
+                <th>Routing Weight</th>
+                <th>Reward Multiplier</th>
+                <th>Example Model</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>5</td>
+                <td>77</td>
+                <td>2.0×</td>
+                <td>juggernautXL</td>
+              </tr>
+              <tr>
+                <td>4</td>
+                <td>70</td>
+                <td>1.7×</td>
+                <td>majicmix</td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td>55</td>
+                <td>1.3×</td>
+                <td>lazymix</td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>50</td>
+                <td>1.1×</td>
+                <td>deliberate</td>
+              </tr>
+              <tr>
+                <td>1</td>
+                <td>45</td>
+                <td>1.0×</td>
+                <td>epicrealism</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <a href="https://github.com/marcusllittle/havnai-web/tree/main/docs#rewards" class="inline-flex mt-8 px-6 py-3 border border-ocean/60 rounded-full text-ocean hover:bg-ocean/10 font-semibold">Learn About Rewards</a>
-      </div>
-    </section>
+      </section>
 
-    <section id="join" class="max-w-6xl mx-auto px-6 py-12">
-      <div class="grid lg:grid-cols-2 gap-12 items-center">
-        <div>
-          <p class="text-sm text-ocean tracking-[0.3em] uppercase">Join Alpha / Community</p>
-          <h2 class="text-3xl font-semibold mt-3 mb-4">Help shape decentralized intelligence.</h2>
-          <p class="text-slate-400 mb-6">Join the private alpha and get early access to creator tooling, live telemetry, and $HAI reward drops.</p>
-          <form class="flex flex-col sm:flex-row gap-4">
-            <input type="email" placeholder="you@studio.com" class="flex-1 px-4 py-3 rounded-full bg-white/5 border border-white/10 focus:outline-none focus:border-ocean" />
-            <button type="submit" class="px-6 py-3 rounded-full bg-ocean text-slate-950 font-semibold shadow-neon">Join Waitlist</button>
-          </form>
-          <p class="text-xs text-slate-500 mt-3">Or <a href="https://joinhavn.io/alpha" class="text-ocean underline">fill out the Typeform</a>.</p>
+      <!-- MODEL SHOWCASE -->
+      <section id="models" class="section section-alt">
+        <div class="section-header">
+          <h2>Live Model Catalog</h2>
+          <p>
+            Models, weights, and tags pulled directly from the coordinator via
+            <code>/api/models/stats</code>.
+          </p>
         </div>
-        <div class="flex flex-col gap-4">
-          <p class="text-sm text-slate-400">Hang out with the community:</p>
-          <div class="flex gap-4 flex-wrap">
-            <a href="https://discord.gg/" class="px-5 py-3 rounded-full border border-white/10 hover:border-ocean/60">Discord</a>
-            <a href="https://github.com/marcusllittle/havnai-node" class="px-5 py-3 rounded-full border border-white/10 hover:border-ocean/60">GitHub</a>
-            <a href="https://x.com/joinHAVNAI" class="px-5 py-3 rounded-full border border-white/10 hover:border-ocean/60">X / Twitter</a>
+        <div class="model-grid" id="modelGrid">
+          <div class="model-card placeholder">
+            <p class="model-name">Loading models…</p>
+            <p class="model-weight">Weight —</p>
+            <p class="model-desc">
+              Once the coordinator responds, you’ll see the live registry here.
+            </p>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section id="resources" class="max-w-6xl mx-auto px-6 py-12">
-      <div class="flex flex-col gap-4 mb-8">
-        <p class="text-sm text-ocean tracking-[0.3em] uppercase">Docs & Resources</p>
-        <h2 class="text-3xl font-semibold">All signals. Zero noise.</h2>
-      </div>
-      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <a href="https://github.com/marcusllittle/havnai-core" class="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-ocean/60 transition">
-          <p class="text-lg font-semibold">GitHub</p>
-          <p class="text-slate-400 text-sm mt-2">Source, issues, roadmaps.</p>
-        </a>
-        <a href="https://github.com/marcusllittle/havnai-web/tree/main/docs" class="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-ocean/60 transition">
-          <p class="text-lg font-semibold">Docs</p>
-          <p class="text-slate-400 text-sm mt-2">Installers, APIs, tutorials.</p>
-        </a>
-        <a href="https://github.com/marcusllittle/havnai-web/blob/main/WHITEPAPER.md" class="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-ocean/60 transition">
-          <p class="text-lg font-semibold">Whitepaper</p>
-          <p class="text-slate-400 text-sm mt-2">Economic + technical blueprint.</p>
-        </a>
-        <a href="http://api.joinhavn.io:5001/dashboard" class="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-ocean/60 transition">
-          <p class="text-lg font-semibold">Dashboard</p>
-          <p class="text-slate-400 text-sm mt-2">Live telemetry + payouts.</p>
-        </a>
-      </div>
-    </section>
+      <!-- LIVE JOBS SNAPSHOT -->
+      <section class="section live-section">
+        <div class="section-header">
+          <h2>Live Jobs Snapshot</h2>
+          <p>Recent public jobs, straight from the grid.</p>
+        </div>
+        <div class="live-layout">
+          <div class="table-wrapper">
+            <table class="jobs-table">
+              <thead>
+                <tr>
+                  <th>Job</th>
+                  <th>Model</th>
+                  <th>Reward</th>
+                  <th>Status</th>
+                  <th>Preview</th>
+                </tr>
+              </thead>
+              <tbody id="jobsTableBody">
+                <tr>
+                  <td colspan="5">Waiting for recent jobs from /api/models/stats…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="live-summary">
+            <h3>Network Pulse</h3>
+            <ul>
+              <li><span>Active nodes</span><strong id="liveActiveNodes">--</strong></li>
+              <li><span>Jobs (24h)</span><strong id="liveJobs24h">--</strong></li>
+              <li><span>Success rate</span><strong id="liveSuccessRate">--%</strong></li>
+            </ul>
+          </div>
+        </div>
+      </section>
 
-    <footer class="max-w-6xl mx-auto px-6 py-12 border-t border-white/5 mt-8">
-      <div class="grid md:grid-cols-4 gap-6 text-sm text-slate-400">
-        <div>
-          <p class="font-semibold text-white mb-2">About</p>
-          <p>HavnAI is the decentralized intelligence layer for creators, GPU operators, and demand partners.</p>
+      <!-- JOIN / ALPHA -->
+      <section id="join" class="section join-section">
+        <div class="join-inner">
+          <div class="join-copy">
+            <h2>Join Stage 6 → 7 Alpha</h2>
+            <p>
+              We are validating weighted routing, benchmark-driven tiers, and the reward engine
+              across a small set of GPUs before opening the grid. If you are comfortable running
+              bleeding-edge AI infra, we want you in the loop.
+            </p>
+            <ul>
+              <li>12&nbsp;GB+ NVIDIA GPU (3060 / 3080 / 4090 class).</li>
+              <li>Solid upstream bandwidth and uptime.</li>
+              <li>Willingness to iterate on configs and report issues.</li>
+            </ul>
+          </div>
+          <div class="join-actions">
+            <a href="https://joinhavn.io/alpha" class="btn primary wide">Join Alpha (Typeform)</a>
+            <a href="http://api.joinhavn.io:5001/dashboard" class="btn tertiary wide"
+              >View Live Dashboard</a
+            >
+            <p class="join-note">
+              After joining, you’ll receive updated install + config steps tailored to your GPU
+              and OS.
+            </p>
+          </div>
         </div>
-        <div>
-          <p class="font-semibold text-white mb-2">Docs</p>
-          <ul class="space-y-2">
-            <li><a href="https://github.com/marcusllittle/havnai-web/tree/main/docs" class="hover:text-ocean">Get Started</a></li>
-            <li><a href="https://github.com/marcusllittle/havnai-web/tree/main/docs" class="hover:text-ocean">API</a></li>
-            <li><a href="https://github.com/marcusllittle/havnai-web/tree/main/docs" class="hover:text-ocean">Node Guide</a></li>
-          </ul>
+      </section>
+    </main>
+
+    <!-- FOOTER + PATREON -->
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div class="footer-main">
+          <div>
+            <h3>HavnAI</h3>
+            <p>Decentralized GPU network. Weighted model routing. $HAI rewards.</p>
+          </div>
+          <div>
+            <h4>Docs & Code</h4>
+            <ul>
+              <li><a href="https://github.com/marcusllittle/havnai-core">havnai-core</a></li>
+              <li><a href="https://github.com/marcusllittle/havnai-node">havnai-node</a></li>
+              <li><a href="https://github.com/marcusllittle/havnai-web">havnai-web</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4>Contact</h4>
+            <p><a href="mailto:support@joinhavn.io">support@joinhavn.io</a></p>
+          </div>
         </div>
-        <div>
-          <p class="font-semibold text-white mb-2">Legal</p>
-          <ul class="space-y-2">
-            <li><a href="/privacy" class="hover:text-ocean">Privacy</a></li>
-            <li><a href="/terms" class="hover:text-ocean">Terms</a></li>
-          </ul>
+        <div class="footer-patreon">
+          <span>Exclusive AI drops &amp; creator prompts</span>
+          <a href="https://patreon.com/cw/u38989793" target="_blank" rel="noreferrer"
+            >patreon.com/cw/u38989793</a
+          >
         </div>
-        <div>
-          <p class="font-semibold text-white mb-2">Contact</p>
-          <p>support@joinhavn.io</p>
-        </div>
+        <p class="footer-meta">© 2025 HavnAI Network. All rights reserved.</p>
       </div>
-      <p class="mt-6 text-xs text-slate-500">© 2025 HavnAI Network. Powered by Open Source & Codex.</p>
     </footer>
-  </div>
 
-  <script type="module">
-    import { apiGet } from "./lib/api.js";
+    <script>
+      (function () {
+        const API_BASE = window.NEXT_PUBLIC_API_BASE_URL || "/api";
 
-    const particleField = document.querySelector('.particle-field');
-    for (let i = 0; i < 60; i++) {
-      const dot = document.createElement('span');
-      dot.style.left = Math.random() * 100 + '%';
-      dot.style.bottom = Math.random() * 100 + '%';
-      dot.style.animationDelay = (Math.random() * 10) + 's';
-      dot.style.opacity = Math.random();
-      particleField.appendChild(dot);
-    }
+        // Responsive nav
+        const navToggle = document.getElementById("navToggle");
+        const primaryNav = document.getElementById("primaryNav");
+        navToggle.addEventListener("click", () => {
+          primaryNav.classList.toggle("nav-open");
+          navToggle.classList.toggle("nav-open");
+        });
 
-    const sampleStats = {
-      active_nodes: '--',
-      jobs_completed_24h: '--',
-      success_rate: '--',
-      top_model: '--'
-    };
+        // Fetch stats + registry + jobs from /api/models/stats
+        const heroActiveNodes = document.getElementById("heroActiveNodes");
+        const heroJobs24h = document.getElementById("heroJobs24h");
+        const heroSuccessRate = document.getElementById("heroSuccessRate");
+        const heroTopModel = document.getElementById("heroTopModel");
 
-    async function loadStats() {
-      try {
-        const data = await apiGet('/models/stats');
-        if (!data) throw new Error('No data returned');
-        updateStats(data);
-      } catch (err) {
-        updateStats(sampleStats);
-      }
-    }
+        const liveActiveNodes = document.getElementById("liveActiveNodes");
+        const liveJobs24h = document.getElementById("liveJobs24h");
+        const liveSuccessRate = document.getElementById("liveSuccessRate");
 
-    function updateStats(data) {
-      const nodes = data.active_nodes ?? sampleStats.active_nodes;
-      const jobs = data.jobs_completed_24h ?? sampleStats.jobs_completed_24h;
-      const success = data.success_rate ?? sampleStats.success_rate;
-      const model = data.top_model_display ?? data.top_model ?? sampleStats.top_model;
-      document.getElementById('heroNodes').textContent = nodes;
-      document.getElementById('heroJobs').textContent = jobs;
-      document.getElementById('heroSuccess').textContent = success + '%';
-      document.getElementById('heroModel').textContent = model;
-      document.getElementById('statusNodes').textContent = nodes;
-      document.getElementById('statusJobs').textContent = jobs;
-      document.getElementById('statusSuccess').textContent = success + '%';
-      document.getElementById('statusModel').textContent = model;
-    }
+        const modelGrid = document.getElementById("modelGrid");
+        const jobsTableBody = document.getElementById("jobsTableBody");
 
-    loadStats();
-    setInterval(loadStats, 15000);
-  </script>
-</body>
+        const sampleStats = {
+          active_nodes: 0,
+          jobs_completed_24h: 0,
+          success_rate: 0,
+          top_model: "—",
+          model_registry: [],
+          recent_jobs: [],
+        };
+
+        function safeArray(value) {
+          return Array.isArray(value) ? value : [];
+        }
+
+        function renderStats(data) {
+          const nodes = data.active_nodes ?? sampleStats.active_nodes;
+          const jobs = data.jobs_completed_24h ?? sampleStats.jobs_completed_24h;
+          const success = data.success_rate ?? sampleStats.success_rate;
+          const topModel = data.top_model ?? sampleStats.top_model;
+
+          heroActiveNodes.textContent = nodes;
+          heroJobs24h.textContent = jobs;
+          heroSuccessRate.textContent = typeof success === "number" ? success.toFixed(1) + "%" : success;
+          heroTopModel.textContent = topModel || "—";
+
+          liveActiveNodes.textContent = nodes;
+          liveJobs24h.textContent = jobs;
+          liveSuccessRate.textContent = typeof success === "number" ? success.toFixed(1) + "%" : success;
+        }
+
+        function renderModels(registry) {
+          const models = safeArray(registry);
+          if (!models.length) {
+            modelGrid.innerHTML =
+              '<div class="model-card placeholder"><p class="model-name">No models registered yet.</p><p class="model-weight">Weight —</p><p class="model-desc">Once the coordinator exposes the registry, models will appear here automatically.</p></div>';
+            return;
+          }
+
+          const cards = models
+            .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+            .slice(0, 12)
+            .map((entry) => {
+              const name = entry.name || entry.model || "unnamed-model";
+              const weight = entry.weight ?? entry.reward_weight ?? 0;
+              const tags = safeArray(entry.tags);
+              const description =
+                entry.description ||
+                (tags.length ? "Tagged: " + tags.join(", ") : "Creator model registered on the grid.");
+              const preview = entry.preview_url || "/HavnAI-logo.png";
+              return `
+                <article class="model-card">
+                  <div class="model-preview">
+                    <img src="${preview}" alt="${name} preview" loading="lazy" />
+                  </div>
+                  <div class="model-body">
+                    <h3 class="model-name">${name}</h3>
+                    <p class="model-weight">Weight: <strong>${weight}</strong></p>
+                    <p class="model-desc">${description}</p>
+                    ${
+                      tags.length
+                        ? `<div class="model-tags">${tags
+                            .slice(0, 4)
+                            .map((t) => `<span class="tag">${t}</span>`)
+                            .join("")}</div>`
+                        : ""
+                    }
+                  </div>
+                </article>
+              `;
+            })
+            .join("");
+
+          modelGrid.innerHTML = cards;
+        }
+
+        function renderJobs(jobs) {
+          const list = safeArray(jobs);
+          if (!list.length) {
+            jobsTableBody.innerHTML =
+              '<tr><td colspan="5">No recent public jobs reported yet.</td></tr>';
+            return;
+          }
+
+          const rows = list
+            .slice(0, 10)
+            .map((job) => {
+              const id = job.job_id || job.id || "—";
+              const model = job.model || "—";
+              const reward =
+                typeof job.reward_hai === "number"
+                  ? job.reward_hai.toFixed(6)
+                  : typeof job.reward === "number"
+                  ? job.reward.toFixed(6)
+                  : "—";
+              const status = (job.status || "UNKNOWN").toString().toUpperCase();
+              const imageUrl = job.image_url || job.preview_url || "";
+              const preview = imageUrl
+                ? `<button class="preview-thumb" data-preview="${imageUrl}" aria-label="Open preview for ${id}">
+                    <img src="${imageUrl}" alt="${id} preview" loading="lazy" />
+                  </button>`
+                : "—";
+              return `
+                <tr>
+                  <td><code>${id}</code></td>
+                  <td>${model}</td>
+                  <td>${reward || "—"}</td>
+                  <td>${status}</td>
+                  <td>${preview}</td>
+                </tr>
+              `;
+            })
+            .join("");
+
+          jobsTableBody.innerHTML = rows;
+        }
+
+        async function loadStats() {
+          try {
+            const res = await fetch(API_BASE + "/models/stats", { credentials: "same-origin" });
+            if (!res.ok) throw new Error("stats HTTP " + res.status);
+            const data = await res.json();
+            renderStats(data);
+            renderModels(data.model_registry || data.models || []);
+            renderJobs(data.recent_jobs || []);
+          } catch (err) {
+            console.error("Failed to load /api/models/stats", err);
+            renderStats(sampleStats);
+            renderModels(sampleStats.model_registry);
+            renderJobs(sampleStats.recent_jobs);
+          }
+        }
+
+        loadStats();
+        setInterval(loadStats, 15000);
+
+        // Simple lightbox for job previews (reused by dashboard if needed)
+        const body = document.body;
+        function ensureLightbox() {
+          let lb = document.getElementById("lightbox");
+          if (!lb) {
+            lb = document.createElement("div");
+            lb.id = "lightbox";
+            lb.className = "lightbox hidden";
+            lb.innerHTML =
+              '<div class="lightbox-backdrop"></div><div class="lightbox-content"><img alt="Preview" /><button class="lightbox-close" aria-label="Close preview">×</button></div>';
+            body.appendChild(lb);
+            lb.addEventListener("click", (evt) => {
+              if (
+                evt.target === lb ||
+                evt.target.classList.contains("lightbox-backdrop") ||
+                evt.target.classList.contains("lightbox-close")
+              ) {
+                lb.classList.add("hidden");
+              }
+            });
+          }
+          return lb;
+        }
+
+        jobsTableBody.addEventListener("click", (evt) => {
+          const btn = evt.target.closest(".preview-thumb");
+          if (!btn) return;
+          const src = btn.getAttribute("data-preview");
+          if (!src) return;
+          const lb = ensureLightbox();
+          const img = lb.querySelector("img");
+          img.src = src;
+          lb.classList.remove("hidden");
+        });
+      })();
+    </script>
+  </body>
 </html>

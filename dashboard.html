@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <script>
+      // Expose API base for static deployments (mirrors Next.js env)
+      window.NEXT_PUBLIC_API_BASE_URL = "/api";
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HavnAI Grid Dashboard · Stage 6 → 7</title>
+    <meta
+      name="description"
+      content="Development dashboard for the HavnAI decentralized GPU network: models, jobs, and nodes in real time."
+    />
+    <link rel="icon" type="image/png" href="/HavnAI-logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Exo+2:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="dashboard.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body class="site-body">
+    <div class="bg-aurora"></div>
+    <header class="site-header">
+      <div class="header-inner">
+        <a href="/" class="brand">
+          <img src="/HavnAI-logo.png" alt="HavnAI" class="brand-logo" />
+          <div class="brand-text">
+            <span class="brand-stage">Stage 6 → 7 Alpha</span>
+            <span class="brand-name">HavnAI Grid</span>
+          </div>
+        </a>
+        <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+          <span></span><span></span>
+        </button>
+        <nav class="nav-links" id="primaryNav">
+          <a href="/#home">Home</a>
+          <a href="/#how">How It Works</a>
+          <a href="/#smart-routing">Smart Routing</a>
+          <a href="/#rewards">Rewards</a>
+          <a href="/#models">Models</a>
+          <a href="/dashboard" class="nav-active">Dashboard</a>
+          <a href="https://joinhavn.io/alpha" target="_blank">Join Alpha</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="dashboard-main">
+      <!-- SUMMARY ROW -->
+      <section class="section dashboard-summary">
+        <div class="section-header">
+          <h2>Grid Telemetry</h2>
+          <p>Live stats from the coordinator, powered by <code>/api/models/stats</code> and <code>/nodes</code>.</p>
+        </div>
+        <div class="summary-grid">
+          <article class="summary-card">
+            <span class="label">Active Nodes</span>
+            <strong id="metricActiveNodes">--</strong>
+          </article>
+          <article class="summary-card">
+            <span class="label">Jobs (24h)</span>
+            <strong id="metricJobs24h">--</strong>
+          </article>
+          <article class="summary-card">
+            <span class="label">Success Rate</span>
+            <strong id="metricSuccessRate">--%</strong>
+          </article>
+          <article class="summary-card">
+            <span class="label">Top Model</span>
+            <strong id="metricTopModel">--</strong>
+          </article>
+          <article class="summary-card">
+            <span class="label">Total Nodes (all)</span>
+            <strong id="metricTotalNodes">--</strong>
+          </article>
+          <article class="summary-card">
+            <span class="label">Avg Utilization</span>
+            <strong id="metricAvgUtil">--%</strong>
+          </article>
+        </div>
+        <div class="summary-meta">
+          <span id="summaryUpdated">Last Updated: --</span>
+        </div>
+      </section>
+
+      <!-- MODEL LEADERBOARD -->
+      <section class="section">
+        <div class="section-header header-row">
+          <div>
+            <h2>Model Leaderboard</h2>
+            <p>Weighted routing favors higher-tier models. Sorted by weight.</p>
+          </div>
+          <div class="model-controls">
+            <label for="modelFilter">Filter</label>
+            <select id="modelFilter">
+              <option value="all">All</option>
+              <option value="realism">Realism</option>
+              <option value="anime">Anime</option>
+              <option value="cartoon">Cartoon</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table class="leaderboard-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Model</th>
+                <th>Weight</th>
+                <th>Tags</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboardBody">
+              <tr>
+                <td colspan="4">Loading model registry…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- JOBS LINE GRAPH -->
+      <section class="section dashboard-chart">
+        <div class="section-header header-row">
+          <div>
+            <h2>Jobs Over Time</h2>
+            <p>Live job throughput from recent activity.</p>
+          </div>
+          <div class="range-toggle">
+            <button type="button" data-range="1h" class="range-btn active">1h</button>
+            <button type="button" data-range="6h" class="range-btn">6h</button>
+            <button type="button" data-range="24h" class="range-btn">24h</button>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="jobsChart" aria-label="Jobs over time" role="img"></canvas>
+        </div>
+      </section>
+
+      <!-- JOB FEED -->
+      <section class="section">
+        <div class="section-header">
+          <h2>Recent Jobs Feed</h2>
+          <p>Last few jobs processed on the grid, including reward and preview.</p>
+        </div>
+        <div class="table-wrapper">
+          <table class="jobs-table">
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>Model</th>
+                <th>Reward</th>
+                <th>Status</th>
+                <th>Preview</th>
+                <th>Completed</th>
+              </tr>
+            </thead>
+            <tbody id="jobsFeedBody">
+              <tr>
+                <td colspan="6">Waiting for /api/models/stats → recent_jobs…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- NODE VISUALIZATION -->
+      <section class="section">
+        <div class="section-header">
+          <h2>Node Grid</h2>
+          <p>Live creator/worker nodes with GPU type, load, and heartbeat.</p>
+        </div>
+        <div class="node-grid" id="nodeGrid">
+          <article class="node-card placeholder">
+            <h3>Waiting for nodes…</h3>
+            <p>Once <code>/nodes</code> responds, nodes will appear here.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner dashboard-footer">
+        <div class="footer-patreon small">
+          <span>Exclusive AI drops &amp; creator prompts</span>
+          <a href="https://patreon.com/cw/u38989793" target="_blank" rel="noreferrer"
+            >patreon.com/cw/u38989793</a
+          >
+        </div>
+        <p class="footer-meta">HavnAI Grid · Development dashboard · Stage 6 → 7 Alpha</p>
+      </div>
+    </footer>
+
+    <script>
+      (function () {
+        const API_BASE = window.NEXT_PUBLIC_API_BASE_URL || "/api";
+        const ROOT_BASE = API_BASE.replace(/\\/api$/, "") || "";
+
+        // Shared nav behavior
+        const navToggle = document.getElementById("navToggle");
+        const primaryNav = document.getElementById("primaryNav");
+        navToggle.addEventListener("click", () => {
+          primaryNav.classList.toggle("nav-open");
+          navToggle.classList.toggle("nav-open");
+        });
+
+        // Elements
+        const metricActiveNodes = document.getElementById("metricActiveNodes");
+        const metricJobs24h = document.getElementById("metricJobs24h");
+        const metricSuccessRate = document.getElementById("metricSuccessRate");
+        const metricTopModel = document.getElementById("metricTopModel");
+        const metricTotalNodes = document.getElementById("metricTotalNodes");
+        const metricAvgUtil = document.getElementById("metricAvgUtil");
+        const summaryUpdated = document.getElementById("summaryUpdated");
+
+        const leaderboardBody = document.getElementById("leaderboardBody");
+        const modelFilter = document.getElementById("modelFilter");
+
+        const jobsFeedBody = document.getElementById("jobsFeedBody");
+        const nodeGrid = document.getElementById("nodeGrid");
+
+        const rangeButtons = Array.from(document.querySelectorAll(".range-btn"));
+        const ctx = document.getElementById("jobsChart").getContext("2d");
+        let jobsChart = null;
+        let cachedJobs = [];
+        let cachedModels = [];
+
+        function safeArray(value) {
+          return Array.isArray(value) ? value : [];
+        }
+
+        function setSummary(data, nodeSummary) {
+          const nodes = data.active_nodes ?? nodeSummary?.online_nodes ?? "--";
+          const jobs = data.jobs_completed_24h ?? "--";
+          const success = data.success_rate ?? "--";
+          const topModel = data.top_model ?? "--";
+
+          metricActiveNodes.textContent = nodes;
+          metricJobs24h.textContent = jobs;
+          metricSuccessRate.textContent =
+            typeof success === "number" ? success.toFixed(1) + "%" : success;
+          metricTopModel.textContent = topModel;
+
+          metricTotalNodes.textContent = nodeSummary?.total_nodes ?? "--";
+          const avgUtil =
+            typeof nodeSummary?.avg_utilization === "number"
+              ? nodeSummary.avg_utilization.toFixed(1) + "%"
+              : "--";
+          metricAvgUtil.textContent = avgUtil;
+          summaryUpdated.textContent = "Last Updated: " + new Date().toLocaleTimeString();
+        }
+
+        function renderLeaderboard(models) {
+          const filter = modelFilter.value;
+          const filtered = safeArray(models).filter((m) => {
+            if (filter === "all") return true;
+            const tags = safeArray(m.tags).map((t) => t.toString().toLowerCase());
+            if (filter === "realism") return tags.includes("realism");
+            if (filter === "anime") return tags.includes("anime");
+            if (filter === "cartoon") return tags.includes("cartoon");
+            return true;
+          });
+
+          if (!filtered.length) {
+            leaderboardBody.innerHTML =
+              '<tr><td colspan="4">No models match the current filter.</td></tr>';
+            return;
+          }
+
+          const sorted = filtered
+            .slice()
+            .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+            .slice(0, 32);
+
+          const rows = sorted
+            .map((entry, index) => {
+              const name = entry.name || entry.model || "unnamed-model";
+              const weight = entry.weight ?? entry.reward_weight ?? 0;
+              const tags = safeArray(entry.tags);
+              let rankClass = "";
+              if (index === 0) rankClass = "gold";
+              else if (index === 1) rankClass = "silver";
+              else if (index === 2) rankClass = "bronze";
+              return `
+                <tr class="${rankClass}">
+                  <td>${index + 1}</td>
+                  <td>${name}</td>
+                  <td>${weight}</td>
+                  <td>${tags.join(", ")}</td>
+                </tr>
+              `;
+            })
+            .join("");
+
+          leaderboardBody.innerHTML = rows;
+        }
+
+        function buildJobSeries(jobs, rangeHours) {
+          const now = Date.now();
+          const cutoff = now - rangeHours * 60 * 60 * 1000;
+          const buckets = new Map();
+
+          safeArray(jobs).forEach((job) => {
+            const tsRaw = job.completed_at || job.timestamp || job.submitted_at;
+            if (!tsRaw) return;
+            const ts =
+              typeof tsRaw === "number" ? tsRaw * 1000 : Date.parse(tsRaw.toString());
+            if (Number.isNaN(ts) || ts < cutoff) return;
+            const minute = Math.floor(ts / 60000) * 60000;
+            buckets.set(minute, (buckets.get(minute) || 0) + 1);
+          });
+
+          if (!buckets.size) {
+            // Fallback synthetic trend
+            const labels = [];
+            const data = [];
+            const points = 12;
+            for (let i = points - 1; i >= 0; i--) {
+              const t = now - (i * rangeHours * 60 * 60 * 1000) / points;
+              labels.push(new Date(t).toLocaleTimeString());
+              data.push(Math.round(Math.random() * 4));
+            }
+            return { labels, data };
+          }
+
+          const sortedKeys = Array.from(buckets.keys()).sort((a, b) => a - b);
+          const labels = sortedKeys.map((ms) => new Date(ms).toLocaleTimeString());
+          const data = sortedKeys.map((ms) => buckets.get(ms));
+          return { labels, data };
+        }
+
+        function renderJobsChart(jobs, range) {
+          const rangeHours = range === "1h" ? 1 : range === "6h" ? 6 : 24;
+          const { labels, data } = buildJobSeries(jobs, rangeHours);
+
+          const config = {
+            type: "line",
+            data: {
+              labels,
+              datasets: [
+                {
+                  label: "Jobs",
+                  data,
+                  borderColor: "#00eaff",
+                  backgroundColor: "rgba(0, 234, 255, 0.25)",
+                  tension: 0.25,
+                  pointRadius: 2,
+                  pointHoverRadius: 4,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  display: false,
+                },
+              },
+              scales: {
+                x: {
+                  ticks: { color: "#9db3c4", maxRotation: 0, autoSkip: true },
+                  grid: { color: "rgba(255,255,255,0.04)" },
+                },
+                y: {
+                  beginAtZero: true,
+                  ticks: { color: "#9db3c4", precision: 0 },
+                  grid: { color: "rgba(255,255,255,0.04)" },
+                },
+              },
+            },
+          };
+
+          if (jobsChart) {
+            jobsChart.destroy();
+          }
+          jobsChart = new Chart(ctx, config);
+        }
+
+        function renderJobsFeed(jobs) {
+          const list = safeArray(jobs);
+          if (!list.length) {
+            jobsFeedBody.innerHTML =
+              '<tr><td colspan="6">No recent jobs yet. Submit via /submit-job to see activity.</td></tr>';
+            return;
+          }
+
+          const rows = list
+            .slice(0, 20)
+            .map((job) => {
+              const id = job.job_id || job.id || "—";
+              const model = job.model || "—";
+              const reward =
+                typeof job.reward_hai === "number"
+                  ? job.reward_hai.toFixed(6)
+                  : typeof job.reward === "number"
+                  ? job.reward.toFixed(6)
+                  : "—";
+              const status = (job.status || "UNKNOWN").toString().toUpperCase();
+              const completedRaw = job.completed_at || job.timestamp || null;
+              const completed = completedRaw
+                ? new Date(
+                    typeof completedRaw === "number" ? completedRaw * 1000 : completedRaw
+                  ).toLocaleTimeString()
+                : "—";
+              const imageUrl = job.image_url || job.preview_url || "";
+              const preview = imageUrl
+                ? `<button class="preview-thumb" data-preview="${imageUrl}" aria-label="Open preview for ${id}">
+                    <img src="${imageUrl}" alt="${id} preview" loading="lazy" />
+                  </button>`
+                : "—";
+
+              return `
+                <tr>
+                  <td><code>${id}</code></td>
+                  <td>${model}</td>
+                  <td>${reward}</td>
+                  <td>${status}</td>
+                  <td>${preview}</td>
+                  <td>${completed}</td>
+                </tr>
+              `;
+            })
+            .join("");
+
+          jobsFeedBody.innerHTML = rows;
+        }
+
+        function renderNodes(nodes) {
+          const list = safeArray(nodes);
+          if (!list.length) {
+            nodeGrid.innerHTML =
+              '<article class="node-card placeholder"><h3>No nodes yet</h3><p>Once nodes register with the coordinator, they will appear here.</p></article>';
+            return;
+          }
+
+          const cards = list
+            .slice()
+            .sort((a, b) => {
+              const utilA = a.avg_utilization ?? a.gpu_utilization ?? 0;
+              const utilB = b.avg_utilization ?? b.gpu_utilization ?? 0;
+              return utilB - utilA;
+            })
+            .map((node) => {
+              const name = node.node_name || node.node_id;
+              const status = node.status || "offline";
+              const util = (node.avg_utilization ?? node.gpu_utilization ?? 0).toFixed(1);
+              const uptime = node.uptime_human || "—";
+              const lastSeen = node.last_seen || "—";
+              const role = node.role || "worker";
+              const gpuName =
+                (node.gpu && (node.gpu.model || node.gpu.gpu_name)) ||
+                (node.last_result &&
+                  node.last_result.metrics &&
+                  node.last_result.metrics.gpu_name) ||
+                "Unknown GPU";
+              return `
+                <article class="node-card ${status === "online" ? "online" : "offline"}">
+                  <header>
+                    <h3>${name}</h3>
+                    <span class="node-role">${role}</span>
+                  </header>
+                  <dl>
+                    <div>
+                      <dt>GPU</dt>
+                      <dd>${gpuName}</dd>
+                    </div>
+                    <div>
+                      <dt>Uptime</dt>
+                      <dd>${uptime}</dd>
+                    </div>
+                    <div>
+                      <dt>Load</dt>
+                      <dd>${util}%</dd>
+                    </div>
+                    <div>
+                      <dt>Last heartbeat</dt>
+                      <dd>${lastSeen}</dd>
+                    </div>
+                  </dl>
+                  <footer>
+                    <span class="node-status">${status}</span>
+                  </footer>
+                </article>
+              `;
+            })
+            .join("");
+
+          nodeGrid.innerHTML = cards;
+        }
+
+        async function fetchStatsAndModels() {
+          try {
+            const res = await fetch(API_BASE + "/models/stats", { credentials: "same-origin" });
+            if (!res.ok) throw new Error("stats HTTP " + res.status);
+            const data = await res.json();
+            cachedJobs = safeArray(data.recent_jobs);
+            cachedModels = safeArray(data.model_registry || data.models || []);
+            setSummary(data, null);
+            renderLeaderboard(cachedModels);
+            renderJobsFeed(cachedJobs);
+            renderJobsChart(cachedJobs, "1h");
+          } catch (err) {
+            console.error("Failed to fetch /api/models/stats", err);
+          }
+        }
+
+        async function fetchNodes() {
+          try {
+            const res = await fetch(ROOT_BASE + "/nodes", { credentials: "same-origin" });
+            if (!res.ok) throw new Error("nodes HTTP " + res.status);
+            const data = await res.json();
+            renderNodes(data.nodes || []);
+            setSummary(
+              {
+                active_nodes: data.summary?.online_nodes,
+                jobs_completed_24h: undefined,
+                success_rate: undefined,
+                top_model: undefined,
+              },
+              data.summary || null
+            );
+          } catch (err) {
+            console.error("Failed to fetch /nodes", err);
+          }
+        }
+
+        // Range toggles
+        rangeButtons.forEach((btn) => {
+          btn.addEventListener("click", () => {
+            rangeButtons.forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            const range = btn.getAttribute("data-range") || "1h";
+            renderJobsChart(cachedJobs, range);
+          });
+        });
+
+        modelFilter.addEventListener("change", () => {
+          renderLeaderboard(cachedModels);
+        });
+
+        // Lightbox for previews
+        const body = document.body;
+        function ensureLightbox() {
+          let lb = document.getElementById("lightbox");
+          if (!lb) {
+            lb = document.createElement("div");
+            lb.id = "lightbox";
+            lb.className = "lightbox hidden";
+            lb.innerHTML =
+              '<div class="lightbox-backdrop"></div><div class="lightbox-content"><img alt="Preview" /><button class="lightbox-close" aria-label="Close preview">×</button></div>';
+            body.appendChild(lb);
+            lb.addEventListener("click", (evt) => {
+              if (
+                evt.target === lb ||
+                evt.target.classList.contains("lightbox-backdrop") ||
+                evt.target.classList.contains("lightbox-close")
+              ) {
+                lb.classList.add("hidden");
+              }
+            });
+          }
+          return lb;
+        }
+
+        jobsFeedBody.addEventListener("click", (evt) => {
+          const btn = evt.target.closest(".preview-thumb");
+          if (!btn) return;
+          const src = btn.getAttribute("data-preview");
+          if (!src) return;
+          const lb = ensureLightbox();
+          const img = lb.querySelector("img");
+          img.src = src;
+          lb.classList.remove("hidden");
+        });
+
+        // Initial load + polling
+        fetchStatsAndModels();
+        fetchNodes();
+        setInterval(fetchStatsAndModels, 15000);
+        setInterval(fetchNodes, 20000);
+      })();
+    </script>
+  </body>
+</html>
+
