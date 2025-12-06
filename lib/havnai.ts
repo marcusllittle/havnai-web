@@ -30,13 +30,26 @@ export interface ResultResponse {
   error?: string;
 }
 
-// Single source of truth for the coordinator base URL.
-// - In production you can set NEXT_PUBLIC_HAVNAI_API_BASE to "https://api.joinhavn.io:5001"
-// - By default we assume the frontend is behind a proxy that exposes the core at /api.
-const API_BASE =
-  process.env.NEXT_PUBLIC_HAVNAI_API_BASE && process.env.NEXT_PUBLIC_HAVNAI_API_BASE.length > 0
-    ? process.env.NEXT_PUBLIC_HAVNAI_API_BASE
-    : "/api";
+function getApiBase(): string {
+  const envBase =
+    process.env.NEXT_PUBLIC_HAVNAI_API_BASE && process.env.NEXT_PUBLIC_HAVNAI_API_BASE.length > 0
+      ? process.env.NEXT_PUBLIC_HAVNAI_API_BASE
+      : undefined;
+
+  if (typeof window !== "undefined") {
+    const origin = window.location.origin || "";
+    const isLocalhost =
+      origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1");
+
+    if (isLocalhost && envBase) {
+      return envBase;
+    }
+
+    return "/api";
+  }
+
+  return envBase || "/api";
+}
 
 // Wallet used when submitting jobs from the /test page.
 // Configure NEXT_PUBLIC_HAVNAI_WALLET in .env.local to point to your real EVM address.
@@ -46,7 +59,7 @@ const WALLET =
     : "0x0000000000000000000000000000000000000000";
 
 function apiUrl(path: string): string {
-  return `${API_BASE}${path}`;
+  return `${getApiBase()}${path}`;
 }
 
 function resolveAssetUrl(path: string | undefined | null): string | undefined {
@@ -54,7 +67,7 @@ function resolveAssetUrl(path: string | undefined | null): string | undefined {
   // If already absolute (http/https), return as-is.
   if (/^https?:\/\//i.test(path)) return path;
   // Otherwise, prefix with API_BASE so we hit the coordinator, not the Next dev server.
-  return `${API_BASE}${path}`;
+  return `${getApiBase()}${path}`;
 }
 
 export async function submitAutoJob(
