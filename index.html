@@ -66,16 +66,68 @@
               model tiers, and live rewards.
             </p>
             <div class="hero-install-note">
-              <h3>Getting a node online (what actually worked)</h3>
-              <ol>
-                <li>Install NVIDIA drivers + CUDA on a 12–24&nbsp;GB GPU box.</li>
-                <li>Clone <code>havnai-node</code>, create a Python 3.11 venv, and install <code>requirements.txt</code>.</li>
-                <li>Set <code>SERVER_URL</code>, <code>WALLET</code>, and <code>CREATOR_MODE=true</code> in <code>~/.havnai/.env</code>.</li>
-                <li>Run <code>python client/client.py</code> and watch it register in the dashboard.</li>
-              </ol>
+              <h3>Join the HavnAI GPU Grid</h3>
+
+              <h4>1. One‑line installer</h4>
+              <p>On your GPU machine, run:</p>
+              <pre><code>curl -fsSL http://api.joinhavn.io:5001/installers/install-node.sh \
+  | bash -s -- --server http://api.joinhavn.io:5001</code></pre>
+              <p>You can also pass your wallet and creator flag directly:</p>
+              <pre><code>curl -fsSL http://api.joinhavn.io:5001/installers/install-node.sh \
+  | bash -s -- --server http://api.joinhavn.io:5001 \
+           --wallet 0xYOUR_WALLET_ADDRESS \
+           --creator \
+           --start</code></pre>
+
+              <h4>2. Prerequisites</h4>
+              <ul>
+                <li>64‑bit Linux (Ubuntu/Debian/RHEL) or macOS&nbsp;12+.</li>
+                <li>Recent NVIDIA GPU with driver + CUDA/cuDNN installed.</li>
+                <li>Python&nbsp;3.10+ and <code>curl</code>.</li>
+                <li>12–16&nbsp;GB free disk for models.</li>
+                <li>EVM‑compatible wallet address for $HAI rewards.</li>
+              </ul>
+              <p>On Ubuntu/Debian you typically need:</p>
+              <pre><code>sudo apt update && sudo apt install -y \
+  python3 python3-venv python3-pip curl ffmpeg</code></pre>
+
+              <h4>3. What the installer actually does</h4>
+              <ul>
+                <li>Creates <code>~/.havnai/</code> as the node home.</li>
+                <li>Clones/updates <code>havnai-node</code> under <code>~/Downloads/source-code</code> (or similar).</li>
+                <li>Creates a Python virtualenv at <code>~/.havnai/venv</code> and installs all deps there.</li>
+                <li>Writes <code>~/.havnai/.env</code> with sane defaults.</li>
+                <li>Sets up a user‑level systemd service <code>havnai-node</code> and optionally starts it.</li>
+              </ul>
+              <p>No system‑wide Python packages are touched; everything lives inside <code>~/.havnai</code>.</p>
+
+              <h4>4. Configure your wallet &amp; server</h4>
+              <p>Edit the env file:</p>
+              <pre><code>nano ~/.havnai/.env</code></pre>
+              <p>Set at least:</p>
+              <pre><code>WALLET=0xYOUR_WALLET_ADDRESS
+SERVER_URL=http://api.joinhavn.io:5001
+CREATOR_MODE=true    # accept image/video jobs</code></pre>
+              <p>Good starting point for image jobs:</p>
+              <pre><code>HAI_STEPS=40
+HAI_GUIDANCE=6.5
+HAI_WIDTH=832
+HAI_HEIGHT=1248
+HAI_CLIPSKIP=2</code></pre>
+
+              <h4>5. Enable and start the node service</h4>
+              <pre><code>systemctl --user daemon-reload
+systemctl --user enable havnai-node
+systemctl --user start havnai-node</code></pre>
+              <p>To keep it running after logout on Linux:</p>
+              <pre><code>loginctl enable-linger $USER</code></pre>
+              <p>Check status and logs:</p>
+              <pre><code>systemctl --user status havnai-node
+journalctl --user -u havnai-node -f</code></pre>
+
               <p>
-                These are the exact steps we hardened after a lot of trial and error—no magic, just
-                a clean path from GPU to live jobs.
+                You should see logs like “Node ID: … Role: CREATOR”, “Wallet linked with coordinator”,
+                and “Heartbeat OK (creator)” once the node is live.
               </p>
             </div>
           </div>
