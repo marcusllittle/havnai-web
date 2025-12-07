@@ -24,6 +24,7 @@ const MODEL_OPTIONS: { id: string; label: string }[] = [
 
 const TestPage: React.FC = () => {
   const [prompt, setPrompt] = useState("");
+  const [negativePrompt, setNegativePrompt] = useState("");
   const [jobId, setJobId] = useState<string | undefined>();
   const [statusMessage, setStatusMessage] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
@@ -69,7 +70,8 @@ const TestPage: React.FC = () => {
     try {
       const id = await submitAutoJob(
         trimmed,
-        selectedModel === "auto" ? undefined : selectedModel
+        selectedModel === "auto" ? undefined : selectedModel,
+        negativePrompt.trim()
       );
       setJobId(id);
       setStatusMessage("Waiting for GPU node…");
@@ -264,6 +266,18 @@ const TestPage: React.FC = () => {
                     <p className="generator-help">
                       Auto routes to the highest-performing model based on weight and pipeline. Choosing a specific model overrides auto routing for this job only.
                     </p>
+                    <label className="generator-label" htmlFor="negative-prompt">
+                      Negative prompt
+                    </label>
+                    <textarea
+                      id="negative-prompt"
+                      className="prompt-input"
+                      placeholder="e.g. extra limbs, bad anatomy, blurry, artifacts"
+                      value={negativePrompt}
+                      onChange={(e) => setNegativePrompt(e.target.value)}
+                      rows={2}
+                    />
+                    <p className="generator-help">Sent directly to the coordinator; helps reduce artifacts.</p>
                   </div>
                 )}
 

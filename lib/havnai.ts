@@ -72,7 +72,8 @@ function resolveAssetUrl(path: string | undefined | null): string | undefined {
 
 export async function submitAutoJob(
   prompt: string,
-  modelOverride?: string
+  modelOverride?: string,
+  negativePrompt?: string
 ): Promise<string> {
   const model =
     modelOverride && modelOverride.trim().length > 0
@@ -83,7 +84,7 @@ export async function submitAutoJob(
     wallet: WALLET,
     model,
     prompt,
-    negative_prompt: "low quality, blurry",
+    negative_prompt: negativePrompt && negativePrompt.trim().length > 0 ? negativePrompt : "low quality, blurry",
     width: 832,
     height: 1248,
     steps: 40,
