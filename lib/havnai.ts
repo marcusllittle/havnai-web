@@ -113,6 +113,47 @@ export async function submitAutoJob(
   return json.job_id;
 }
 
+export async function submitFaceSwapJob(
+  prompt: string,
+  sourceFaceB64: string,
+  modelOverride?: string,
+  negativePrompt?: string,
+  ipadapterScale: number = 0.85
+): Promise<string> {
+  const model =
+    modelOverride && modelOverride.trim().length > 0
+      ? modelOverride.trim()
+      : "auto";
+
+  const body = {
+    wallet: WALLET,
+    model,
+    prompt,
+    negative_prompt: negativePrompt && negativePrompt.trim().length > 0 ? negativePrompt : "low quality, blurry",
+    source_face: sourceFaceB64,
+    ipadapter_scale: ipadapterScale,
+  };
+
+  const res = await fetch(apiUrl("/submit-swap-ipadapter"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`submit-swap-ipadapter failed: ${res.status} ${text}`);
+  }
+
+  const json = (await res.json()) as SubmitJobResponse;
+  if (!json.job_id) {
+    throw new Error(json.error || "No job_id returned from submit-swap-ipadapter");
+  }
+  return json.job_id;
+}
+
 export async function fetchJob(jobId: string): Promise<JobDetailResponse> {
   const res = await fetch(apiUrl(`/jobs/${encodeURIComponent(jobId)}`));
   if (!res.ok) {
