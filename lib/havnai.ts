@@ -134,7 +134,7 @@ export async function submitFaceSwapJob(
     ipadapter_scale: ipadapterScale,
   };
 
-  const res = await fetch(apiUrl("/submit-swap-ipadapter"), {
+  const res = await fetch(apiUrl("/submit-job"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -144,12 +144,12 @@ export async function submitFaceSwapJob(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`submit-swap-ipadapter failed: ${res.status} ${text}`);
+    throw new Error(`submit-job failed: ${res.status} ${text}`);
   }
 
   const json = (await res.json()) as SubmitJobResponse;
   if (!json.job_id) {
-    throw new Error(json.error || "No job_id returned from submit-swap-ipadapter");
+    throw new Error(json.error || "No job_id returned from submit-job");
   }
   return json.job_id;
 }
