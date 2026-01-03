@@ -4,7 +4,7 @@ import { HavnAIButton } from "../components/HavnAIButton";
 import { StatusBox } from "../components/StatusBox";
 import { OutputCard } from "../components/OutputCard";
 import { HistoryFeed, HistoryItem } from "../components/HistoryFeed";
-import { submitAutoJob, submitFaceSwapJob, fetchJob, fetchResult, SubmitJobOptions } from "../lib/havnai";
+import { submitAutoJob, fetchJob, fetchResult, SubmitJobOptions } from "../lib/havnai";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
@@ -37,10 +37,6 @@ const TestPage: React.FC = () => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>("auto");
-  const [faceSwap, setFaceSwap] = useState(false);
-  const [sourceFaceB64, setSourceFaceB64] = useState<string>("");
-  const [ipadapterScale, setIpadapterScale] = useState<number>(0.85);
-  const [sourcePreview, setSourcePreview] = useState<string | undefined>();
   const [useStandardNegative, setUseStandardNegative] = useState(true);
   const [steps, setSteps] = useState("");
   const [guidance, setGuidance] = useState("");
@@ -137,10 +133,6 @@ const TestPage: React.FC = () => {
   const handleSubmit = async () => {
     const trimmed = prompt.trim();
     if (!trimmed) return;
-    if (faceSwap && !sourceFaceB64) {
-      setStatusMessage("Please upload a source face image for face swap.");
-      return;
-    }
     setLoading(true);
     setStatusMessage("Job submitted…");
     setImageUrl(undefined);
@@ -151,21 +143,12 @@ const TestPage: React.FC = () => {
     try {
       const options = buildOptions();
       const customNegative = useStandardNegative ? "" : negativePrompt.trim();
-      const id = faceSwap
-        ? await submitFaceSwapJob(
-            trimmed,
-            sourceFaceB64,
-            selectedModel === "auto" ? undefined : selectedModel,
-            customNegative,
-            ipadapterScale,
-            options
-          )
-        : await submitAutoJob(
-            trimmed,
-            selectedModel === "auto" ? undefined : selectedModel,
-            customNegative,
-            options
-          );
+      const id = await submitAutoJob(
+        trimmed,
+        selectedModel === "auto" ? undefined : selectedModel,
+        customNegative,
+        options
+      );
       setJobId(id);
       setStatusMessage("Waiting for GPU node…");
       await pollJob(id, trimmed);
@@ -256,21 +239,6 @@ const TestPage: React.FC = () => {
     setRuntimeSeconds(null);
     setJobId(undefined);
     setStatusMessage(undefined);
-  };
-
-  const handleFaceFile = (file: File | null) => {
-    if (!file) {
-      setSourceFaceB64("");
-      setSourcePreview(undefined);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setSourceFaceB64(result);
-      setSourcePreview(result);
-    };
-    reader.readAsDataURL(file);
   };
 
   // Mobile nav toggle (reuse behavior from index.html)
@@ -534,48 +502,6 @@ const TestPage: React.FC = () => {
                     <button type="button" className="generator-mini-button" onClick={addLora}>
                       Add LoRA
                     </button>
-                    <div className="generator-face-swap">
-                      <label className="generator-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={faceSwap}
-                          onChange={(e) => setFaceSwap(e.target.checked)}
-                        />
-                        <span>Enable face swap (IP-Adapter FaceID PlusV2)</span>
-                      </label>
-                      {faceSwap && (
-                        <>
-                          <label className="generator-label" htmlFor="source-face">
-                            Source face image
-                          </label>
-                          <input
-                            id="source-face"
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleFaceFile(e.target.files?.[0] || null)}
-                          />
-                          {sourcePreview && (
-                            <div className="generator-face-preview">
-                              <span className="generator-help">Source preview</span>
-                              <img src={sourcePreview} alt="Source face preview" />
-                            </div>
-                          )}
-                          <label className="generator-label" htmlFor="ipadapter-scale">
-                            Face strength (0.5–1.0)
-                          </label>
-                          <input
-                            id="ipadapter-scale"
-                            type="range"
-                            min={0.5}
-                            max={1.0}
-                            step={0.01}
-                            value={ipadapterScale}
-                            onChange={(e) => setIpadapterScale(parseFloat(e.target.value))}
-                          />
-                          <p className="generator-help">Lower keeps more of the base model; higher enforces the source face harder.</p>
-                        </>
-                      )}
-                    </div>
                   </div>
                 )}
 
