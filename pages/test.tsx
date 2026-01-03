@@ -10,8 +10,6 @@ const HISTORY_KEY = "havnai_test_history_v1";
 
 const MODEL_OPTIONS: { id: string; label: string }[] = [
   { id: "auto", label: "Auto (let grid choose best)" },
-  { id: "majicmixRealistic_v7", label: "majicmixRealistic_v7 · all‑round realism" },
-  { id: "lazymixRealAmateur_v40", label: "lazymixRealAmateur_v40 · phone-photo realism" },
   { id: "juggernautXL_ragnarokBy", label: "juggernautXL_ragnarokBy · SDXL studio" },
   { id: "epicrealismXL_vxviiCrystalclear", label: "epicrealismXL_vxviiCrystalclear · SDXL daylight" },
   { id: "perfectdeliberate_v5SD15", label: "perfectdeliberate_v5SD15 · portraits" },
