@@ -30,6 +30,22 @@ export interface ResultResponse {
   error?: string;
 }
 
+export interface LoraConfig {
+  name: string;
+  weight?: number;
+}
+
+export interface SubmitJobOptions {
+  steps?: number;
+  guidance?: number;
+  width?: number;
+  height?: number;
+  sampler?: string;
+  seed?: number;
+  loras?: LoraConfig[];
+  autoAnatomy?: boolean;
+}
+
 function getApiBase(): string {
   const envBase =
     process.env.NEXT_PUBLIC_HAVNAI_API_BASE && process.env.NEXT_PUBLIC_HAVNAI_API_BASE.length > 0
@@ -73,25 +89,39 @@ function resolveAssetUrl(path: string | undefined | null): string | undefined {
 export async function submitAutoJob(
   prompt: string,
   modelOverride?: string,
-  negativePrompt?: string
+  negativePrompt?: string,
+  options?: SubmitJobOptions
 ): Promise<string> {
   const model =
     modelOverride && modelOverride.trim().length > 0
       ? modelOverride.trim()
       : "auto";
 
-  const body = {
+  const body: Record<string, any> = {
     wallet: WALLET,
     model,
     prompt,
-    negative_prompt: negativePrompt && negativePrompt.trim().length > 0 ? negativePrompt : "low quality, blurry",
-    width: 832,
-    height: 1248,
-    steps: 40,
-    sampler: "euler a",
-    guidance: 6,
-    clipskip: 2,
   };
+  const trimmedNegative = negativePrompt?.trim();
+  if (trimmedNegative) {
+    body.negative_prompt = trimmedNegative;
+  }
+  if (options) {
+    if (options.steps != null) body.steps = options.steps;
+    if (options.guidance != null) body.guidance = options.guidance;
+    if (options.width != null) body.width = options.width;
+    if (options.height != null) body.height = options.height;
+    if (options.seed != null) body.seed = options.seed;
+    if (options.sampler && options.sampler.trim().length > 0) {
+      body.sampler = options.sampler;
+    }
+    if (options.loras && options.loras.length > 0) {
+      body.loras = options.loras;
+    }
+    if (options.autoAnatomy != null) {
+      body.auto_anatomy = options.autoAnatomy;
+    }
+  }
 
   const res = await fetch(apiUrl("/submit-job"), {
     method: "POST",
@@ -118,21 +148,41 @@ export async function submitFaceSwapJob(
   sourceFaceB64: string,
   modelOverride?: string,
   negativePrompt?: string,
-  ipadapterScale: number = 0.85
+  ipadapterScale: number = 0.85,
+  options?: SubmitJobOptions
 ): Promise<string> {
   const model =
     modelOverride && modelOverride.trim().length > 0
       ? modelOverride.trim()
       : "auto";
 
-  const body = {
+  const body: Record<string, any> = {
     wallet: WALLET,
     model,
     prompt,
-    negative_prompt: negativePrompt && negativePrompt.trim().length > 0 ? negativePrompt : "low quality, blurry",
     source_face: sourceFaceB64,
     ipadapter_scale: ipadapterScale,
   };
+  const trimmedNegative = negativePrompt?.trim();
+  if (trimmedNegative) {
+    body.negative_prompt = trimmedNegative;
+  }
+  if (options) {
+    if (options.steps != null) body.steps = options.steps;
+    if (options.guidance != null) body.guidance = options.guidance;
+    if (options.width != null) body.width = options.width;
+    if (options.height != null) body.height = options.height;
+    if (options.seed != null) body.seed = options.seed;
+    if (options.sampler && options.sampler.trim().length > 0) {
+      body.sampler = options.sampler;
+    }
+    if (options.loras && options.loras.length > 0) {
+      body.loras = options.loras;
+    }
+    if (options.autoAnatomy != null) {
+      body.auto_anatomy = options.autoAnatomy;
+    }
+  }
 
   const res = await fetch(apiUrl("/submit-job"), {
     method: "POST",

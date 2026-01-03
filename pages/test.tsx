@@ -4,7 +4,7 @@ import { HavnAIButton } from "../components/HavnAIButton";
 import { StatusBox } from "../components/StatusBox";
 import { OutputCard } from "../components/OutputCard";
 import { HistoryFeed, HistoryItem } from "../components/HistoryFeed";
-import { submitAutoJob, submitFaceSwapJob, fetchJob, fetchResult } from "../lib/havnai";
+import { submitAutoJob, submitFaceSwapJob, fetchJob, fetchResult, SubmitJobOptions } from "../lib/havnai";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
@@ -22,6 +22,11 @@ const MODEL_OPTIONS: { id: string; label: string }[] = [
   { id: "kizukiAnimeHentai_animeHentaiV4", label: "kizukiAnimeHentai_animeHentaiV4 · anime" },
 ];
 
+type LoraDraft = {
+  name: string;
+  weight: string;
+};
+
 const TestPage: React.FC = () => {
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
@@ -38,6 +43,14 @@ const TestPage: React.FC = () => {
   const [sourceFaceB64, setSourceFaceB64] = useState<string>("");
   const [ipadapterScale, setIpadapterScale] = useState<number>(0.85);
   const [sourcePreview, setSourcePreview] = useState<string | undefined>();
+  const [useStandardNegative, setUseStandardNegative] = useState(true);
+  const [steps, setSteps] = useState("");
+  const [guidance, setGuidance] = useState("");
+  const [width, setWidth] = useState("");
+  const [height, setHeight] = useState("");
+  const [sampler, setSampler] = useState("");
+  const [seed, setSeed] = useState("");
+  const [loras, setLoras] = useState<LoraDraft[]>([]);
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -61,6 +74,68 @@ const TestPage: React.FC = () => {
     }
   };
 
+  const addLora = () => {
+    setLoras((prev) => [...prev, { name: "", weight: "" }]);
+  };
+
+  const updateLora = (index: number, field: "name" | "weight", value: string) => {
+    setLoras((prev) =>
+      prev.map((entry, idx) => (idx === index ? { ...entry, [field]: value } : entry))
+    );
+  };
+
+  const removeLora = (index: number) => {
+    setLoras((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const parseOptionalInt = (value: string): number | undefined => {
+    if (!value.trim()) return undefined;
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  const parseOptionalFloat = (value: string): number | undefined => {
+    if (!value.trim()) return undefined;
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  const buildOptions = (): SubmitJobOptions | undefined => {
+    const options: SubmitJobOptions = {};
+    const stepsValue = parseOptionalInt(steps);
+    const guidanceValue = parseOptionalFloat(guidance);
+    const widthValue = parseOptionalInt(width);
+    const heightValue = parseOptionalInt(height);
+    const samplerValue = sampler.trim();
+    const seedValue = parseOptionalInt(seed);
+
+    if (stepsValue !== undefined) options.steps = stepsValue;
+    if (guidanceValue !== undefined) options.guidance = guidanceValue;
+    if (widthValue !== undefined) options.width = widthValue;
+    if (heightValue !== undefined) options.height = heightValue;
+    if (samplerValue) options.sampler = samplerValue;
+    if (seedValue !== undefined) options.seed = seedValue;
+
+    const loraPayload = loras
+      .map((entry) => {
+        const name = entry.name.trim();
+        if (!name) return null;
+        const weightValue = parseOptionalFloat(entry.weight);
+        const payload: { name: string; weight?: number } = { name };
+        if (weightValue !== undefined) {
+          payload.weight = weightValue;
+        }
+        return payload;
+      })
+      .filter((entry): entry is { name: string; weight?: number } => Boolean(entry));
+
+    if (loraPayload.length > 0) {
+      options.loras = loraPayload;
+    }
+
+    return Object.keys(options).length > 0 ? options : undefined;
+  };
+
   const handleSubmit = async () => {
     const trimmed = prompt.trim();
     if (!trimmed) return;
@@ -76,18 +151,22 @@ const TestPage: React.FC = () => {
     setJobId(undefined);
 
     try {
+      const options = buildOptions();
+      const customNegative = useStandardNegative ? "" : negativePrompt.trim();
       const id = faceSwap
         ? await submitFaceSwapJob(
             trimmed,
             sourceFaceB64,
             selectedModel === "auto" ? undefined : selectedModel,
-            negativePrompt.trim(),
-            ipadapterScale
+            customNegative,
+            ipadapterScale,
+            options
           )
         : await submitAutoJob(
             trimmed,
             selectedModel === "auto" ? undefined : selectedModel,
-            negativePrompt.trim()
+            customNegative,
+            options
           );
       setJobId(id);
       setStatusMessage("Waiting for GPU node…");
@@ -297,18 +376,166 @@ const TestPage: React.FC = () => {
                     <p className="generator-help">
                       Auto routes to the highest-performing model based on weight and pipeline. Choosing a specific model overrides auto routing for this job only.
                     </p>
+                    <label className="generator-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={useStandardNegative}
+                        onChange={(e) => setUseStandardNegative(e.target.checked)}
+                      />
+                      <span>Use standard negative prompt (recommended)</span>
+                    </label>
+                    <p className="generator-help">
+                      When enabled, the coordinator appends the model negative + global negatives automatically.
+                    </p>
                     <label className="generator-label" htmlFor="negative-prompt">
-                      Negative prompt
+                      Negative prompt (extra)
                     </label>
                     <textarea
                       id="negative-prompt"
-                      className="prompt-input"
-                      placeholder="e.g. extra limbs, bad anatomy, blurry, artifacts"
+                      className="generator-input"
+                      placeholder="Optional extra negatives to append"
                       value={negativePrompt}
                       onChange={(e) => setNegativePrompt(e.target.value)}
                       rows={2}
+                      disabled={useStandardNegative}
                     />
-                    <p className="generator-help">Sent directly to the coordinator; helps reduce artifacts.</p>
+                    <p className="generator-help">
+                      Only used when the standard negative prompt is disabled.
+                    </p>
+                    <span className="generator-label">Generation settings</span>
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="steps">
+                          Steps
+                        </label>
+                        <input
+                          id="steps"
+                          type="number"
+                          min={5}
+                          max={50}
+                          step={1}
+                          className="generator-input"
+                          placeholder="Auto (registry)"
+                          value={steps}
+                          onChange={(e) => setSteps(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="generator-label" htmlFor="guidance">
+                          Guidance
+                        </label>
+                        <input
+                          id="guidance"
+                          type="number"
+                          min={1}
+                          max={15}
+                          step={0.1}
+                          className="generator-input"
+                          placeholder="Auto (registry)"
+                          value={guidance}
+                          onChange={(e) => setGuidance(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="width">
+                          Width
+                        </label>
+                        <input
+                          id="width"
+                          type="number"
+                          min={256}
+                          max={1536}
+                          step={64}
+                          className="generator-input"
+                          placeholder="Auto (registry)"
+                          value={width}
+                          onChange={(e) => setWidth(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="generator-label" htmlFor="height">
+                          Height
+                        </label>
+                        <input
+                          id="height"
+                          type="number"
+                          min={256}
+                          max={1536}
+                          step={64}
+                          className="generator-input"
+                          placeholder="Auto (registry)"
+                          value={height}
+                          onChange={(e) => setHeight(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="sampler">
+                          Sampler
+                        </label>
+                        <input
+                          id="sampler"
+                          type="text"
+                          className="generator-input"
+                          placeholder="Auto (registry)"
+                          value={sampler}
+                          onChange={(e) => setSampler(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="generator-label" htmlFor="seed">
+                          Seed
+                        </label>
+                        <input
+                          id="seed"
+                          type="number"
+                          min={0}
+                          step={1}
+                          className="generator-input"
+                          placeholder="Random"
+                          value={seed}
+                          onChange={(e) => setSeed(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <span className="generator-label">LoRA stack (order matters)</span>
+                    <p className="generator-help">
+                      Leave blank to use server defaults. Weights are optional.
+                    </p>
+                    {loras.map((entry, index) => (
+                      <div className="generator-lora-row" key={`lora-${index}`}>
+                        <input
+                          type="text"
+                          className="generator-input"
+                          placeholder="LoRA name (e.g. Handv2)"
+                          value={entry.name}
+                          onChange={(e) => updateLora(index, "name", e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          max={2}
+                          step={0.05}
+                          className="generator-input"
+                          placeholder="Weight"
+                          value={entry.weight}
+                          onChange={(e) => updateLora(index, "weight", e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="generator-mini-button"
+                          onClick={() => removeLora(index)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" className="generator-mini-button" onClick={addLora}>
+                      Add LoRA
+                    </button>
                     <div className="generator-face-swap">
                       <label className="generator-checkbox">
                         <input
