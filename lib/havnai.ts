@@ -35,6 +35,40 @@ export interface LoraConfig {
   weight?: number;
 }
 
+export interface FaceSwapRequest {
+  baseImageUrl: string;
+  faceSourceUrl: string;
+  prompt?: string;
+  model?: string;
+  strength?: number;
+  numSteps?: number;
+  loras?: LoraConfig[];
+  seed?: number;
+}
+
+export interface WanVideoRequest {
+  prompt: string;
+  negativePrompt?: string;
+  motionType?: string;
+  loraList?: string[];
+  initImageB64?: string;
+  duration?: number;
+  fps?: number;
+  width?: number;
+  height?: number;
+}
+
+export interface WanVideoStatus {
+  job_id: string;
+  status?: string;
+  error?: string;
+  video_path?: string;
+  video_url?: string;
+  created_at?: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
 export interface SubmitJobOptions {
   steps?: number;
   guidance?: number;
@@ -143,48 +177,25 @@ export async function submitAutoJob(
   return json.job_id;
 }
 
-export async function submitFaceSwapJob(
-  prompt: string,
-  sourceFaceB64: string,
-  modelOverride?: string,
-  negativePrompt?: string,
-  ipadapterScale: number = 0.85,
-  options?: SubmitJobOptions
-): Promise<string> {
+export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<string> {
   const model =
-    modelOverride && modelOverride.trim().length > 0
-      ? modelOverride.trim()
-      : "auto";
+    request.model && request.model.trim().length > 0 ? request.model.trim() : "epicrealismXL_vxviiCrystalclear";
 
   const body: Record<string, any> = {
     wallet: WALLET,
     model,
-    prompt,
-    source_face: sourceFaceB64,
-    ipadapter_scale: ipadapterScale,
+    prompt: request.prompt || "",
+    base_image_url: request.baseImageUrl,
+    face_source_url: request.faceSourceUrl,
   };
-  const trimmedNegative = negativePrompt?.trim();
-  if (trimmedNegative) {
-    body.negative_prompt = trimmedNegative;
-  }
-  if (options) {
-    if (options.steps != null) body.steps = options.steps;
-    if (options.guidance != null) body.guidance = options.guidance;
-    if (options.width != null) body.width = options.width;
-    if (options.height != null) body.height = options.height;
-    if (options.seed != null) body.seed = options.seed;
-    if (options.sampler && options.sampler.trim().length > 0) {
-      body.sampler = options.sampler;
-    }
-    if (options.loras && options.loras.length > 0) {
-      body.loras = options.loras;
-    }
-    if (options.autoAnatomy != null) {
-      body.auto_anatomy = options.autoAnatomy;
-    }
+  if (request.strength != null) body.strength = request.strength;
+  if (request.numSteps != null) body.num_steps = request.numSteps;
+  if (request.seed != null) body.seed = request.seed;
+  if (request.loras && request.loras.length > 0) {
+    body.loras = request.loras;
   }
 
-  const res = await fetch(apiUrl("/submit-job"), {
+  const res = await fetch(apiUrl("/submit-faceswap-job"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -194,12 +205,46 @@ export async function submitFaceSwapJob(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`submit-job failed: ${res.status} ${text}`);
+    throw new Error(`submit-faceswap-job failed: ${res.status} ${text}`);
   }
 
   const json = (await res.json()) as SubmitJobResponse;
   if (!json.job_id) {
-    throw new Error(json.error || "No job_id returned from submit-job");
+    throw new Error(json.error || "No job_id returned from submit-faceswap-job");
+  }
+  return json.job_id;
+}
+
+export async function submitWanVideoJob(request: WanVideoRequest): Promise<string> {
+  const body: Record<string, any> = {
+    prompt: request.prompt,
+    wallet: WALLET,
+  };
+  if (request.negativePrompt) body.negative_prompt = request.negativePrompt;
+  if (request.motionType) body.motion_type = request.motionType;
+  if (request.loraList && request.loraList.length > 0) body.lora_list = request.loraList;
+  if (request.initImageB64) body.init_image = request.initImageB64;
+  if (request.duration != null) body.duration = request.duration;
+  if (request.fps != null) body.fps = request.fps;
+  if (request.width != null) body.width = request.width;
+  if (request.height != null) body.height = request.height;
+
+  const res = await fetch(apiUrl("/generate-video"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`generate-video failed: ${res.status} ${text}`);
+  }
+
+  const json = (await res.json()) as SubmitJobResponse;
+  if (!json.job_id) {
+    throw new Error(json.error || "No job_id returned from generate-video");
   }
   return json.job_id;
 }
@@ -224,6 +269,19 @@ export async function fetchResult(jobId: string): Promise<ResultResponse> {
   return {
     ...json,
     image_url: resolveAssetUrl(json.image_url),
+    video_url: resolveAssetUrl(json.video_url),
+  };
+}
+
+export async function fetchWanVideoJob(jobId: string): Promise<WanVideoStatus> {
+  const res = await fetch(apiUrl(`/generate-video/${encodeURIComponent(jobId)}`));
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`fetch video job failed: ${res.status} ${text}`);
+  }
+  const json = (await res.json()) as WanVideoStatus;
+  return {
+    ...json,
     video_url: resolveAssetUrl(json.video_url),
   };
 }

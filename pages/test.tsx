@@ -4,7 +4,15 @@ import { HavnAIButton } from "../components/HavnAIButton";
 import { StatusBox } from "../components/StatusBox";
 import { OutputCard } from "../components/OutputCard";
 import { HistoryFeed, HistoryItem } from "../components/HistoryFeed";
-import { submitAutoJob, fetchJob, fetchResult, SubmitJobOptions } from "../lib/havnai";
+import {
+  submitAutoJob,
+  submitFaceSwapJob,
+  submitWanVideoJob,
+  fetchJob,
+  fetchResult,
+  fetchWanVideoJob,
+  SubmitJobOptions,
+} from "../lib/havnai";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
@@ -20,18 +28,27 @@ const MODEL_OPTIONS: { id: string; label: string }[] = [
   { id: "kizukiAnimeHentai_animeHentaiV4", label: "kizukiAnimeHentai_animeHentaiV4 · anime" },
 ];
 
+const FACE_SWAP_MODELS: { id: string; label: string }[] = [
+  { id: "epicrealismXL_vxviiCrystalclear", label: "epicrealismXL_vxviiCrystalclear · SDXL daylight" },
+  { id: "juggernautXL_ragnarokBy", label: "juggernautXL_ragnarokBy · SDXL studio" },
+];
+
 type LoraDraft = {
   name: string;
   weight: string;
 };
 
+type GeneratorMode = "image" | "face_swap" | "wan_video";
+
 const TestPage: React.FC = () => {
+  const [mode, setMode] = useState<GeneratorMode>("image");
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [jobId, setJobId] = useState<string | undefined>();
   const [statusMessage, setStatusMessage] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | undefined>();
+  const [videoUrl, setVideoUrl] = useState<string | undefined>();
   const [model, setModel] = useState<string | undefined>();
   const [runtimeSeconds, setRuntimeSeconds] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -45,6 +62,19 @@ const TestPage: React.FC = () => {
   const [sampler, setSampler] = useState("");
   const [seed, setSeed] = useState("");
   const [loras, setLoras] = useState<LoraDraft[]>([]);
+  const [faceswapModel, setFaceswapModel] = useState(FACE_SWAP_MODELS[0].id);
+  const [baseImageUrl, setBaseImageUrl] = useState("");
+  const [faceSourceUrl, setFaceSourceUrl] = useState("");
+  const [faceswapStrength, setFaceswapStrength] = useState("0.8");
+  const [faceswapSteps, setFaceswapSteps] = useState("20");
+  const [videoNegative, setVideoNegative] = useState("");
+  const [videoDuration, setVideoDuration] = useState("4");
+  const [videoFps, setVideoFps] = useState("24");
+  const [videoWidth, setVideoWidth] = useState("720");
+  const [videoHeight, setVideoHeight] = useState("512");
+  const [videoMotion, setVideoMotion] = useState("high");
+  const [videoInitUrl, setVideoInitUrl] = useState("");
+  const [videoLoras, setVideoLoras] = useState<string[]>([]);
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -82,6 +112,18 @@ const TestPage: React.FC = () => {
     setLoras((prev) => prev.filter((_, idx) => idx !== index));
   };
 
+  const addVideoLora = () => {
+    setVideoLoras((prev) => [...prev, ""]);
+  };
+
+  const updateVideoLora = (index: number, value: string) => {
+    setVideoLoras((prev) => prev.map((entry, idx) => (idx === index ? value : entry)));
+  };
+
+  const removeVideoLora = (index: number) => {
+    setVideoLoras((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
   const parseOptionalInt = (value: string): number | undefined => {
     if (!value.trim()) return undefined;
     const parsed = Number.parseInt(value, 10);
@@ -92,6 +134,21 @@ const TestPage: React.FC = () => {
     if (!value.trim()) return undefined;
     const parsed = Number.parseFloat(value);
     return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  const buildLoraPayload = (): { name: string; weight?: number }[] => {
+    return loras
+      .map((entry) => {
+        const name = entry.name.trim();
+        if (!name) return null;
+        const weightValue = parseOptionalFloat(entry.weight);
+        const payload: { name: string; weight?: number } = { name };
+        if (weightValue !== undefined) {
+          payload.weight = weightValue;
+        }
+        return payload;
+      })
+      .filter((entry): entry is { name: string; weight?: number } => Boolean(entry));
   };
 
   const buildOptions = (): SubmitJobOptions | undefined => {
@@ -110,19 +167,7 @@ const TestPage: React.FC = () => {
     if (samplerValue) options.sampler = samplerValue;
     if (seedValue !== undefined) options.seed = seedValue;
 
-    const loraPayload = loras
-      .map((entry) => {
-        const name = entry.name.trim();
-        if (!name) return null;
-        const weightValue = parseOptionalFloat(entry.weight);
-        const payload: { name: string; weight?: number } = { name };
-        if (weightValue !== undefined) {
-          payload.weight = weightValue;
-        }
-        return payload;
-      })
-      .filter((entry): entry is { name: string; weight?: number } => Boolean(entry));
-
+    const loraPayload = buildLoraPayload();
     if (loraPayload.length > 0) {
       options.loras = loraPayload;
     }
@@ -130,28 +175,102 @@ const TestPage: React.FC = () => {
     return Object.keys(options).length > 0 ? options : undefined;
   };
 
+  const fetchImageAsBase64 = async (url: string): Promise<string> => {
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch init image: ${res.status}`);
+    }
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          resolve(reader.result);
+        } else {
+          reject(new Error("Failed to convert init image"));
+        }
+      };
+      reader.onerror = () => reject(new Error("Failed to convert init image"));
+      reader.readAsDataURL(blob);
+    });
+  };
+
   const handleSubmit = async () => {
     const trimmed = prompt.trim();
-    if (!trimmed) return;
+    if (mode !== "face_swap" && !trimmed) {
+      setStatusMessage("Prompt is required.");
+      return;
+    }
     setLoading(true);
     setStatusMessage("Job submitted…");
     setImageUrl(undefined);
+    setVideoUrl(undefined);
     setRuntimeSeconds(null);
     setModel(undefined);
     setJobId(undefined);
 
     try {
-      const options = buildOptions();
-      const customNegative = useStandardNegative ? "" : negativePrompt.trim();
-      const id = await submitAutoJob(
-        trimmed,
-        selectedModel === "auto" ? undefined : selectedModel,
-        customNegative,
-        options
-      );
-      setJobId(id);
-      setStatusMessage("Waiting for GPU node…");
-      await pollJob(id, trimmed);
+      if (mode === "image") {
+        const options = buildOptions();
+        const customNegative = useStandardNegative ? "" : negativePrompt.trim();
+        const id = await submitAutoJob(
+          trimmed,
+          selectedModel === "auto" ? undefined : selectedModel,
+          customNegative,
+          options
+        );
+        setJobId(id);
+        setStatusMessage("Waiting for GPU node…");
+        await pollJob(id, trimmed);
+      } else if (mode === "face_swap") {
+        const baseUrl = baseImageUrl.trim();
+        const faceUrl = faceSourceUrl.trim();
+        if (!baseUrl || !faceUrl) {
+          setStatusMessage("Base image URL and face source URL are required.");
+          return;
+        }
+        const loraPayload = buildLoraPayload();
+        const seedValue = parseOptionalInt(seed);
+        const strengthValue = parseOptionalFloat(faceswapStrength) ?? 0.8;
+        const stepsValue = parseOptionalInt(faceswapSteps) ?? 20;
+        const id = await submitFaceSwapJob({
+          prompt: trimmed,
+          model: faceswapModel,
+          baseImageUrl: baseUrl,
+          faceSourceUrl: faceUrl,
+          strength: strengthValue,
+          numSteps: stepsValue,
+          loras: loraPayload.length > 0 ? loraPayload : undefined,
+          seed: seedValue,
+        });
+        setJobId(id);
+        setStatusMessage("Waiting for GPU node…");
+        await pollJob(id, trimmed || "Face swap");
+      } else {
+        const initUrl = videoInitUrl.trim();
+        let initImageB64: string | undefined;
+        if (initUrl) {
+          setStatusMessage("Fetching init image…");
+          initImageB64 = await fetchImageAsBase64(initUrl);
+        }
+        const loraList = videoLoras
+          .map((entry) => entry.trim())
+          .filter((entry) => entry.length > 0);
+        const id = await submitWanVideoJob({
+          prompt: trimmed,
+          negativePrompt: videoNegative.trim() || undefined,
+          motionType: videoMotion,
+          loraList: loraList.length > 0 ? loraList : undefined,
+          initImageB64,
+          duration: parseOptionalFloat(videoDuration),
+          fps: parseOptionalInt(videoFps),
+          width: parseOptionalInt(videoWidth),
+          height: parseOptionalInt(videoHeight),
+        });
+        setJobId(id);
+        setStatusMessage("WAN job queued…");
+        await pollWanVideo(id, trimmed);
+      }
     } catch (err: any) {
       setStatusMessage(err?.message || "Failed to submit job.");
     } finally {
@@ -186,26 +305,33 @@ const TestPage: React.FC = () => {
           }
 
           const result = await fetchResult(id);
-          if (!result.image_url) {
-            setStatusMessage("Job finished, but no image was found.");
+          const resolvedImage = result.image_url;
+          const resolvedVideo = result.video_url;
+          if (!resolvedImage && !resolvedVideo) {
+            setStatusMessage("Job finished, but no output was found.");
             return;
           }
 
-          const resolvedUrl = result.image_url;
-          setImageUrl(resolvedUrl);
+          if (resolvedVideo) {
+            setVideoUrl(resolvedVideo);
+          } else if (resolvedImage) {
+            setImageUrl(resolvedImage);
+          }
           setRuntimeSeconds(runtime);
           setModel(job.model);
           setStatusMessage("Done.");
 
-          const item: HistoryItem = {
-            jobId: id,
-            prompt: usedPrompt,
-            imageUrl: resolvedUrl,
-            model: job.model,
-            timestamp: Date.now(),
-          };
-          const next = [item, ...history].slice(0, 5);
-          saveHistory(next);
+          if (resolvedImage) {
+            const item: HistoryItem = {
+              jobId: id,
+              prompt: usedPrompt,
+              imageUrl: resolvedImage,
+              model: job.model,
+              timestamp: Date.now(),
+            };
+            const next = [item, ...history].slice(0, 5);
+            saveHistory(next);
+          }
           return;
         } else if (status === "FAILED") {
           setStatusMessage("Job failed on the grid.");
@@ -224,8 +350,52 @@ const TestPage: React.FC = () => {
     setStatusMessage(`Gave up after ${elapsed.toFixed(1)} seconds without completion.`);
   };
 
+  const pollWanVideo = async (id: string, usedPrompt: string) => {
+    const start = Date.now();
+    let attempts = 0;
+
+    while (attempts < 120) {
+      attempts += 1;
+      try {
+        const job = await fetchWanVideoJob(id);
+        const status = (job.status || "").toUpperCase();
+
+        if (status === "QUEUED") {
+          setStatusMessage("WAN job queued…");
+        } else if (status === "RUNNING") {
+          setStatusMessage("Rendering WAN video…");
+        } else if (status === "SUCCESS") {
+          if (job.video_url) {
+            setVideoUrl(job.video_url);
+            setModel("WAN GGUF");
+            setStatusMessage("Video ready.");
+          } else if (job.video_path) {
+            setStatusMessage(`Video ready at ${job.video_path}`);
+          } else {
+            setStatusMessage("Video ready, but no URL was returned.");
+          }
+          setRuntimeSeconds((Date.now() - start) / 1000);
+          return;
+        } else if (status === "FAILED") {
+          setStatusMessage(job.error || "WAN video failed.");
+          return;
+        } else {
+          setStatusMessage(`Status: ${status || "Unknown"}`);
+        }
+      } catch (err: any) {
+        setStatusMessage(err?.message || "Error while polling video job.");
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+
+    const elapsed = (Date.now() - start) / 1000;
+    setStatusMessage(`Gave up after ${elapsed.toFixed(1)} seconds without completion.`);
+  };
+
   const handleHistorySelect = (item: HistoryItem) => {
     setImageUrl(item.imageUrl);
+    setVideoUrl(undefined);
     setModel(item.model);
     setRuntimeSeconds(null);
     setJobId(item.jobId);
@@ -235,6 +405,7 @@ const TestPage: React.FC = () => {
   const handleHistoryClear = () => {
     saveHistory([]);
     setImageUrl(undefined);
+    setVideoUrl(undefined);
     setModel(undefined);
     setRuntimeSeconds(null);
     setJobId(undefined);
@@ -299,8 +470,31 @@ const TestPage: React.FC = () => {
           <div className="generator-card">
             <div className="generator-grid">
               <div className="generator-left">
+                <div className="generator-mode-tabs">
+                  <button
+                    type="button"
+                    className={`generator-mode-button${mode === "image" ? " is-active" : ""}`}
+                    onClick={() => setMode("image")}
+                  >
+                    Image
+                  </button>
+                  <button
+                    type="button"
+                    className={`generator-mode-button${mode === "face_swap" ? " is-active" : ""}`}
+                    onClick={() => setMode("face_swap")}
+                  >
+                    Face swap
+                  </button>
+                  <button
+                    type="button"
+                    className={`generator-mode-button${mode === "wan_video" ? " is-active" : ""}`}
+                    onClick={() => setMode("wan_video")}
+                  >
+                    WAN video
+                  </button>
+                </div>
                 <label className="generator-label" htmlFor="prompt">
-                  Prompt
+                  {mode === "face_swap" ? "Style prompt (optional)" : "Prompt"}
                 </label>
                 <HavnAIPrompt
                   value={prompt}
@@ -309,23 +503,255 @@ const TestPage: React.FC = () => {
                   disabled={loading}
                 />
 
+                {mode === "face_swap" && (
+                  <div className="generator-advanced">
+                    <span className="generator-label">Face swap inputs</span>
+                    <label className="generator-label" htmlFor="base-image-url">
+                      Base image URL
+                    </label>
+                    <input
+                      id="base-image-url"
+                      type="text"
+                      className="generator-input"
+                      placeholder="http://server/static/outputs/<job_id>.png"
+                      value={baseImageUrl}
+                      onChange={(e) => setBaseImageUrl(e.target.value)}
+                    />
+                    <label className="generator-label" htmlFor="face-source-url">
+                      Face source URL
+                    </label>
+                    <input
+                      id="face-source-url"
+                      type="text"
+                      className="generator-input"
+                      placeholder="http://server/static/outputs/<job_id>.png"
+                      value={faceSourceUrl}
+                      onChange={(e) => setFaceSourceUrl(e.target.value)}
+                    />
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="faceswap-strength">
+                          Strength
+                        </label>
+                        <input
+                          id="faceswap-strength"
+                          type="number"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          className="generator-input"
+                          value={faceswapStrength}
+                          onChange={(e) => setFaceswapStrength(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="generator-label" htmlFor="faceswap-steps">
+                          Steps
+                        </label>
+                        <input
+                          id="faceswap-steps"
+                          type="number"
+                          min={5}
+                          max={60}
+                          step={1}
+                          className="generator-input"
+                          value={faceswapSteps}
+                          onChange={(e) => setFaceswapSteps(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <label className="generator-label" htmlFor="faceswap-model">
+                      Base SDXL model
+                    </label>
+                    <select
+                      id="faceswap-model"
+                      value={faceswapModel}
+                      onChange={(e) => setFaceswapModel(e.target.value)}
+                      className="generator-select"
+                    >
+                      {FACE_SWAP_MODELS.map((opt) => (
+                        <option key={opt.id} value={opt.id}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="generator-label">Optional LoRAs</span>
+                    {loras.map((entry, index) => (
+                      <div className="generator-lora-row" key={`faceswap-lora-${index}`}>
+                        <input
+                          type="text"
+                          className="generator-input"
+                          placeholder="LoRA name"
+                          value={entry.name}
+                          onChange={(e) => updateLora(index, "name", e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          max={2}
+                          step={0.05}
+                          className="generator-input"
+                          placeholder="Weight"
+                          value={entry.weight}
+                          onChange={(e) => updateLora(index, "weight", e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="generator-mini-button"
+                          onClick={() => removeLora(index)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" className="generator-mini-button" onClick={addLora}>
+                      Add LoRA
+                    </button>
+                  </div>
+                )}
+
+                {mode === "wan_video" && (
+                  <div className="generator-advanced">
+                    <span className="generator-label">WAN video settings</span>
+                    <label className="generator-label" htmlFor="video-negative">
+                      Negative prompt
+                    </label>
+                    <textarea
+                      id="video-negative"
+                      className="generator-input"
+                      placeholder="Optional negatives"
+                      value={videoNegative}
+                      onChange={(e) => setVideoNegative(e.target.value)}
+                      rows={2}
+                    />
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="video-duration">
+                          Duration (sec)
+                        </label>
+                        <input
+                          id="video-duration"
+                          type="number"
+                          min={1}
+                          step={0.5}
+                          className="generator-input"
+                          value={videoDuration}
+                          onChange={(e) => setVideoDuration(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="generator-label" htmlFor="video-fps">
+                          FPS
+                        </label>
+                        <input
+                          id="video-fps"
+                          type="number"
+                          min={1}
+                          max={60}
+                          step={1}
+                          className="generator-input"
+                          value={videoFps}
+                          onChange={(e) => setVideoFps(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="video-width">
+                          Width
+                        </label>
+                        <input
+                          id="video-width"
+                          type="number"
+                          min={64}
+                          step={64}
+                          className="generator-input"
+                          value={videoWidth}
+                          onChange={(e) => setVideoWidth(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="generator-label" htmlFor="video-height">
+                          Height
+                        </label>
+                        <input
+                          id="video-height"
+                          type="number"
+                          min={64}
+                          step={64}
+                          className="generator-input"
+                          value={videoHeight}
+                          onChange={(e) => setVideoHeight(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <label className="generator-label" htmlFor="video-motion">
+                      Motion type
+                    </label>
+                    <select
+                      id="video-motion"
+                      value={videoMotion}
+                      onChange={(e) => setVideoMotion(e.target.value)}
+                      className="generator-select"
+                    >
+                      <option value="high">High noise (default)</option>
+                      <option value="low">Low noise</option>
+                    </select>
+                    <label className="generator-label" htmlFor="video-init-url">
+                      Init image URL (optional)
+                    </label>
+                    <input
+                      id="video-init-url"
+                      type="text"
+                      className="generator-input"
+                      placeholder="http://server/static/outputs/<job_id>.png"
+                      value={videoInitUrl}
+                      onChange={(e) => setVideoInitUrl(e.target.value)}
+                    />
+                    <span className="generator-label">WAN LoRAs (names only)</span>
+                    {videoLoras.map((entry, index) => (
+                      <div className="generator-lora-row" key={`video-lora-${index}`}>
+                        <input
+                          type="text"
+                          className="generator-input"
+                          placeholder="LoRA name"
+                          value={entry}
+                          onChange={(e) => updateVideoLora(index, e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="generator-mini-button"
+                          onClick={() => removeVideoLora(index)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" className="generator-mini-button" onClick={addVideoLora}>
+                      Add WAN LoRA
+                    </button>
+                  </div>
+                )}
+
                 <div className="generator-controls">
                   <HavnAIButton
-                    label="Generate"
+                    label={mode === "wan_video" ? "Render video" : mode === "face_swap" ? "Swap face" : "Generate"}
                     loading={loading}
-                    disabled={!prompt.trim()}
+                    disabled={mode !== "face_swap" && !prompt.trim()}
                     onClick={handleSubmit}
                   />
-                  <button
-                    type="button"
-                    className="generator-advanced-toggle"
-                    onClick={() => setAdvancedOpen((v) => !v)}
-                  >
-                    {advancedOpen ? "Hide advanced options" : "Show advanced options"}
-                  </button>
+                  {mode === "image" && (
+                    <button
+                      type="button"
+                      className="generator-advanced-toggle"
+                      onClick={() => setAdvancedOpen((v) => !v)}
+                    >
+                      {advancedOpen ? "Hide advanced options" : "Show advanced options"}
+                    </button>
+                  )}
                 </div>
 
-                {advancedOpen && (
+                {advancedOpen && mode === "image" && (
                   <div className="generator-advanced">
                     <span className="generator-label">Model</span>
                     <select
@@ -512,6 +938,7 @@ const TestPage: React.FC = () => {
                 <label className="generator-label">Output</label>
                 <OutputCard
                   imageUrl={imageUrl}
+                  videoUrl={videoUrl}
                   model={model}
                   runtimeSeconds={runtimeSeconds || null}
                   jobId={jobId}
