@@ -64,7 +64,11 @@ const TestPage: React.FC = () => {
   const [loras, setLoras] = useState<LoraDraft[]>([]);
   const [faceswapModel, setFaceswapModel] = useState(FACE_SWAP_MODELS[0].id);
   const [baseImageUrl, setBaseImageUrl] = useState("");
+  const [baseImageData, setBaseImageData] = useState<string | undefined>();
+  const [baseImageName, setBaseImageName] = useState<string | undefined>();
   const [faceSourceUrl, setFaceSourceUrl] = useState("");
+  const [faceSourceData, setFaceSourceData] = useState<string | undefined>();
+  const [faceSourceName, setFaceSourceName] = useState<string | undefined>();
   const [faceswapStrength, setFaceswapStrength] = useState("0.8");
   const [faceswapSteps, setFaceswapSteps] = useState("20");
   const [videoNegative, setVideoNegative] = useState("");
@@ -136,6 +140,21 @@ const TestPage: React.FC = () => {
     return Number.isFinite(parsed) ? parsed : undefined;
   };
 
+  const readFileAsDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          resolve(reader.result);
+        } else {
+          reject(new Error("Failed to read image file"));
+        }
+      };
+      reader.onerror = () => reject(new Error("Failed to read image file"));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const buildLoraPayload = (): { name: string; weight?: number }[] => {
     return loras
       .map((entry) => {
@@ -195,6 +214,32 @@ const TestPage: React.FC = () => {
     });
   };
 
+  const handleBaseImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await readFileAsDataUrl(file);
+      setBaseImageData(data);
+      setBaseImageName(file.name);
+      setBaseImageUrl("");
+    } catch (err: any) {
+      setStatusMessage(err?.message || "Failed to read base image file.");
+    }
+  };
+
+  const handleFaceSourceUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await readFileAsDataUrl(file);
+      setFaceSourceData(data);
+      setFaceSourceName(file.name);
+      setFaceSourceUrl("");
+    } catch (err: any) {
+      setStatusMessage(err?.message || "Failed to read face source image.");
+    }
+  };
+
   const handleSubmit = async () => {
     const trimmed = prompt.trim();
     if (mode !== "face_swap" && !trimmed) {
@@ -223,10 +268,10 @@ const TestPage: React.FC = () => {
         setStatusMessage("Waiting for GPU node…");
         await pollJob(id, trimmed);
       } else if (mode === "face_swap") {
-        const baseUrl = baseImageUrl.trim();
-        const faceUrl = faceSourceUrl.trim();
+        const baseUrl = baseImageData || baseImageUrl.trim();
+        const faceUrl = faceSourceData || faceSourceUrl.trim();
         if (!baseUrl || !faceUrl) {
-          setStatusMessage("Base image URL and face source URL are required.");
+          setStatusMessage("Base image and face source are required.");
           return;
         }
         const loraPayload = buildLoraPayload();
@@ -515,8 +560,30 @@ const TestPage: React.FC = () => {
                       className="generator-input"
                       placeholder="http://server/static/outputs/<job_id>.png"
                       value={baseImageUrl}
-                      onChange={(e) => setBaseImageUrl(e.target.value)}
+                      onChange={(e) => {
+                        setBaseImageUrl(e.target.value);
+                        setBaseImageData(undefined);
+                        setBaseImageName(undefined);
+                      }}
                     />
+                    <label className="generator-label" htmlFor="base-image-upload">
+                      Or upload base image
+                    </label>
+                    <input
+                      id="base-image-upload"
+                      type="file"
+                      accept="image/*"
+                      className="generator-input"
+                      onChange={handleBaseImageUpload}
+                    />
+                    {baseImageName && (
+                      <p className="generator-help">Using uploaded file: {baseImageName}</p>
+                    )}
+                    {baseImageData && (
+                      <div className="generator-face-preview">
+                        <img src={baseImageData} alt="Base preview" />
+                      </div>
+                    )}
                     <label className="generator-label" htmlFor="face-source-url">
                       Face source URL
                     </label>
@@ -526,8 +593,30 @@ const TestPage: React.FC = () => {
                       className="generator-input"
                       placeholder="http://server/static/outputs/<job_id>.png"
                       value={faceSourceUrl}
-                      onChange={(e) => setFaceSourceUrl(e.target.value)}
+                      onChange={(e) => {
+                        setFaceSourceUrl(e.target.value);
+                        setFaceSourceData(undefined);
+                        setFaceSourceName(undefined);
+                      }}
                     />
+                    <label className="generator-label" htmlFor="face-source-upload">
+                      Or upload face source
+                    </label>
+                    <input
+                      id="face-source-upload"
+                      type="file"
+                      accept="image/*"
+                      className="generator-input"
+                      onChange={handleFaceSourceUpload}
+                    />
+                    {faceSourceName && (
+                      <p className="generator-help">Using uploaded file: {faceSourceName}</p>
+                    )}
+                    {faceSourceData && (
+                      <div className="generator-face-preview">
+                        <img src={faceSourceData} alt="Face source preview" />
+                      </div>
+                    )}
                     <div className="generator-row">
                       <div>
                         <label className="generator-label" htmlFor="faceswap-strength">
