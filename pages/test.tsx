@@ -7,10 +7,8 @@ import { HistoryFeed, HistoryItem } from "../components/HistoryFeed";
 import {
   submitAutoJob,
   submitFaceSwapJob,
-  submitWanVideoJob,
   fetchJob,
   fetchResult,
-  fetchWanVideoJob,
   SubmitJobOptions,
 } from "../lib/havnai";
 
@@ -38,7 +36,7 @@ type LoraDraft = {
   weight: string;
 };
 
-type GeneratorMode = "image" | "face_swap" | "wan_video";
+type GeneratorMode = "image" | "face_swap";
 
 const TestPage: React.FC = () => {
   const [mode, setMode] = useState<GeneratorMode>("image");
@@ -71,14 +69,6 @@ const TestPage: React.FC = () => {
   const [faceSourceName, setFaceSourceName] = useState<string | undefined>();
   const [faceswapStrength, setFaceswapStrength] = useState("0.8");
   const [faceswapSteps, setFaceswapSteps] = useState("20");
-  const [videoNegative, setVideoNegative] = useState("");
-  const [videoDuration, setVideoDuration] = useState("4");
-  const [videoFps, setVideoFps] = useState("24");
-  const [videoWidth, setVideoWidth] = useState("720");
-  const [videoHeight, setVideoHeight] = useState("512");
-  const [videoMotion, setVideoMotion] = useState("high");
-  const [videoInitUrl, setVideoInitUrl] = useState("");
-  const [videoLoras, setVideoLoras] = useState<string[]>([]);
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -114,18 +104,6 @@ const TestPage: React.FC = () => {
 
   const removeLora = (index: number) => {
     setLoras((prev) => prev.filter((_, idx) => idx !== index));
-  };
-
-  const addVideoLora = () => {
-    setVideoLoras((prev) => [...prev, ""]);
-  };
-
-  const updateVideoLora = (index: number, value: string) => {
-    setVideoLoras((prev) => prev.map((entry, idx) => (idx === index ? value : entry)));
-  };
-
-  const removeVideoLora = (index: number) => {
-    setVideoLoras((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   const parseOptionalInt = (value: string): number | undefined => {
@@ -194,26 +172,6 @@ const TestPage: React.FC = () => {
     return Object.keys(options).length > 0 ? options : undefined;
   };
 
-  const fetchImageAsBase64 = async (url: string): Promise<string> => {
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch init image: ${res.status}`);
-    }
-    const blob = await res.blob();
-    return await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === "string") {
-          resolve(reader.result);
-        } else {
-          reject(new Error("Failed to convert init image"));
-        }
-      };
-      reader.onerror = () => reject(new Error("Failed to convert init image"));
-      reader.readAsDataURL(blob);
-    });
-  };
-
   const handleBaseImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -266,7 +224,7 @@ const TestPage: React.FC = () => {
         );
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
-        await pollJob(id, trimmed);
+        await pollJob(id, trimmed, 360);
       } else if (mode === "face_swap") {
         const baseUrl = baseImageData || baseImageUrl.trim();
         const faceUrl = faceSourceData || faceSourceUrl.trim();
@@ -290,31 +248,7 @@ const TestPage: React.FC = () => {
         });
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
-        await pollJob(id, trimmed || "Face swap");
-      } else {
-        const initUrl = videoInitUrl.trim();
-        let initImageB64: string | undefined;
-        if (initUrl) {
-          setStatusMessage("Fetching init image…");
-          initImageB64 = await fetchImageAsBase64(initUrl);
-        }
-        const loraList = videoLoras
-          .map((entry) => entry.trim())
-          .filter((entry) => entry.length > 0);
-        const id = await submitWanVideoJob({
-          prompt: trimmed,
-          negativePrompt: videoNegative.trim() || undefined,
-          motionType: videoMotion,
-          loraList: loraList.length > 0 ? loraList : undefined,
-          initImageB64,
-          duration: parseOptionalFloat(videoDuration),
-          fps: parseOptionalInt(videoFps),
-          width: parseOptionalInt(videoWidth),
-          height: parseOptionalInt(videoHeight),
-        });
-        setJobId(id);
-        setStatusMessage("WAN job queued…");
-        await pollWanVideo(id, trimmed);
+        await pollJob(id, trimmed || "Face swap", 900);
       }
     } catch (err: any) {
       setStatusMessage(err?.message || "Failed to submit job.");
@@ -323,12 +257,10 @@ const TestPage: React.FC = () => {
     }
   };
 
-  const pollJob = async (id: string, usedPrompt: string) => {
+  const pollJob = async (id: string, usedPrompt: string, maxWaitSeconds = 600) => {
     const start = Date.now();
-    let attempts = 0;
 
-    while (attempts < 120) {
-      attempts += 1;
+    while ((Date.now() - start) / 1000 < maxWaitSeconds) {
       try {
         const job = await fetchJob(id);
         const status = (job.status || "").toUpperCase();
@@ -386,49 +318,6 @@ const TestPage: React.FC = () => {
         }
       } catch (err: any) {
         setStatusMessage(err?.message || "Error while polling job.");
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-    }
-
-    const elapsed = (Date.now() - start) / 1000;
-    setStatusMessage(`Gave up after ${elapsed.toFixed(1)} seconds without completion.`);
-  };
-
-  const pollWanVideo = async (id: string, usedPrompt: string) => {
-    const start = Date.now();
-    let attempts = 0;
-
-    while (attempts < 120) {
-      attempts += 1;
-      try {
-        const job = await fetchWanVideoJob(id);
-        const status = (job.status || "").toUpperCase();
-
-        if (status === "QUEUED") {
-          setStatusMessage("WAN job queued…");
-        } else if (status === "RUNNING") {
-          setStatusMessage("Rendering WAN video…");
-        } else if (status === "SUCCESS") {
-          if (job.video_url) {
-            setVideoUrl(job.video_url);
-            setModel("WAN GGUF");
-            setStatusMessage("Video ready.");
-          } else if (job.video_path) {
-            setStatusMessage(`Video ready at ${job.video_path}`);
-          } else {
-            setStatusMessage("Video ready, but no URL was returned.");
-          }
-          setRuntimeSeconds((Date.now() - start) / 1000);
-          return;
-        } else if (status === "FAILED") {
-          setStatusMessage(job.error || "WAN video failed.");
-          return;
-        } else {
-          setStatusMessage(`Status: ${status || "Unknown"}`);
-        }
-      } catch (err: any) {
-        setStatusMessage(err?.message || "Error while polling video job.");
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -529,13 +418,6 @@ const TestPage: React.FC = () => {
                     onClick={() => setMode("face_swap")}
                   >
                     Face swap
-                  </button>
-                  <button
-                    type="button"
-                    className={`generator-mode-button${mode === "wan_video" ? " is-active" : ""}`}
-                    onClick={() => setMode("wan_video")}
-                  >
-                    WAN video
                   </button>
                 </div>
                 <label className="generator-label" htmlFor="prompt">
@@ -699,132 +581,9 @@ const TestPage: React.FC = () => {
                   </div>
                 )}
 
-                {mode === "wan_video" && (
-                  <div className="generator-advanced">
-                    <span className="generator-label">WAN video settings</span>
-                    <label className="generator-label" htmlFor="video-negative">
-                      Negative prompt
-                    </label>
-                    <textarea
-                      id="video-negative"
-                      className="generator-input"
-                      placeholder="Optional negatives"
-                      value={videoNegative}
-                      onChange={(e) => setVideoNegative(e.target.value)}
-                      rows={2}
-                    />
-                    <div className="generator-row">
-                      <div>
-                        <label className="generator-label" htmlFor="video-duration">
-                          Duration (sec)
-                        </label>
-                        <input
-                          id="video-duration"
-                          type="number"
-                          min={1}
-                          step={0.5}
-                          className="generator-input"
-                          value={videoDuration}
-                          onChange={(e) => setVideoDuration(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="generator-label" htmlFor="video-fps">
-                          FPS
-                        </label>
-                        <input
-                          id="video-fps"
-                          type="number"
-                          min={1}
-                          max={60}
-                          step={1}
-                          className="generator-input"
-                          value={videoFps}
-                          onChange={(e) => setVideoFps(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <div className="generator-row">
-                      <div>
-                        <label className="generator-label" htmlFor="video-width">
-                          Width
-                        </label>
-                        <input
-                          id="video-width"
-                          type="number"
-                          min={64}
-                          step={64}
-                          className="generator-input"
-                          value={videoWidth}
-                          onChange={(e) => setVideoWidth(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="generator-label" htmlFor="video-height">
-                          Height
-                        </label>
-                        <input
-                          id="video-height"
-                          type="number"
-                          min={64}
-                          step={64}
-                          className="generator-input"
-                          value={videoHeight}
-                          onChange={(e) => setVideoHeight(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <label className="generator-label" htmlFor="video-motion">
-                      Motion type
-                    </label>
-                    <select
-                      id="video-motion"
-                      value={videoMotion}
-                      onChange={(e) => setVideoMotion(e.target.value)}
-                      className="generator-select"
-                    >
-                      <option value="high">High noise (default)</option>
-                      <option value="low">Low noise</option>
-                    </select>
-                    <label className="generator-label" htmlFor="video-init-url">
-                      Init image URL (optional)
-                    </label>
-                    <input
-                      id="video-init-url"
-                      type="text"
-                      className="generator-input"
-                      placeholder="http://server/static/outputs/<job_id>.png"
-                      value={videoInitUrl}
-                      onChange={(e) => setVideoInitUrl(e.target.value)}
-                    />
-                    <span className="generator-label">WAN LoRAs (names only)</span>
-                    {videoLoras.map((entry, index) => (
-                      <div className="generator-lora-row" key={`video-lora-${index}`}>
-                        <input
-                          type="text"
-                          className="generator-input"
-                          placeholder="LoRA name"
-                          value={entry}
-                          onChange={(e) => updateVideoLora(index, e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          className="generator-mini-button"
-                          onClick={() => removeVideoLora(index)}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                    <button type="button" className="generator-mini-button" onClick={addVideoLora}>
-                      Add WAN LoRA
-                    </button>
-                  </div>
-                )}
-
                 <div className="generator-controls">
                   <HavnAIButton
-                    label={mode === "wan_video" ? "Render video" : mode === "face_swap" ? "Swap face" : "Generate"}
+                    label={mode === "face_swap" ? "Swap face" : "Generate"}
                     loading={loading}
                     disabled={mode !== "face_swap" && !prompt.trim()}
                     onClick={handleSubmit}
