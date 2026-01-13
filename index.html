@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
   <head>
     <script>
@@ -7,12 +7,12 @@
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HavnAI Network — Own Your Intelligence</title>
+    <title>HavnAI Network â€” Own Your Intelligence</title>
     <meta
       name="description"
       content="HavnAI is a decentralized GPU network where creators earn $HAI running AI models."
     />
-    <meta property="og:title" content="HavnAI Network — Own Your Intelligence" />
+    <meta property="og:title" content="HavnAI Network â€” Own Your Intelligence" />
     <meta
       property="og:description"
       content="A decentralized GPU network with weighted model routing and dynamic $HAI rewards."
@@ -34,7 +34,7 @@
         <a href="#home" class="brand">
           <img src="/HavnAI-logo.png" alt="HavnAI" class="brand-logo" />
           <div class="brand-text">
-            <span class="brand-stage">Stage 6 → 7 Alpha</span>
+            <span class="brand-stage">Stage 6 â†’ 7 Alpha</span>
             <span class="brand-name">HavnAI Network</span>
           </div>
         </a>
@@ -74,24 +74,13 @@
               <strong>$HAI</strong> running AI models. Weighted routing, benchmark-driven
               model tiers, and live rewards.
             </p>
-            <div class="hero-install-note">
-              <h3>Join the HavnAI GPU Grid</h3>
-              <p>
-                Run this on your GPU machine to install the node:
-              </p>
-              <pre><code>curl -fsSL http://api.joinhavn.io:5001/installers/install-node.sh \
-  | bash -s -- --server http://api.joinhavn.io:5001</code></pre>
-              <p>
-                Full prerequisites, WAN I2V setup, systemd steps, and troubleshooting live on the
-                coordinator’s install guide.
-              </p>
-              <a
-                href="http://api.joinhavn.io:5001/join"
-                target="_blank"
-                rel="noreferrer"
-                class="btn tertiary wide"
-              >
-                Open full node install guide
+            <!-- New CTA buttons -->
+            <div class="hero-cta">
+              <a href="#calculator" class="btn btn-primary btn-lg">
+                Calculate Earnings
+              </a>
+              <a href="/test" class="btn btn-secondary btn-lg">
+                Try Generator
               </a>
             </div>
           </div>
@@ -120,84 +109,155 @@
           </div>
         </div>
       </section>
+      <section id="value" class="section">
+        <div class="section-header">
+          <h2>Why Choose HavnAI</h2>
+          <p>Three reasons GPU operators choose our network</p>
+        </div>
 
+        <div class="value-grid">
+          <article class="value-card">
+            <div class="value-icon">💰</div>
+            <h3>Passive Income</h3>
+            <p>
+              Your GPU runs AI workloads automatically. Earn $HAI tokens 24/7
+              with zero management required.
+            </p>
+            <ul class="value-list">
+              <li>Automated job matching</li>
+              <li>Instant $HAI payouts</li>
+              <li>No minimum commitment</li>
+            </ul>
+          </article>
+
+          <article class="value-card value-card-highlight">
+            <div class="value-badge">Most Popular</div>
+            <div class="value-icon">⚖️</div>
+            <h3>Fair Rewards</h3>
+            <p>
+              Better models earn more. Benchmark-driven tiers ensure quality
+              work gets quality compensation.
+            </p>
+            <ul class="value-list">
+              <li>Performance-based multipliers</li>
+              <li>Transparent reward formula</li>
+              <li>Higher tiers = bigger payouts</li>
+            </ul>
+          </article>
+
+          <article class="value-card">
+            <div class="value-icon">👑</div>
+            <h3>Own Your Work</h3>
+            <p>
+              Your workflows become revenue-earning assets. Earn royalties
+              every time your work powers someone's creation.
+            </p>
+            <ul class="value-list">
+              <li>Workflow registry on-chain</li>
+              <li>Automatic royalty splits</li>
+              <li>Build once, earn forever</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+      <section id="calculator" class="section section-alt">
+        <div class="section-header">
+          <h2>Calculate Your Earnings</h2>
+          <p>Estimate your monthly $HAI rewards based on your GPU</p>
+        </div>
+
+        <div class="calculator-container">
+          <div class="calculator-widget">
+            <div class="calc-input-group">
+              <label class="calc-label">GPU Type</label>
+              <select id="calcGpuType" class="calc-select">
+                <option value="3060">NVIDIA RTX 3060 (12GB)</option>
+                <option value="3080">NVIDIA RTX 3080 (10GB)</option>
+                <option value="3090">NVIDIA RTX 3090 (24GB)</option>
+                <option value="4070">NVIDIA RTX 4070 (12GB)</option>
+                <option value="4080">NVIDIA RTX 4080 (16GB)</option>
+                <option value="4090" selected>NVIDIA RTX 4090 (24GB)</option>
+                <option value="a4000">NVIDIA A4000 (16GB)</option>
+                <option value="a5000">NVIDIA A5000 (24GB)</option>
+              </select>
+            </div>
+
+            <div class="calc-input-group">
+              <label class="calc-label">Daily Uptime</label>
+              <div class="calc-slider-container">
+                <input
+                  type="range"
+                  id="calcUptime"
+                  class="calc-slider"
+                  min="1"
+                  max="24"
+                  value="20"
+                >
+                <div class="calc-value" id="calcUptimeValue">20 hours/day</div>
+              </div>
+            </div>
+
+            <div class="calc-results">
+              <div class="calc-result-row">
+                <span>Jobs per day</span>
+                <strong id="calcJobsPerDay">160</strong>
+              </div>
+              <div class="calc-result-row">
+                <span>Daily earnings</span>
+                <strong id="calcDailyEarnings">19.20 $HAI</strong>
+              </div>
+              <div class="calc-result-row calc-result-main">
+                <span>Monthly Earnings</span>
+                <strong id="calcMonthlyEarnings">576 $HAI</strong>
+              </div>
+            </div>
+
+            <a href="#join" class="btn btn-primary wide">Start Earning Now</a>
+
+            <p class="calc-disclaimer">
+              Estimates based on current network activity. Actual earnings vary
+              based on demand, model weights, and job complexity.
+            </p>
+          </div>
+        </div>
+      </section>
       <!-- HOW IT WORKS -->
       <section id="how" class="section">
         <div class="section-header">
           <h2>How It Works</h2>
-          <p>From GPU to $HAI rewards in four concrete steps.</p>
+          <p>Three simple steps to start earning</p>
         </div>
         <div class="steps-grid">
           <article class="step-card">
             <div class="step-icon">1</div>
-            <h3>Connect Your GPU Node</h3>
+            <h3>Install Node</h3>
             <p>
-              Point the HavnAI node client at the coordinator, set your wallet, and enable
-              <code>CREATOR_MODE</code> to accept image/video jobs.
+              One-click installer configures your GPU for the HavnAI network.
+              Works on Windows and Linux.
             </p>
           </article>
           <article class="step-card">
             <div class="step-icon">2</div>
-            <h3>Receive AI Jobs</h3>
+            <h3>Go Online</h3>
             <p>
-              The coordinator queues jobs submitted to <code>/submit-job</code> and assigns them
-              only to compatible, healthy nodes.
+              Your GPU joins the network automatically. The coordinator assigns
+              jobs based on your capabilities and availability.
             </p>
           </article>
           <article class="step-card">
             <div class="step-icon">3</div>
-            <h3>Run Models with Weighted Routing</h3>
+            <h3>Earn $HAI</h3>
             <p>
-              Models are chosen with weighted random routing, favoring higher-tier, benchmarked
-              checkpoints.
-            </p>
-          </article>
-          <article class="step-card">
-            <div class="step-icon">4</div>
-            <h3>Earn $HAI Automatically</h3>
-            <p>
-              Each completed job records runtime, model weight, and quality tier to scale your
-              $HAI rewards.
+              Process AI workloads 24/7. $HAI tokens deposit to your wallet
+              automatically after each completed job.
             </p>
           </article>
         </div>
-      </section>
-
-      <!-- SMART ROUTING -->
-      <section id="smart-routing" class="section section-alt">
-        <div class="section-header">
-          <h2>Smart Routing · Weighted Models</h2>
-          <p>
-            Identical prompts, benchmark scores, and a registry-backed weight for every creator model.
-          </p>
-        </div>
-        <div class="routing-layout">
-          <div class="routing-copy">
-            <p>
-              When a user hits <code>/submit-job</code> with <code>"model": "auto"</code>, the
-              coordinator selects a model using weighted random routing. Weights are derived from a
-              benchmark → scoring → registry workflow:
-            </p>
-            <ul>
-              <li>Standardized prompts per domain (realism, anime, motion, text).</li>
-              <li>Rubric scoring → tier assignment (Tier 5 → Tier 1).</li>
-              <li>Tier ↔ target weight ↔ reward multiplier.</li>
-            </ul>
-            <p>
-              The result: more reliable, higher-quality models are chosen more often and rewarded more
-              aggressively in $HAI.
-            </p>
-          </div>
-          <div class="json-card">
-            <div class="json-card-label">Example routing weights</div>
-            <pre><code>{
-  "juggernautxl_ragnarokby": 77,
-  "majicmixRealistic_v7": 70,
-  "lazymixRealAmateur_v40": 55,
-  "perfectdeliberate_v5SD15": 50,
-  "epicrealismxl_vxviicrystalclear": 45
-}</code></pre>
-          </div>
+        <div class="how-cta">
+          <a href="#quick-start" class="btn btn-primary">Get Started</a>
+          <a href="http://api.joinhavn.io:5001/join" target="_blank" class="btn btn-tertiary">
+            View Full Guide
+          </a>
         </div>
       </section>
 
@@ -206,6 +266,48 @@
         <div class="section-header">
           <h2>Dynamic $HAI Rewards</h2>
           <p>Weight tiers drive multipliers. Better models, bigger payouts.</p>
+        </div>
+        <div class="rewards-visual">
+          <div class="rewards-chart">
+            <div class="chart-bar" style="--height: 100%; --tier: 5;">
+              <div class="bar-fill"></div>
+              <div class="bar-label">
+                <strong>Tier 5</strong>
+                <span>2.0× reward</span>
+              </div>
+            </div>
+            <div class="chart-bar" style="--height: 85%; --tier: 4;">
+              <div class="bar-fill"></div>
+              <div class="bar-label">
+                <strong>Tier 4</strong>
+                <span>1.7× reward</span>
+              </div>
+            </div>
+            <div class="chart-bar" style="--height: 65%; --tier: 3;">
+              <div class="bar-fill"></div>
+              <div class="bar-label">
+                <strong>Tier 3</strong>
+                <span>1.3× reward</span>
+              </div>
+            </div>
+            <div class="chart-bar" style="--height: 55%; --tier: 2;">
+              <div class="bar-fill"></div>
+              <div class="bar-label">
+                <strong>Tier 2</strong>
+                <span>1.1× reward</span>
+              </div>
+            </div>
+            <div class="chart-bar" style="--height: 50%; --tier: 1;">
+              <div class="bar-fill"></div>
+              <div class="bar-label">
+                <strong>Tier 1</strong>
+                <span>1.0× reward</span>
+              </div>
+            </div>
+          </div>
+          <p class="chart-caption">
+            Higher-tier models earn proportionally more $HAI per job
+          </p>
         </div>
         <div class="table-wrapper">
           <table class="rewards-table">
@@ -221,31 +323,31 @@
               <tr>
                 <td>5</td>
                 <td>77</td>
-                <td>2.0×</td>
+                <td>2.0Ã—</td>
                 <td>juggernautXL</td>
               </tr>
               <tr>
                 <td>4</td>
                 <td>70</td>
-                <td>1.7×</td>
+                <td>1.7Ã—</td>
                 <td>majicmix</td>
               </tr>
               <tr>
                 <td>3</td>
                 <td>55</td>
-                <td>1.3×</td>
+                <td>1.3Ã—</td>
                 <td>lazymix</td>
               </tr>
               <tr>
                 <td>2</td>
                 <td>50</td>
-                <td>1.1×</td>
+                <td>1.1Ã—</td>
                 <td>deliberate</td>
               </tr>
               <tr>
                 <td>1</td>
                 <td>45</td>
-                <td>1.0×</td>
+                <td>1.0Ã—</td>
                 <td>epicrealism</td>
               </tr>
             </tbody>
@@ -264,10 +366,10 @@
         </div>
         <div class="model-grid" id="modelGrid">
           <div class="model-card placeholder">
-            <p class="model-name">Loading models…</p>
-            <p class="model-weight">Weight —</p>
+            <p class="model-name">Loading modelsâ€¦</p>
+            <p class="model-weight">Weight â€”</p>
             <p class="model-desc">
-              Once the coordinator responds, you’ll see the live registry here.
+              Once the coordinator responds, youâ€™ll see the live registry here.
             </p>
           </div>
         </div>
@@ -293,7 +395,7 @@
               </thead>
               <tbody id="jobsTableBody">
                 <tr>
-                  <td colspan="5">Waiting for recent jobs from /api/models/stats…</td>
+                  <td colspan="5">Waiting for recent jobs from /api/models/statsâ€¦</td>
                 </tr>
               </tbody>
             </table>
@@ -308,12 +410,275 @@
           </div>
         </div>
       </section>
+      <div id="smart-routing"></div>
+      <section id="technical" class="section">
+        <div class="section-header">
+          <h2>Technical Details</h2>
+          <p>For developers and power users</p>
+        </div>
 
+        <div class="accordion">
+          <details class="accordion-item">
+            <summary class="accordion-header">
+              <h3>Weighted Model Routing</h3>
+              <svg class="accordion-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+              </svg>
+            </summary>
+            <div class="accordion-content">
+              <p>
+                When a user hits <code>/submit-job</code> with <code>"model": "auto"</code>, the
+                coordinator selects a model using weighted random routing. Weights are derived from a
+                benchmark → scoring → registry workflow:
+              </p>
+              <ul>
+                <li>Standardized prompts per domain (realism, anime, motion, text).</li>
+                <li>Rubric scoring → tier assignment (Tier 5 → Tier 1).</li>
+                <li>Tier ↔ target weight ↔ reward multiplier.</li>
+              </ul>
+              <p>
+                The result: more reliable, higher-quality models are chosen more often and rewarded more
+                aggressively in $HAI.
+              </p>
+
+              <div class="json-card">
+                <div class="json-card-label">Example routing weights</div>
+                <pre><code>{
+  "juggernautxl_ragnarokby": 77,
+  "majicmixRealistic_v7": 70,
+  "lazymixRealAmateur_v40": 55,
+  "perfectdeliberate_v5SD15": 50,
+  "epicrealismxl_vxviicrystalclear": 45
+}</code></pre>
+              </div>
+            </div>
+          </details>
+
+          <details class="accordion-item">
+            <summary class="accordion-header">
+              <h3>Dynamic $HAI Rewards</h3>
+              <svg class="accordion-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+              </svg>
+            </summary>
+            <div class="accordion-content">
+              <p>
+                Rewards are calculated dynamically based on model weight, runtime, and job complexity:
+              </p>
+              <pre><code>reward_hai = base_reward × weight_factor ×
+              compute_cost_factor ×
+              runtime_factor ×
+              success_factor</code></pre>
+              <p>Where:</p>
+              <ul>
+                <li><strong>base_reward</strong> – Protocol-level base (default 0.05 $HAI)</li>
+                <li><strong>weight_factor</strong> – Model weight / 10.0</li>
+                <li><strong>compute_cost_factor</strong> – SDXL: 1.5x, SD1.5: 1.0x, Anime: 0.7x</li>
+                <li><strong>runtime_factor</strong> – max(1.0, actual_runtime / baseline_runtime)</li>
+                <li><strong>success_factor</strong> – 1.0 for success, 0.0 for failure</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="accordion-item">
+            <summary class="accordion-header">
+              <h3>Node Heartbeats & Registration</h3>
+              <svg class="accordion-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+              </svg>
+            </summary>
+            <div class="accordion-content">
+              <p>
+                Nodes run the bundled client and connect to the coordinator using a simple
+                heartbeat/polling protocol.
+              </p>
+              <h4>POST /register (heartbeat)</h4>
+              <p>Sent periodically by each node with GPU stats and capabilities:</p>
+              <ul>
+                <li>Node ID, OS, GPU type, memory stats</li>
+                <li>Available models and pipelines</li>
+                <li>Uptime and utilization metrics</li>
+              </ul>
+              <h4>GET /tasks/creator</h4>
+              <p>Nodes poll for work filtered by role, supported models, and pipelines.</p>
+              <h4>POST /results</h4>
+              <p>Nodes submit job results with metrics. Coordinator computes rewards and updates job state.</p>
+            </div>
+          </details>
+        </div>
+      </section>
+      <section id="faq" class="section">
+        <div class="section-header">
+          <h2>Frequently Asked Questions</h2>
+          <p>Everything you need to know about running a HavnAI node</p>
+        </div>
+
+        <div class="faq-container">
+          <details class="faq-item">
+            <summary class="faq-question">
+              What hardware do I need?
+              <svg class="faq-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+              </svg>
+            </summary>
+            <div class="faq-answer">
+              <p>
+                Minimum requirements: NVIDIA GPU with 12GB+ VRAM (RTX 3060 or better),
+                16GB+ system RAM, and stable internet. We recommend RTX 4070 or higher
+                for optimal earnings. Works on Windows 10/11 and Linux (Ubuntu 20.04+).
+              </p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              How much can I realistically earn?
+              <svg class="faq-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+              </svg>
+            </summary>
+            <div class="faq-answer">
+              <p>
+                Earnings depend on your GPU tier and uptime. An RTX 4090 running 20 hours/day
+                typically earns 400-600 $HAI monthly at current network rates. Use our calculator
+                above for personalized estimates. Actual earnings vary based on network demand and
+                job complexity.
+              </p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              Do I need to manage anything after installation?
+              <svg class="faq-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+              </svg>
+            </summary>
+            <div class="faq-answer">
+              <p>
+                No active management required. Once installed, your node operates autonomously—
+                connecting to the coordinator, accepting jobs, processing workloads, and receiving
+                $HAI rewards. You can monitor performance through the dashboard but intervention
+                is rarely needed.
+              </p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              How and when do I get paid?
+              <svg class="faq-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+              </svg>
+            </summary>
+            <div class="faq-answer">
+              <p>
+                $HAI tokens are credited to your linked wallet automatically after each completed
+                job. Rewards are calculated based on model tier, job complexity, and runtime.
+                You can track your earnings in real-time through the dashboard.
+              </p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              Is this safe and legal?
+              <svg class="faq-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+              </svg>
+            </summary>
+            <div class="faq-answer">
+              <p>
+                Yes. You're providing legitimate compute services for AI image and video generation.
+                All workloads are verified and logged. The node software runs in user-space with no
+                system-level access. You maintain full control and can disconnect at any time.
+              </p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              What if I have multiple GPUs?
+              <svg class="faq-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+              </svg>
+            </summary>
+            <div class="faq-answer">
+              <p>
+                You can run multiple nodes on the same machine, one per GPU. Each GPU earns
+                independently. The installer supports multi-GPU setups—just specify which GPU
+                each node instance should use. Total earnings scale linearly with GPU count.
+              </p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              Can I use this with gaming or other GPU tasks?
+              <svg class="faq-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+              </svg>
+            </summary>
+            <div class="faq-answer">
+              <p>
+                Yes, but not simultaneously. When you launch a game or other GPU-intensive application,
+                pause your node to free up VRAM. You can configure the node to run only during specific
+                hours (e.g., overnight) if you use your GPU for other purposes during the day.
+              </p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">
+              What happens if my node goes offline?
+              <svg class="faq-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+              </svg>
+            </summary>
+            <div class="faq-answer">
+              <p>
+                No penalties. The coordinator detects offline nodes within minutes and stops assigning
+                jobs. When you come back online, your node automatically rejoins and resumes earning.
+                There's no minimum uptime requirement.
+              </p>
+            </div>
+          </details>
+        </div>
+      </section>
+      <section id="quick-start" class="section">
+        <div class="section-header">
+          <h2>Quick Start Guide</h2>
+          <p>Get your node running in under 5 minutes</p>
+        </div>
+
+        <div class="install-container">
+          <div class="install-card">
+            <h3>Install HavnAI Node</h3>
+            <p>Run this command on your GPU machine:</p>
+            <pre class="install-command"><code>curl -fsSL http://api.joinhavn.io:5001/installers/install-node.sh \
+  | bash -s -- --server http://api.joinhavn.io:5001</code></pre>
+
+            <div class="install-requirements">
+              <h4>Requirements</h4>
+              <ul>
+                <li>NVIDIA GPU with 12GB+ VRAM (RTX 3060 or better)</li>
+                <li>Ubuntu 20.04+ or Windows 10/11</li>
+                <li>Python 3.10+</li>
+                <li>Stable internet connection</li>
+              </ul>
+            </div>
+
+            <a href="http://api.joinhavn.io:5001/join" target="_blank" class="btn btn-tertiary wide">
+              View Full Installation Guide
+            </a>
+          </div>
+        </div>
+      </section>
       <!-- JOIN / ALPHA -->
       <section id="join" class="section join-section">
         <div class="join-inner">
           <div class="join-copy">
-            <h2>Join Stage 6 → 7 Alpha</h2>
+            <h2>Join Stage 6 â†’ 7 Alpha</h2>
             <p>
               We are validating weighted routing, benchmark-driven tiers, and the reward engine
               across a small set of GPUs before opening the grid. If you are comfortable running
@@ -331,7 +696,7 @@
               >View Live Dashboard</a
             >
             <p class="join-note">
-              After joining, you’ll receive updated install + config steps tailored to your GPU
+              After joining, youâ€™ll receive updated install + config steps tailored to your GPU
               and OS.
             </p>
           </div>
@@ -350,7 +715,7 @@
               <p class="footer-tagline">Decentralized GPU network for AI creators.</p>
             </div>
           </div>
-          <p class="footer-copy">© 2025 HavnAI Network</p>
+          <p class="footer-copy">Â© 2025 HavnAI Network</p>
         </div>
 
         <div class="footer-col footer-col-center">
@@ -418,7 +783,7 @@
           active_nodes: 0,
           jobs_completed_24h: 0,
           success_rate: 0,
-          top_model: "—",
+          top_model: "â€”",
           model_registry: [],
           recent_jobs: [],
         };
@@ -436,7 +801,7 @@
           heroActiveNodes.textContent = nodes;
           heroJobs24h.textContent = jobs;
           heroSuccessRate.textContent = typeof success === "number" ? success.toFixed(1) + "%" : success;
-          heroTopModel.textContent = topModel || "—";
+          heroTopModel.textContent = topModel || "â€”";
 
           liveActiveNodes.textContent = nodes;
           liveJobs24h.textContent = jobs;
@@ -447,7 +812,7 @@
           const models = safeArray(registry);
           if (!models.length) {
             modelGrid.innerHTML =
-              '<div class="model-card placeholder"><p class="model-name">No models registered yet.</p><p class="model-weight">Weight —</p><p class="model-desc">Once the coordinator exposes the registry, models will appear here automatically.</p></div>';
+              '<div class="model-card placeholder"><p class="model-name">No models registered yet.</p><p class="model-weight">Weight â€”</p><p class="model-desc">Once the coordinator exposes the registry, models will appear here automatically.</p></div>';
             return;
           }
 
@@ -499,26 +864,26 @@
           const rows = list
             .slice(0, 10)
             .map((job) => {
-              const id = job.job_id || job.id || "—";
-              const model = job.model || "—";
+              const id = job.job_id || job.id || "â€”";
+              const model = job.model || "â€”";
               const reward =
                 typeof job.reward_hai === "number"
                   ? job.reward_hai.toFixed(6)
                   : typeof job.reward === "number"
                   ? job.reward.toFixed(6)
-                  : "—";
+                  : "â€”";
               const status = (job.status || "UNKNOWN").toString().toUpperCase();
               const imageUrl = job.image_url || job.preview_url || "";
               const preview = imageUrl
                 ? `<button class="preview-thumb" data-preview="${imageUrl}" aria-label="Open preview for ${id}">
                     <img src="${imageUrl}" alt="${id} preview" loading="lazy" />
                   </button>`
-                : "—";
+                : "â€”";
               return `
                 <tr>
                   <td><code>${id}</code></td>
                   <td>${model}</td>
-                  <td>${reward || "—"}</td>
+                  <td>${reward || "â€”"}</td>
                   <td>${status}</td>
                   <td>${preview}</td>
                 </tr>
@@ -557,7 +922,7 @@
             lb.id = "lightbox";
             lb.className = "lightbox hidden";
             lb.innerHTML =
-              '<div class="lightbox-backdrop"></div><div class="lightbox-content"><img alt="Preview" /><button class="lightbox-close" aria-label="Close preview">×</button></div>';
+              '<div class="lightbox-backdrop"></div><div class="lightbox-content"><img alt="Preview" /><button class="lightbox-close" aria-label="Close preview">Ã—</button></div>';
             body.appendChild(lb);
             lb.addEventListener("click", (evt) => {
               if (
@@ -584,5 +949,62 @@
         });
       })();
     </script>
+
+    <script>
+      // Earnings Calculator
+      (function initCalculator() {
+        const gpuProfiles = {
+          "3060": { jobsPerHour: 6, avgReward: 0.08 },
+          "3080": { jobsPerHour: 10, avgReward: 0.09 },
+          "3090": { jobsPerHour: 12, avgReward: 0.1 },
+          "4070": { jobsPerHour: 11, avgReward: 0.09 },
+          "4080": { jobsPerHour: 15, avgReward: 0.11 },
+          "4090": { jobsPerHour: 20, avgReward: 0.12 },
+          "a4000": { jobsPerHour: 13, avgReward: 0.1 },
+          "a5000": { jobsPerHour: 16, avgReward: 0.11 },
+        };
+
+        const gpuSelect = document.getElementById("calcGpuType");
+        const uptimeSlider = document.getElementById("calcUptime");
+        const uptimeValue = document.getElementById("calcUptimeValue");
+        const jobsPerDayEl = document.getElementById("calcJobsPerDay");
+        const dailyEarningsEl = document.getElementById("calcDailyEarnings");
+        const monthlyEarningsEl = document.getElementById("calcMonthlyEarnings");
+
+        if (!gpuSelect || !uptimeSlider) return;
+
+        function calculate() {
+          const gpuType = gpuSelect.value;
+          const uptime = parseInt(uptimeSlider.value, 10);
+          const profile = gpuProfiles[gpuType];
+
+          const utilizationFactor = 0.8;
+          const jobsPerDay = Math.round(profile.jobsPerHour * uptime * utilizationFactor);
+          const dailyEarnings = (jobsPerDay * profile.avgReward).toFixed(2);
+          const monthlyEarnings = (dailyEarnings * 30).toFixed(2);
+
+          jobsPerDayEl.textContent = jobsPerDay;
+          dailyEarningsEl.textContent = `${dailyEarnings} $HAI`;
+          monthlyEarningsEl.textContent = `${monthlyEarnings} $HAI`;
+          uptimeValue.textContent = `${uptime} hours/day`;
+        }
+
+        gpuSelect.addEventListener("change", calculate);
+        uptimeSlider.addEventListener("input", calculate);
+
+        calculate();
+      })();
+    </script>
   </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
