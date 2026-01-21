@@ -41,7 +41,111 @@ type LoraDraft = {
   weight: string;
 };
 
+type LoraOption = {
+  name: string;
+  label: string;
+  weight?: number;
+};
+
 type GeneratorMode = "image" | "face_swap";
+
+type LoraAccumulator = {
+  name: string;
+  weight?: number;
+  models: Set<string>;
+  nodes: Set<string>;
+};
+
+const LORA_LABEL_LIMIT = 2;
+
+const buildLoraOptions = (models: any[], nodes: any[]): LoraOption[] => {
+  const map = new Map<string, LoraAccumulator>();
+
+  const getOrCreate = (name: string): LoraAccumulator => {
+    const key = name.trim();
+    if (!map.has(key)) {
+      map.set(key, { name: key, models: new Set(), nodes: new Set() });
+    }
+    return map.get(key)!;
+  };
+
+  const addManifestLora = (name: string, modelName: string, weight?: number) => {
+    if (!name) return;
+    const entry = getOrCreate(name);
+    if (modelName) {
+      entry.models.add(modelName);
+    }
+    if (entry.weight == null && weight != null && Number.isFinite(weight)) {
+      entry.weight = weight;
+    }
+  };
+
+  const addNodeLora = (name: string, nodeName: string) => {
+    if (!name) return;
+    const entry = getOrCreate(name);
+    if (nodeName) {
+      entry.nodes.add(nodeName);
+    }
+  };
+
+  (models || []).forEach((model) => {
+    const modelName = String(model?.name || model?.model || "").trim();
+    const loraEntries: any[] = [];
+    if (Array.isArray(model?.lora)) {
+      loraEntries.push(...model.lora);
+    } else if (model?.lora && typeof model.lora === "object") {
+      loraEntries.push(model.lora);
+    }
+    const loraPath = typeof model?.lora_path === "string" ? model.lora_path.trim() : "";
+    if (loraPath) {
+      loraEntries.push({
+        name: loraPath,
+        weight: model?.lora_strength_default,
+      });
+    }
+    loraEntries.forEach((lora) => {
+      const name = String(lora?.name || lora?.filename || "").trim();
+      if (!name) return;
+      let weight = lora?.weight ?? lora?.strength;
+      if (weight != null) {
+        const parsed = Number(weight);
+        weight = Number.isFinite(parsed) ? parsed : undefined;
+      }
+      addManifestLora(name, modelName, weight);
+    });
+  });
+
+  (nodes || []).forEach((node) => {
+    const nodeName = String(node?.node_name || node?.node_id || "").trim();
+    const loras = Array.isArray(node?.loras) ? node.loras : [];
+    loras.forEach((item: any) => {
+      const name = String(item?.name || item || "").trim();
+      if (!name) return;
+      addNodeLora(name, nodeName);
+    });
+  });
+
+  const options: LoraOption[] = [];
+  for (const entry of map.values()) {
+    const sources: string[] = [];
+    if (entry.models.size) {
+      const modelsList = Array.from(entry.models).filter(Boolean);
+      const preview = modelsList.slice(0, LORA_LABEL_LIMIT);
+      const suffix = modelsList.length > preview.length ? ` +${modelsList.length - preview.length}` : "";
+      sources.push(`manifest: ${preview.join(", ")}${suffix}`);
+    }
+    if (entry.nodes.size) {
+      const nodesList = Array.from(entry.nodes).filter(Boolean);
+      const preview = nodesList.slice(0, LORA_LABEL_LIMIT);
+      const suffix = nodesList.length > preview.length ? ` +${nodesList.length - preview.length}` : "";
+      sources.push(`nodes: ${preview.join(", ")}${suffix}`);
+    }
+    const label = sources.length ? `${entry.name} (${sources.join(" | ")})` : entry.name;
+    options.push({ name: entry.name, label, weight: entry.weight });
+  }
+
+  return options.sort((a, b) => a.name.localeCompare(b.name));
+};
 
 const TestPage: React.FC = () => {
   const [mode, setMode] = useState<GeneratorMode>("image");
@@ -65,6 +169,8 @@ const TestPage: React.FC = () => {
   const [sampler, setSampler] = useState("");
   const [seed, setSeed] = useState("");
   const [loras, setLoras] = useState<LoraDraft[]>([]);
+  const [loraOptions, setLoraOptions] = useState<LoraOption[]>([]);
+  const [selectedLora, setSelectedLora] = useState("");
   const [faceswapModel, setFaceswapModel] = useState(FACE_SWAP_MODELS[0].id);
   const [baseImageUrl, setBaseImageUrl] = useState("");
   const [baseImageData, setBaseImageData] = useState<string | undefined>();
@@ -90,6 +196,37 @@ const TestPage: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const apiBase =
+      process.env.NEXT_PUBLIC_HAVNAI_API_BASE && process.env.NEXT_PUBLIC_HAVNAI_API_BASE.length > 0
+        ? process.env.NEXT_PUBLIC_HAVNAI_API_BASE
+        : "/api";
+
+    const loadLoras = async () => {
+      try {
+        const [modelsRes, nodesRes] = await Promise.all([
+          fetch(`${apiBase}/models/list`),
+          fetch(`${apiBase}/nodes`),
+        ]);
+        const modelsJson = modelsRes.ok ? await modelsRes.json() : {};
+        const nodesJson = nodesRes.ok ? await nodesRes.json() : {};
+        if (!active) return;
+        const options = buildLoraOptions(modelsJson.models || [], nodesJson.nodes || []);
+        setLoraOptions(options);
+      } catch {
+        if (active) {
+          setLoraOptions([]);
+        }
+      }
+    };
+
+    loadLoras();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const saveHistory = (items: HistoryItem[]) => {
     setHistory(items);
     if (typeof window !== "undefined") {
@@ -109,6 +246,20 @@ const TestPage: React.FC = () => {
 
   const removeLora = (index: number) => {
     setLoras((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const addSelectedLora = () => {
+    if (!selectedLora) return;
+    const option = loraOptions.find((entry) => entry.name === selectedLora);
+    if (!option) return;
+    setLoras((prev) => {
+      if (prev.some((entry) => entry.name.trim() === option.name)) {
+        return prev;
+      }
+      const weight = option.weight != null ? String(option.weight) : "";
+      return [...prev, { name: option.name, weight }];
+    });
+    setSelectedLora("");
   };
 
   const parseOptionalInt = (value: string): number | undefined => {
@@ -176,6 +327,43 @@ const TestPage: React.FC = () => {
 
     return Object.keys(options).length > 0 ? options : undefined;
   };
+
+  const renderLoraPicker = (idPrefix: string) => (
+    <div className="generator-row">
+      <div>
+        <label className="generator-label" htmlFor={`${idPrefix}-lora-picker`}>
+          LoRA preset
+        </label>
+        <select
+          id={`${idPrefix}-lora-picker`}
+          value={selectedLora}
+          onChange={(e) => setSelectedLora(e.target.value)}
+          className="generator-select"
+          disabled={loraOptions.length === 0}
+        >
+          <option value="">
+            {loraOptions.length > 0 ? "Select a LoRA" : "No LoRAs detected"}
+          </option>
+          {loraOptions.map((entry) => (
+            <option key={entry.name} value={entry.name}>
+              {entry.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="generator-label">&nbsp;</label>
+        <button
+          type="button"
+          className="generator-mini-button"
+          onClick={addSelectedLora}
+          disabled={!selectedLora}
+        >
+          Add preset
+        </button>
+      </div>
+    </div>
+  );
 
   const handleBaseImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -552,6 +740,7 @@ const TestPage: React.FC = () => {
                       ))}
                     </select>
                     <span className="generator-label">Optional LoRAs</span>
+                    {renderLoraPicker("faceswap")}
                     {loras.map((entry, index) => (
                       <div className="generator-lora-row" key={`faceswap-lora-${index}`}>
                         <input
@@ -750,6 +939,7 @@ const TestPage: React.FC = () => {
                     <p className="generator-help">
                       Leave blank to use server defaults. Weights are optional.
                     </p>
+                    {renderLoraPicker("image")}
                     {loras.map((entry, index) => (
                       <div className="generator-lora-row" key={`lora-${index}`}>
                         <input
