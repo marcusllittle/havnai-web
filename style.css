@@ -1292,6 +1292,8 @@ main,
   text-transform: uppercase;
   letter-spacing: 0.12em;
   background: rgba(5, 10, 18, 0.85);
+  font-family: inherit;
+  cursor: pointer;
   transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
