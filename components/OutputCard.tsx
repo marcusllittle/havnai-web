@@ -21,6 +21,7 @@ export const OutputCard: React.FC<OutputCardProps> = ({
       ? runtimeSeconds.toFixed(1)
       : undefined;
   const label = videoUrl ? "Generated video" : "Generated image";
+  const downloadName = `${jobId || "havnai-output"}.${videoUrl ? "mp4" : "png"}`;
 
   return (
     <div className="generator-output-card">
@@ -48,6 +49,17 @@ export const OutputCard: React.FC<OutputCardProps> = ({
           </span>
         )}
       </div>
+      {videoUrl && (
+        <div className="generator-output-actions">
+          <a
+            href={videoUrl}
+            download={downloadName}
+            className="generator-download"
+          >
+            Download video
+          </a>
+        </div>
+      )}
     </div>
   );
 };

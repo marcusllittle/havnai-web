@@ -1273,6 +1273,34 @@ main,
   color: var(--text-muted);
 }
 
+.generator-output-actions {
+  margin-top: 0.6rem;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.generator-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 234, 255, 0.35);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  background: rgba(5, 10, 18, 0.85);
+  transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.generator-download:hover {
+  color: var(--accent-strong);
+  border-color: var(--accent-strong);
+  transform: translateY(-1px);
+}
+
 .generator-output-meta strong {
   color: var(--accent-strong);
 }
