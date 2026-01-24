@@ -407,9 +407,16 @@
                   ).toLocaleTimeString()
                 : "—";
               const imageUrl = job.image_url || job.preview_url || "";
-              const preview = imageUrl
-                ? `<button class="preview-thumb" data-preview="${imageUrl}" aria-label="Open preview for ${id}">
-                    <img src="${imageUrl}" alt="${id} preview" loading="lazy" />
+              const videoUrl = job.video_url || "";
+              const previewUrl = videoUrl || imageUrl;
+              const previewType = videoUrl ? "video" : "image";
+              const preview = previewUrl
+                ? `<button class="preview-thumb" data-preview="${previewUrl}" data-preview-type="${previewType}" aria-label="Open preview for ${id}">
+                    ${
+                      previewType === "video"
+                        ? `<video src="${previewUrl}" muted playsinline preload="metadata"></video>`
+                        : `<img src="${previewUrl}" alt="${id} preview" loading="lazy" />`
+                    }
                   </button>`
                 : "—";
 
@@ -551,7 +558,7 @@
             lb.id = "lightbox";
             lb.className = "lightbox hidden";
             lb.innerHTML =
-              '<div class="lightbox-backdrop"></div><div class="lightbox-content"><img alt="Preview" /><button class="lightbox-close" aria-label="Close preview">×</button></div>';
+              '<div class="lightbox-backdrop"></div><div class="lightbox-content"><img alt="Preview" /><video controls playsinline></video><button class="lightbox-close" aria-label="Close preview">×</button></div>';
             body.appendChild(lb);
             lb.addEventListener("click", (evt) => {
               if (
@@ -559,6 +566,12 @@
                 evt.target.classList.contains("lightbox-backdrop") ||
                 evt.target.classList.contains("lightbox-close")
               ) {
+                const video = lb.querySelector("video");
+                if (video) {
+                  video.pause();
+                  video.removeAttribute("src");
+                  video.load();
+                }
                 lb.classList.add("hidden");
               }
             });
@@ -571,9 +584,23 @@
           if (!btn) return;
           const src = btn.getAttribute("data-preview");
           if (!src) return;
+          const previewType = btn.getAttribute("data-preview-type") || "";
           const lb = ensureLightbox();
           const img = lb.querySelector("img");
-          img.src = src;
+          const video = lb.querySelector("video");
+          if (!img || !video) return;
+          if (previewType === "video" || src.toLowerCase().endsWith(".mp4")) {
+            video.src = src;
+            video.style.display = "block";
+            img.style.display = "none";
+          } else {
+            img.src = src;
+            img.style.display = "block";
+            video.pause();
+            video.removeAttribute("src");
+            video.load();
+            video.style.display = "none";
+          }
           lb.classList.remove("hidden");
         });
 
@@ -586,4 +613,3 @@
     </script>
   </body>
 </html>
-

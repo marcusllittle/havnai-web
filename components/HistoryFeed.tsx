@@ -3,7 +3,8 @@ import React from "react";
 export interface HistoryItem {
   jobId: string;
   prompt: string;
-  imageUrl: string;
+  imageUrl?: string;
+  videoUrl?: string;
   model?: string;
   timestamp: number;
 }
@@ -44,10 +45,14 @@ export const HistoryFeed: React.FC<HistoryFeedProps> = ({
             className="generator-history-thumb"
             title={item.prompt}
           >
-            <img
-              src={item.imageUrl}
-              alt={item.prompt}
-            />
+            {item.videoUrl ? (
+              <video src={item.videoUrl} muted playsInline preload="metadata" />
+            ) : (
+              <img
+                src={item.imageUrl}
+                alt={item.prompt}
+              />
+            )}
           </button>
         ))}
       </div>

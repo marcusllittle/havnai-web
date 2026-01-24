@@ -137,9 +137,16 @@ const HomePage: NextPage = () => {
               : "—";
           const status = (job.status || "UNKNOWN").toString().toUpperCase();
           const imageUrl = job.image_url || job.preview_url || "";
-          const preview = imageUrl
-            ? `<button class="preview-thumb" data-preview="${imageUrl}" aria-label="Open preview for ${id}">
-                    <img src="${imageUrl}" alt="${id} preview" loading="lazy" />
+          const videoUrl = job.video_url || "";
+          const previewUrl = videoUrl || imageUrl;
+          const previewType = videoUrl ? "video" : "image";
+          const preview = previewUrl
+            ? `<button class="preview-thumb" data-preview="${previewUrl}" data-preview-type="${previewType}" aria-label="Open preview for ${id}">
+                    ${
+                      previewType === "video"
+                        ? `<video src="${previewUrl}" muted playsinline preload="metadata"></video>`
+                        : `<img src="${previewUrl}" alt="${id} preview" loading="lazy" />`
+                    }
                   </button>`
             : "—";
           return `
@@ -185,7 +192,7 @@ const HomePage: NextPage = () => {
         lb.id = "lightbox";
         lb.className = "lightbox hidden";
         lb.innerHTML =
-          '<div class="lightbox-backdrop"></div><div class="lightbox-content"><img alt="Preview" /><button class="lightbox-close" aria-label="Close preview">×</button></div>';
+          '<div class="lightbox-backdrop"></div><div class="lightbox-content"><img alt="Preview" /><video controls playsinline></video><button class="lightbox-close" aria-label="Close preview">×</button></div>';
         body.appendChild(lb);
         lb.addEventListener("click", (evt) => {
           const target = evt.target as HTMLElement | null;
@@ -195,6 +202,12 @@ const HomePage: NextPage = () => {
             target.classList.contains("lightbox-backdrop") ||
             target.classList.contains("lightbox-close")
           ) {
+            const video = lb!.querySelector("video") as HTMLVideoElement | null;
+            if (video) {
+              video.pause();
+              video.removeAttribute("src");
+              video.load();
+            }
             lb!.classList.add("hidden");
           }
         });
@@ -209,10 +222,23 @@ const HomePage: NextPage = () => {
       if (!btn) return;
       const src = btn.getAttribute("data-preview");
       if (!src) return;
+      const previewType = btn.getAttribute("data-preview-type") || "";
       const lb = ensureLightbox();
       const img = lb.querySelector("img");
-      if (!img) return;
-      (img as HTMLImageElement).src = src;
+      const video = lb.querySelector("video");
+      if (!img || !video) return;
+      if (previewType === "video" || src.toLowerCase().endsWith(".mp4")) {
+        (video as HTMLVideoElement).src = src;
+        (video as HTMLVideoElement).style.display = "block";
+        (img as HTMLImageElement).style.display = "none";
+      } else {
+        (img as HTMLImageElement).src = src;
+        (img as HTMLImageElement).style.display = "block";
+        (video as HTMLVideoElement).pause();
+        (video as HTMLVideoElement).removeAttribute("src");
+        (video as HTMLVideoElement).load();
+        (video as HTMLVideoElement).style.display = "none";
+      }
       lb.classList.remove("hidden");
     };
 

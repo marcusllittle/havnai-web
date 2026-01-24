@@ -58,6 +58,19 @@ export interface WanVideoRequest {
   height?: number;
 }
 
+export interface VideoJobRequest {
+  prompt: string;
+  negativePrompt?: string;
+  model?: string;
+  seed?: number;
+  steps?: number;
+  guidance?: number;
+  width?: number;
+  height?: number;
+  frames?: number;
+  fps?: number;
+}
+
 export interface WanVideoStatus {
   job_id: string;
   status?: string;
@@ -245,6 +258,44 @@ export async function submitWanVideoJob(request: WanVideoRequest): Promise<strin
   const json = (await res.json()) as SubmitJobResponse;
   if (!json.job_id) {
     throw new Error(json.error || "No job_id returned from generate-video");
+  }
+  return json.job_id;
+}
+
+export async function submitVideoJob(request: VideoJobRequest): Promise<string> {
+  const model =
+    request.model && request.model.trim().length > 0 ? request.model.trim() : "ltx2";
+
+  const body: Record<string, any> = {
+    wallet: WALLET,
+    model,
+    prompt: request.prompt,
+  };
+  if (request.negativePrompt) body.negative_prompt = request.negativePrompt;
+  if (request.seed != null) body.seed = request.seed;
+  if (request.steps != null) body.steps = request.steps;
+  if (request.guidance != null) body.guidance = request.guidance;
+  if (request.width != null) body.width = request.width;
+  if (request.height != null) body.height = request.height;
+  if (request.frames != null) body.frames = request.frames;
+  if (request.fps != null) body.fps = request.fps;
+
+  const res = await fetch(apiUrl("/submit-job"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`submit-job failed: ${res.status} ${text}`);
+  }
+
+  const json = (await res.json()) as SubmitJobResponse;
+  if (!json.job_id) {
+    throw new Error(json.error || "No job_id returned from submit-job");
   }
   return json.job_id;
 }

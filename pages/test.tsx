@@ -7,6 +7,7 @@ import { HistoryFeed, HistoryItem } from "../components/HistoryFeed";
 import {
   submitAutoJob,
   submitFaceSwapJob,
+  submitVideoJob,
   fetchJob,
   fetchResult,
   SubmitJobOptions,
@@ -36,6 +37,10 @@ const FACE_SWAP_MODELS: { id: string; label: string }[] = [
   { id: "juggernautXL_ragnarokBy", label: "juggernautXL_ragnarokBy · SDXL studio" },
 ];
 
+const VIDEO_MODELS: { id: string; label: string }[] = [
+  { id: "ltx2", label: "ltx2 · Latte-1 video" },
+];
+
 type LoraDraft = {
   name: string;
   weight: string;
@@ -46,7 +51,7 @@ type LoraOption = {
   label: string;
 };
 
-type GeneratorMode = "image" | "face_swap";
+type GeneratorMode = "image" | "face_swap" | "video";
 
 const normalizeLoraOptions = (payload: any): LoraOption[] => {
   const list = Array.isArray(payload?.loras) ? payload.loras : [];
@@ -98,6 +103,15 @@ const TestPage: React.FC = () => {
   const [faceSourceName, setFaceSourceName] = useState<string | undefined>();
   const [faceswapStrength, setFaceswapStrength] = useState("0.8");
   const [faceswapSteps, setFaceswapSteps] = useState("20");
+  const [videoModel, setVideoModel] = useState(VIDEO_MODELS[0].id);
+  const [videoNegativePrompt, setVideoNegativePrompt] = useState("");
+  const [videoSteps, setVideoSteps] = useState("12");
+  const [videoGuidance, setVideoGuidance] = useState("6");
+  const [videoWidth, setVideoWidth] = useState("512");
+  const [videoHeight, setVideoHeight] = useState("512");
+  const [videoFrames, setVideoFrames] = useState("16");
+  const [videoFps, setVideoFps] = useState("8");
+  const [videoSeed, setVideoSeed] = useState("");
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -186,6 +200,10 @@ const TestPage: React.FC = () => {
     if (!value.trim()) return undefined;
     const parsed = Number.parseFloat(value);
     return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  const clampInt = (value: number, min: number, max: number): number => {
+    return Math.max(min, Math.min(value, max));
   };
 
   const readFileAsDataUrl = (file: File): Promise<string> => {
@@ -373,6 +391,36 @@ const TestPage: React.FC = () => {
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
         await pollJob(id, trimmed || "Face swap", 900);
+      } else if (mode === "video") {
+        const negative = videoNegativePrompt.trim();
+        const framesValue = parseOptionalInt(videoFrames) ?? 16;
+        const fpsValue = parseOptionalInt(videoFps) ?? 8;
+        const stepsValue = parseOptionalInt(videoSteps);
+        const guidanceValue = parseOptionalFloat(videoGuidance);
+        const widthValue = parseOptionalInt(videoWidth);
+        const heightValue = parseOptionalInt(videoHeight);
+        const seedValue = parseOptionalInt(videoSeed);
+
+        const safeFrames = clampInt(framesValue, 1, 16);
+        const safeFps = clampInt(fpsValue, 1, 8);
+        const safeWidth = widthValue != null ? clampInt(widthValue, 256, 512) : undefined;
+        const safeHeight = heightValue != null ? clampInt(heightValue, 256, 512) : undefined;
+
+        const id = await submitVideoJob({
+          prompt: trimmed,
+          model: videoModel,
+          negativePrompt: negative || undefined,
+          seed: seedValue,
+          steps: stepsValue,
+          guidance: guidanceValue,
+          width: safeWidth,
+          height: safeHeight,
+          frames: safeFrames,
+          fps: safeFps,
+        });
+        setJobId(id);
+        setStatusMessage("Waiting for GPU node…");
+        await pollJob(id, trimmed, 900);
       }
     } catch (err: any) {
       setStatusMessage(err?.message || "Failed to submit job.");
@@ -415,18 +463,20 @@ const TestPage: React.FC = () => {
 
           if (resolvedVideo) {
             setVideoUrl(resolvedVideo);
-          } else if (resolvedImage) {
+          }
+          if (resolvedImage) {
             setImageUrl(resolvedImage);
           }
           setRuntimeSeconds(runtime);
           setModel(job.model);
           setStatusMessage("Done.");
 
-          if (resolvedImage) {
+          if (resolvedImage || resolvedVideo) {
             const item: HistoryItem = {
               jobId: id,
               prompt: usedPrompt,
               imageUrl: resolvedImage,
+              videoUrl: resolvedVideo,
               model: job.model,
               timestamp: Date.now(),
             };
@@ -452,8 +502,13 @@ const TestPage: React.FC = () => {
   };
 
   const handleHistorySelect = (item: HistoryItem) => {
-    setImageUrl(item.imageUrl);
-    setVideoUrl(undefined);
+    if (item.videoUrl) {
+      setVideoUrl(item.videoUrl);
+      setImageUrl(undefined);
+    } else {
+      setImageUrl(item.imageUrl);
+      setVideoUrl(undefined);
+    }
     setModel(item.model);
     setRuntimeSeconds(null);
     setJobId(item.jobId);
@@ -542,6 +597,13 @@ const TestPage: React.FC = () => {
                     onClick={() => setMode("face_swap")}
                   >
                     Face swap
+                  </button>
+                  <button
+                    type="button"
+                    className={`generator-mode-button${mode === "video" ? " is-active" : ""}`}
+                    onClick={() => setMode("video")}
+                  >
+                    Video
                   </button>
                 </div>
                 <label className="generator-label" htmlFor="prompt">
@@ -706,9 +768,150 @@ const TestPage: React.FC = () => {
                   </div>
                 )}
 
+                {mode === "video" && (
+                  <div className="generator-advanced">
+                    <span className="generator-label">Video model</span>
+                    <select
+                      value={videoModel}
+                      onChange={(e) => setVideoModel(e.target.value)}
+                      className="generator-select"
+                    >
+                      {VIDEO_MODELS.map((opt) => (
+                        <option key={opt.id} value={opt.id}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="generator-label" htmlFor="video-negative-prompt">
+                      Negative prompt (optional)
+                    </label>
+                    <textarea
+                      id="video-negative-prompt"
+                      className="generator-input"
+                      placeholder="Optional negatives for video generation"
+                      value={videoNegativePrompt}
+                      onChange={(e) => setVideoNegativePrompt(e.target.value)}
+                      rows={2}
+                    />
+                    <span className="generator-label">Video settings</span>
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="video-frames">
+                          Frames (max 16)
+                        </label>
+                        <input
+                          id="video-frames"
+                          type="number"
+                          min={1}
+                          max={16}
+                          step={1}
+                          className="generator-input"
+                          value={videoFrames}
+                          onChange={(e) => setVideoFrames(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="generator-label" htmlFor="video-fps">
+                          FPS (max 8)
+                        </label>
+                        <input
+                          id="video-fps"
+                          type="number"
+                          min={1}
+                          max={8}
+                          step={1}
+                          className="generator-input"
+                          value={videoFps}
+                          onChange={(e) => setVideoFps(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <p className="generator-help">
+                      Latte-1 currently supports up to 16 frames. Higher values are clamped.
+                    </p>
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="video-steps">
+                          Steps
+                        </label>
+                        <input
+                          id="video-steps"
+                          type="number"
+                          min={1}
+                          max={50}
+                          step={1}
+                          className="generator-input"
+                          value={videoSteps}
+                          onChange={(e) => setVideoSteps(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="generator-label" htmlFor="video-guidance">
+                          Guidance
+                        </label>
+                        <input
+                          id="video-guidance"
+                          type="number"
+                          min={0}
+                          max={12}
+                          step={0.1}
+                          className="generator-input"
+                          value={videoGuidance}
+                          onChange={(e) => setVideoGuidance(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="video-width">
+                          Width
+                        </label>
+                        <input
+                          id="video-width"
+                          type="number"
+                          min={256}
+                          max={512}
+                          step={64}
+                          className="generator-input"
+                          value={videoWidth}
+                          onChange={(e) => setVideoWidth(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="generator-label" htmlFor="video-height">
+                          Height
+                        </label>
+                        <input
+                          id="video-height"
+                          type="number"
+                          min={256}
+                          max={512}
+                          step={64}
+                          className="generator-input"
+                          value={videoHeight}
+                          onChange={(e) => setVideoHeight(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <label className="generator-label" htmlFor="video-seed">
+                      Seed (optional)
+                    </label>
+                    <input
+                      id="video-seed"
+                      type="number"
+                      min={0}
+                      step={1}
+                      className="generator-input"
+                      placeholder="Random"
+                      value={videoSeed}
+                      onChange={(e) => setVideoSeed(e.target.value)}
+                    />
+                  </div>
+                )}
+
                 <div className="generator-controls">
                   <HavnAIButton
-                    label={mode === "face_swap" ? "Swap face" : "Generate"}
+                    label={mode === "face_swap" ? "Swap face" : mode === "video" ? "Generate video" : "Generate"}
                     loading={loading}
                     disabled={mode !== "face_swap" && !prompt.trim()}
                     onClick={handleSubmit}
