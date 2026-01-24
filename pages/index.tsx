@@ -26,6 +26,7 @@ const HomePage: NextPage = () => {
 
     const modelGrid = document.getElementById("modelGrid");
     const jobsTableBody = document.getElementById("jobsTableBody");
+    const jobsTableHead = document.getElementById("jobsTableHead");
 
     if (
       !heroActiveNodes ||
@@ -36,7 +37,8 @@ const HomePage: NextPage = () => {
       !liveJobs24h ||
       !liveSuccessRate ||
       !modelGrid ||
-      !jobsTableBody
+      !jobsTableBody ||
+      !jobsTableHead
     ) {
       return;
     }
@@ -117,13 +119,65 @@ const HomePage: NextPage = () => {
       modelGrid.innerHTML = cards;
     }
 
+    function getPreviewInfo(job: any) {
+      const videoUrl = job.video_url || job.videoUrl || "";
+      const imageUrl =
+        job.image_url ||
+        job.imageUrl ||
+        job.preview_url ||
+        job.output_url ||
+        job.thumb_url ||
+        "";
+      const previewUrl = videoUrl || imageUrl;
+      const previewType = videoUrl ? "video" : imageUrl ? "image" : "none";
+      return { previewUrl, previewType };
+    }
+
+    function getOutputLabel(job: any) {
+      if (job.video_url) return "Video";
+      if (job.image_url || job.preview_url) return "Image";
+      const status = (job.status || "").toString().toUpperCase();
+      if (status === "SUCCESS" || status === "COMPLETED") return "Ready";
+      return "N/A";
+    }
+
     function renderJobs(jobs: any[]) {
       const list = safeArray(jobs);
       if (!list.length) {
         jobsTableBody.innerHTML =
-          '<tr><td colspan="5">No recent public jobs reported yet.</td></tr>';
+          '<tr><td colspan="5">No public jobs yet. Create something in the Generator to see it here.</td></tr>';
+        jobsTableHead.innerHTML = `
+            <tr>
+              <th>Job</th>
+              <th>Model</th>
+              <th>Reward (Simulated)</th>
+              <th>Status</th>
+              <th>Output</th>
+            </tr>
+          `;
         return;
       }
+
+      const hasPreview = list.some((job) => Boolean(getPreviewInfo(job).previewUrl));
+      jobsTableHead.innerHTML = hasPreview
+        ? `
+            <tr>
+              <th>Job</th>
+              <th>Model</th>
+              <th>Reward (Simulated)</th>
+              <th>Status</th>
+              <th>Preview</th>
+            </tr>
+          `
+        : `
+            <tr>
+              <th>Job</th>
+              <th>Model</th>
+              <th>Reward (Simulated)</th>
+              <th>Status</th>
+              <th>Output</th>
+            </tr>
+          `;
 
       const rows = list
         .slice(0, 10)
@@ -137,19 +191,19 @@ const HomePage: NextPage = () => {
               ? job.reward.toFixed(6)
               : "—";
           const status = (job.status || "UNKNOWN").toString().toUpperCase();
-          const imageUrl = job.image_url || job.preview_url || "";
-          const videoUrl = job.video_url || "";
-          const previewUrl = videoUrl || imageUrl;
-          const previewType = videoUrl ? "video" : "image";
-          const preview = previewUrl
-            ? `<button class="preview-thumb" data-preview="${previewUrl}" data-preview-type="${previewType}" aria-label="Open preview for ${id}">
+          const { previewUrl, previewType } = getPreviewInfo(job);
+          const preview = hasPreview
+            ? `<button class="preview-thumb${previewUrl ? "" : " is-empty"}" data-preview="${previewUrl}" data-preview-type="${previewType}" aria-label="Open preview for ${id}">
                     ${
-                      previewType === "video"
-                        ? `<video src="${previewUrl}" muted playsinline preload="metadata"></video>`
-                        : `<img src="${previewUrl}" alt="${id} preview" loading="lazy" />`
+                      previewUrl
+                        ? previewType === "video"
+                          ? `<video src="${previewUrl}" muted playsinline preload="metadata" onerror="this.closest('.preview-thumb').setAttribute('data-missing','1'); this.remove();"></video>`
+                          : `<img src="${previewUrl}" alt="${id} preview" loading="lazy" onerror="this.closest('.preview-thumb').setAttribute('data-missing','1'); this.remove();" />`
+                        : ""
                     }
+                    <div class="preview-empty"><span>⧗</span><small>No preview</small></div>
                   </button>`
-            : "—";
+            : getOutputLabel(job);
           return `
                 <tr>
                   <td><code>${id}</code></td>
@@ -221,6 +275,7 @@ const HomePage: NextPage = () => {
       if (!target) return;
       const btn = target.closest(".preview-thumb") as HTMLElement | null;
       if (!btn) return;
+      if (btn.getAttribute("data-missing") === "1") return;
       const src = btn.getAttribute("data-preview");
       if (!src) return;
       const previewType = btn.getAttribute("data-preview-type") || "";
@@ -528,13 +583,13 @@ const HomePage: NextPage = () => {
           <div className="live-layout">
             <div className="table-wrapper">
               <table className="jobs-table">
-                <thead>
+                <thead id="jobsTableHead">
                   <tr>
                     <th>Job</th>
                     <th>Model</th>
                     <th>Reward (Simulated)</th>
                     <th>Status</th>
-                    <th>Preview</th>
+                    <th>Output</th>
                   </tr>
                 </thead>
                 <tbody id="jobsTableBody">

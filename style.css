@@ -790,6 +790,32 @@ main,
   display: block;
 }
 
+.preview-thumb.is-empty {
+  cursor: default;
+}
+
+.preview-empty {
+  display: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  border: 1px dashed rgba(0, 234, 255, 0.35);
+  color: var(--text-muted);
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.15rem;
+  background: rgba(5, 10, 18, 0.7);
+}
+
+.preview-thumb.is-empty .preview-empty,
+.preview-thumb[data-missing="1"] .preview-empty {
+  display: flex;
+}
+
 /* Join section */
 
 .join-section {
