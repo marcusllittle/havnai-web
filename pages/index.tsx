@@ -453,7 +453,7 @@ const HomePage: NextPage = () => {
         {/* REWARDS */}
         <section id="rewards" className="section">
           <div className="section-header">
-            <h2>Network Details · Rewards</h2>
+            <h2>Rewards (Simulated — Alpha)</h2>
             <p>Weight tiers drive multipliers in Alpha simulations.</p>
             <AlphaDisclaimer />
           </div>
@@ -462,9 +462,8 @@ const HomePage: NextPage = () => {
               <thead>
                 <tr>
                   <th>Tier</th>
-                  <th>Routing Weight</th>
+                  <th>Weight (Simulated)</th>
                   <th>Reward Multiplier</th>
-                  <th>Example Model</th>
                 </tr>
               </thead>
               <tbody>
@@ -472,31 +471,26 @@ const HomePage: NextPage = () => {
                   <td>5</td>
                   <td>77</td>
                   <td>2.0×</td>
-                  <td>juggernautXL</td>
                 </tr>
                 <tr>
                   <td>4</td>
                   <td>70</td>
                   <td>1.7×</td>
-                  <td>majicmix</td>
                 </tr>
                 <tr>
                   <td>3</td>
                   <td>55</td>
                   <td>1.3×</td>
-                  <td>lazymix</td>
                 </tr>
                 <tr>
                   <td>2</td>
                   <td>50</td>
                   <td>1.1×</td>
-                  <td>deliberate</td>
                 </tr>
                 <tr>
                   <td>1</td>
                   <td>45</td>
                   <td>1.0×</td>
-                  <td>epicrealism</td>
                 </tr>
               </tbody>
             </table>
