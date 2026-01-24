@@ -138,6 +138,24 @@ main,
   width: 100%;
 }
 
+.nav-links .nav-primary {
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  background: rgba(0, 234, 255, 0.15);
+  color: var(--accent-strong);
+  border: 1px solid rgba(0, 234, 255, 0.35);
+}
+
+.nav-links .nav-primary::after {
+  display: none;
+}
+
+.nav-links .nav-secondary {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
 .nav-links .nav-patreon {
   padding: 0.45rem 0.9rem;
   border-radius: 999px;
@@ -227,6 +245,21 @@ main,
 
 .hero-subtitle strong {
   color: var(--accent-strong);
+}
+
+.stage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 234, 255, 0.4);
+  background: rgba(0, 234, 255, 0.08);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent-strong);
+  margin-bottom: 0.8rem;
 }
 
 .hero-cta {
@@ -323,6 +356,64 @@ main,
   margin: 0 0 0.5rem;
   font-size: 0.95rem;
   color: var(--accent-strong);
+}
+
+.alpha-disclaimer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.55rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 189, 46, 0.35);
+  background: rgba(255, 189, 46, 0.08);
+  font-size: 0.75rem;
+  color: #f6d792;
+  margin-top: 0.75rem;
+}
+
+.alpha-disclaimer-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #f0c46e;
+}
+
+.alpha-disclaimer-text {
+  color: #f6d792;
+}
+
+.run-node-panel {
+  margin-top: 1.2rem;
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 234, 255, 0.2);
+  background: rgba(4, 9, 17, 0.92);
+}
+
+.run-node-panel summary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+
+.run-node-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.run-node-panel summary::after {
+  content: "+";
+  float: right;
+  color: var(--accent-strong);
+}
+
+.run-node-panel[open] summary::after {
+  content: "–";
+}
+
+.run-node-panel pre {
+  margin-top: 0.8rem;
 }
 
 .hero-install-note ol {
@@ -1067,6 +1158,14 @@ main,
   align-items: center;
   justify-content: space-between;
   gap: 0.9rem;
+}
+
+.generator-loop {
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
 }
 
 .generator-mode-tabs {

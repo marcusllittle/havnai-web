@@ -546,7 +546,7 @@ const TestPage: React.FC = () => {
           <a href="#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
-              <span className="brand-stage">Stage 6 → 7 Alpha</span>
+              <span className="brand-stage">Stage 7 — Alpha</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
@@ -555,13 +555,14 @@ const TestPage: React.FC = () => {
             <span />
           </button>
           <nav className="nav-links" id="primaryNav">
+            <a href="/generator" className="nav-primary">Generator</a>
             <a href="/">Home</a>
             <a href="https://joinhavn.io#how">How It Works</a>
-            <a href="https://joinhavn.io#smart-routing">Smart Routing</a>
-            <a href="https://joinhavn.io#rewards">Rewards</a>
             <a href="https://joinhavn.io#models">Models</a>
+            <a href="https://joinhavn.io#smart-routing" className="nav-secondary">Smart Routing</a>
+            <a href="https://joinhavn.io#rewards" className="nav-secondary">Rewards</a>
             <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" rel="noreferrer">
-              Dashboard
+              Network Dashboard (Alpha)
             </a>
             <a href="https://joinhavn.io#join">Join Alpha</a>
           </nav>
@@ -571,10 +572,11 @@ const TestPage: React.FC = () => {
       <main>
         <section className="generator-hero" id="home">
           <div className="generator-hero-inner">
+            <span className="stage-badge">Stage 7 — Alpha</span>
             <p className="hero-kicker">Creator Playground</p>
-            <h1 className="generator-hero-title">Create Something Amazing.</h1>
+            <h1 className="generator-hero-title">Create images &amp; videos in minutes.</h1>
             <p className="generator-hero-subtitle">
-              Type a description, optionally pick a model, and let the HavnAI grid render it using the same weighted routing as the live network.
+              Prompt → Generate → Preview → Download. Use advanced controls when you need precision.
             </p>
           </div>
         </section>
@@ -926,6 +928,7 @@ const TestPage: React.FC = () => {
                     </button>
                   )}
                 </div>
+                <p className="generator-loop">Generate → Preview → Download</p>
 
                 {advancedOpen && mode === "image" && (
                   <div className="generator-advanced">

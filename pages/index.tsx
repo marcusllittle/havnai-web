@@ -1,6 +1,7 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useState } from "react";
+import { AlphaDisclaimer } from "../components/AlphaDisclaimer";
 
 const HomePage: NextPage = () => {
   const [navOpen, setNavOpen] = useState(false);
@@ -256,12 +257,12 @@ const HomePage: NextPage = () => {
         <title>HavnAI Network — Own Your Intelligence</title>
         <meta
           name="description"
-          content="HavnAI is a decentralized GPU network where creators earn $HAI running AI models."
+          content="Create images and videos on the HavnAI grid. Stage 7 Alpha for creators."
         />
         <meta property="og:title" content="HavnAI Network — Own Your Intelligence" />
         <meta
           property="og:description"
-          content="A decentralized GPU network with weighted model routing and dynamic $HAI rewards."
+          content="Create images and videos on the HavnAI grid. Creator-first Stage 7 Alpha."
         />
         <meta property="og:type" content="website" />
       </Head>
@@ -271,7 +272,7 @@ const HomePage: NextPage = () => {
           <a href="#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
-              <span className="brand-stage">Stage 6 → 7 Alpha</span>
+              <span className="brand-stage">Stage 7 — Alpha</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
@@ -290,14 +291,14 @@ const HomePage: NextPage = () => {
             id="primaryNav"
             aria-label="Primary navigation"
           >
+            <a href="/generator" className="nav-primary">Generator</a>
             <a href="#home">Home</a>
             <a href="#how">How It Works</a>
-            <a href="#smart-routing">Smart Routing</a>
-            <a href="#rewards">Rewards</a>
             <a href="#models">Models</a>
-            <a href="/test">Generator</a>
+            <a href="#smart-routing" className="nav-secondary">Smart Routing</a>
+            <a href="#rewards" className="nav-secondary">Rewards</a>
             <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" rel="noreferrer">
-              Dashboard
+              Network Dashboard (Alpha)
             </a>
             <a href="#join">Join Alpha</a>
             <a
@@ -317,32 +318,19 @@ const HomePage: NextPage = () => {
         <section id="home" className="hero">
           <div className="hero-inner">
             <div className="hero-content">
-              <p className="hero-kicker">Decentralized GPU Intelligence</p>
-              <h1 className="hero-title">OWN YOUR INTELLIGENCE</h1>
+              <span className="stage-badge">Stage 7 — Alpha</span>
+              <p className="hero-kicker">Creator-first grid</p>
+              <h1 className="hero-title">Create images &amp; videos on the HavnAI grid.</h1>
               <p className="hero-subtitle">
-                A decentralized GPU network where creators earn <strong>$HAI</strong> running AI models.
-                Weighted routing, benchmark-driven model tiers, and live rewards.
+                Prompt → Generate → Preview → Download. Ship visuals fast while the network quietly
+                handles routing, scheduling, and GPU execution behind the scenes.
               </p>
-              <div className="hero-install-note">
-                <h3>Join the HavnAI GPU Grid</h3>
-                <p>Run this on your GPU machine to install the node:</p>
-                <pre>
-                  <code>
-                    curl -fsSL http://api.joinhavn.io:5001/installers/install-node.sh \
-                    {`\n  | bash -s -- --server http://api.joinhavn.io:5001`}
-                  </code>
-                </pre>
-                <p>
-                  Full prerequisites, WAN I2V setup, systemd steps, and troubleshooting live on the
-                  coordinator’s install guide.
-                </p>
-                <a
-                  href="http://api.joinhavn.io:5001/join"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn tertiary wide"
-                >
-                  Open full node install guide
+              <div className="hero-cta">
+                <a className="btn primary btn-lg" href="/generator">
+                  Create Now
+                </a>
+                <a className="btn secondary btn-lg" href="#join">
+                  Run a Node (Alpha)
                 </a>
               </div>
             </div>
@@ -384,39 +372,36 @@ const HomePage: NextPage = () => {
         <section id="how" className="section">
           <div className="section-header">
             <h2>How It Works</h2>
-            <p>From GPU to $HAI rewards in four concrete steps.</p>
+            <p>From prompt to output in four creator-friendly steps.</p>
           </div>
           <div className="steps-grid">
             <article className="step-card">
               <div className="step-icon">1</div>
-              <h3>Connect Your GPU Node</h3>
+              <h3>Write a prompt</h3>
               <p>
-                Point the HavnAI node client at the coordinator, set your wallet, and enable{" "}
-                <code>CREATOR_MODE</code> to accept image/video jobs.
+                Pick Image, Face Swap, or Video. Add advanced settings if you want full control.
               </p>
             </article>
             <article className="step-card">
               <div className="step-icon">2</div>
-              <h3>Receive AI Jobs</h3>
+              <h3>Generate on the grid</h3>
               <p>
-                The coordinator queues jobs submitted to <code>/submit-job</code> and assigns them only to
-                compatible, healthy nodes.
+                The coordinator routes your job to healthy GPU nodes and tracks progress in real time.
               </p>
             </article>
             <article className="step-card">
               <div className="step-icon">3</div>
-              <h3>Run Models with Weighted Routing</h3>
+              <h3>Preview instantly</h3>
               <p>
-                Models are chosen with weighted random routing, favoring higher-tier, benchmarked
-                checkpoints.
+                Watch status updates, then preview your output and download when it’s ready.
               </p>
             </article>
             <article className="step-card">
               <div className="step-icon">4</div>
-              <h3>Earn $HAI Automatically</h3>
+              <h3>Network economics (Alpha)</h3>
               <p>
-                Each completed job records runtime, model weight, and quality tier to scale your $HAI
-                rewards.
+                Routing weights and rewards are simulated during Stage 7 Alpha to validate the network
+                design.
               </p>
             </article>
           </div>
@@ -425,10 +410,11 @@ const HomePage: NextPage = () => {
         {/* SMART ROUTING */}
         <section id="smart-routing" className="section section-alt">
           <div className="section-header">
-            <h2>Smart Routing · Weighted Models</h2>
+            <h2>Network Details · Smart Routing</h2>
             <p>
               Identical prompts, benchmark scores, and a registry-backed weight for every creator model.
             </p>
+            <AlphaDisclaimer />
           </div>
           <div className="routing-layout">
             <div className="routing-copy">
@@ -467,8 +453,9 @@ const HomePage: NextPage = () => {
         {/* REWARDS */}
         <section id="rewards" className="section">
           <div className="section-header">
-            <h2>Dynamic $HAI Rewards</h2>
-            <p>Weight tiers drive multipliers. Better models, bigger payouts.</p>
+            <h2>Network Details · Rewards</h2>
+            <p>Weight tiers drive multipliers in Alpha simulations.</p>
+            <AlphaDisclaimer />
           </div>
           <div className="table-wrapper">
             <table className="rewards-table">
@@ -524,6 +511,7 @@ const HomePage: NextPage = () => {
               Models, weights, and tags pulled directly from the coordinator via{" "}
               <code>/api/models/stats</code>.
             </p>
+            <AlphaDisclaimer message="Model weights are simulated in Alpha; payouts are not active yet." />
           </div>
           <div className="model-grid" id="modelGrid">
             <div className="model-card placeholder">
@@ -541,6 +529,7 @@ const HomePage: NextPage = () => {
           <div className="section-header">
             <h2>Live Jobs Snapshot</h2>
             <p>Recent public jobs, straight from the grid.</p>
+            <AlphaDisclaimer message="Reward totals are simulated in Alpha and are informational only." />
           </div>
           <div className="live-layout">
             <div className="table-wrapper">
@@ -549,7 +538,7 @@ const HomePage: NextPage = () => {
                   <tr>
                     <th>Job</th>
                     <th>Model</th>
-                    <th>Reward</th>
+                    <th>Reward (Simulated)</th>
                     <th>Status</th>
                     <th>Preview</th>
                   </tr>
@@ -585,9 +574,9 @@ const HomePage: NextPage = () => {
         <section id="join" className="section join-section">
           <div className="join-inner">
             <div className="join-copy">
-              <h2>Join Stage 6 → 7 Alpha</h2>
+              <h2>Join Stage 7 — Alpha</h2>
               <p>
-                We are validating weighted routing, benchmark-driven tiers, and the reward engine across a
+                We are validating creator workflows, weighted routing, and the reward engine across a
                 small set of GPUs before opening the grid. If you are comfortable running bleeding-edge AI
                 infra, we want you in the loop.
               </p>
@@ -602,11 +591,33 @@ const HomePage: NextPage = () => {
                 Join Alpha (Typeform)
               </a>
               <a href="http://api.joinhavn.io:5001/dashboard" className="btn tertiary wide">
-                View Live Dashboard
+                View Network Dashboard (Alpha)
               </a>
               <p className="join-note">
                 After joining, you’ll receive updated install + config steps tailored to your GPU and OS.
               </p>
+              <details className="run-node-panel" id="run-node">
+                <summary>Run a Node (Alpha) — install script</summary>
+                <p>Run this on your GPU machine to install the node:</p>
+                <pre>
+                  <code>
+                    curl -fsSL http://api.joinhavn.io:5001/installers/install-node.sh \
+                    {`\n  | bash -s -- --server http://api.joinhavn.io:5001`}
+                  </code>
+                </pre>
+                <p>
+                  Full prerequisites, WAN I2V setup, systemd steps, and troubleshooting live on the
+                  coordinator’s install guide.
+                </p>
+                <a
+                  href="http://api.joinhavn.io:5001/join"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn tertiary wide"
+                >
+                  Open full node install guide
+                </a>
+              </details>
             </div>
           </div>
         </section>

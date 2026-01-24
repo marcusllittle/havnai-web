@@ -7,7 +7,7 @@ class HavnAIDocument extends Document {
         <Head>
           <meta charSet="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>HavnAI Network — Test Generator</title>
+          <title>HavnAI Network — Stage 7 Alpha</title>
           <link rel="icon" type="image/png" href="/HavnAI-logo.png" />
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -27,4 +27,3 @@ class HavnAIDocument extends Document {
 }
 
 export default HavnAIDocument;
-

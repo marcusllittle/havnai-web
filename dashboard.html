@@ -7,7 +7,7 @@
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HavnAI Grid Dashboard · Stage 6 → 7</title>
+    <title>HavnAI Grid Dashboard · Stage 7 Alpha</title>
     <meta
       name="description"
       content="Development dashboard for the HavnAI decentralized GPU network: models, jobs, and nodes in real time."
@@ -29,7 +29,7 @@
         <a href="/" class="brand">
           <img src="/HavnAI-logo.png" alt="HavnAI" class="brand-logo" />
           <div class="brand-text">
-            <span class="brand-stage">Stage 6 → 7 Alpha</span>
+            <span class="brand-stage">Stage 7 — Alpha</span>
             <span class="brand-name">HavnAI Grid</span>
           </div>
         </a>
@@ -37,12 +37,13 @@
           <span></span><span></span>
         </button>
         <nav class="nav-links" id="primaryNav">
+          <a href="/generator" class="nav-primary">Generator</a>
           <a href="/#home">Home</a>
           <a href="/#how">How It Works</a>
-          <a href="/#smart-routing">Smart Routing</a>
-          <a href="/#rewards">Rewards</a>
           <a href="/#models">Models</a>
-          <a href="/dashboard" class="nav-active">Dashboard</a>
+          <a href="/#smart-routing" class="nav-secondary">Smart Routing</a>
+          <a href="/#rewards" class="nav-secondary">Rewards</a>
+          <a href="/dashboard" class="nav-active">Network Dashboard (Alpha)</a>
           <a href="https://joinhavn.io/alpha" target="_blank">Join Alpha</a>
         </nav>
       </div>
@@ -54,6 +55,10 @@
         <div class="section-header">
           <h2>Grid Telemetry</h2>
           <p>Live stats from the coordinator, powered by <code>/api/models/stats</code> and <code>/nodes</code>.</p>
+        </div>
+        <div class="alpha-disclaimer" role="note">
+          <span class="alpha-disclaimer-label">Alpha Disclaimer</span>
+          <span class="alpha-disclaimer-text">Weights and rewards are simulated in Alpha and may change. No payouts are active yet.</span>
         </div>
         <div class="summary-grid">
           <article class="summary-card">
@@ -152,7 +157,7 @@
               <tr>
                 <th>Job</th>
                 <th>Model</th>
-                <th>Reward</th>
+                <th>Reward (Simulated)</th>
                 <th>Status</th>
                 <th>Preview</th>
                 <th>Completed</th>
@@ -190,7 +195,7 @@
             >patreon.com/cw/u38989793</a
           >
         </div>
-        <p class="footer-meta">HavnAI Grid · Development dashboard · Stage 6 → 7 Alpha</p>
+        <p class="footer-meta">HavnAI Grid · Development dashboard · Stage 7 Alpha</p>
       </div>
     </footer>
 
