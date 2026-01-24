@@ -433,11 +433,32 @@ main,
 
 .operator-panel pre {
   margin: 0;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+  overflow-x: auto;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 0.85rem;
+  color: var(--accent-strong);
+}
+
+.operator-panel pre code {
+  white-space: inherit;
 }
 
 .operator-warning {
   font-size: 0.8rem;
   color: #f6d792;
+}
+
+.operator-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .hero-install-note ol {
@@ -856,6 +877,11 @@ main,
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: var(--shadow-soft);
   padding: 1.8rem 1.9rem;
+}
+
+.join-copy,
+.join-actions {
+  min-width: 0;
 }
 
 .join-copy h2 {

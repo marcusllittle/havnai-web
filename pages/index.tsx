@@ -657,9 +657,10 @@ const HomePage: NextPage = () => {
                 infra, we want you in the loop.
               </p>
               <ul>
-                <li>12&nbsp;GB+ NVIDIA GPU (3060 / 3080 / 4090 class).</li>
-                <li>Solid upstream bandwidth and uptime.</li>
-                <li>Willingness to iterate on configs and report issues.</li>
+                <li>Linux (Ubuntu/Debian/RHEL) or macOS 12+ with Python 3.10+ and curl.</li>
+                <li>NVIDIA GPU + drivers; 12&nbsp;GB+ recommended for creator/video workloads.</li>
+                <li>EVM wallet address (simulated rewards in Alpha).</li>
+                <li>Solid upstream bandwidth and willingness to iterate on configs.</li>
               </ul>
             </div>
             <div className="join-actions">
@@ -684,6 +685,10 @@ const HomePage: NextPage = () => {
                   <pre>
                     <code>{installCommand}</code>
                   </pre>
+                  <p className="operator-hint">
+                    If you have a join token, append <code>--token &lt;TOKEN&gt;</code>. To prefill a wallet,
+                    add <code>--wallet 0x...</code>.
+                  </p>
                   <button
                     type="button"
                     className="btn secondary wide operator-copy"
@@ -693,8 +698,8 @@ const HomePage: NextPage = () => {
                   </button>
                   <p className="operator-warning">Early access software. Expect breaking changes.</p>
                   <p>
-                    Full prerequisites, WAN I2V setup, systemd steps, and troubleshooting live on the
-                    coordinator’s install guide.
+                    Full prerequisites, systemd steps, and troubleshooting live on the coordinator’s
+                    install guide.
                   </p>
                   <a
                     href="http://api.joinhavn.io:5001/join"
