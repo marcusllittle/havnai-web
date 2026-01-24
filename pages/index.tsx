@@ -5,6 +5,33 @@ import { AlphaDisclaimer } from "../components/AlphaDisclaimer";
 
 const HomePage: NextPage = () => {
   const [navOpen, setNavOpen] = useState(false);
+  const installCommand =
+    "curl -fsSL http://api.joinhavn.io:5001/installers/install-node.sh \\\n  | bash -s -- --server http://api.joinhavn.io:5001";
+
+  const handleCopyInstall = async () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(installCommand);
+        return;
+      } catch {
+        // fallback below
+      }
+    }
+    if (typeof document === "undefined") return;
+    const textarea = document.createElement("textarea");
+    textarea.value = installCommand;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "absolute";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand("copy");
+    } catch {
+      // no-op
+    }
+    document.body.removeChild(textarea);
+  };
 
   // Client-side behavior for stats, models, jobs, and previews.
   useEffect(() => {
@@ -645,27 +672,39 @@ const HomePage: NextPage = () => {
               <p className="join-note">
                 After joining, you’ll receive updated install + config steps tailored to your GPU and OS.
               </p>
-              <details className="run-node-panel" id="run-node">
-                <summary>Run a Node (Alpha) — install script</summary>
-                <p>Run this on your GPU machine to install the node:</p>
-                <pre>
-                  <code>
-                    curl -fsSL http://api.joinhavn.io:5001/installers/install-node.sh \
-                    {`\n  | bash -s -- --server http://api.joinhavn.io:5001`}
-                  </code>
-                </pre>
-                <p>
-                  Full prerequisites, WAN I2V setup, systemd steps, and troubleshooting live on the
-                  coordinator’s install guide.
-                </p>
-                <a
-                  href="http://api.joinhavn.io:5001/join"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn tertiary wide"
-                >
-                  Open full node install guide
-                </a>
+              <details className="operator-panel" id="run-node">
+                <summary>
+                  <span className="operator-title">Operator Setup (Alpha)</span>
+                  <span className="operator-subtitle">
+                    Advanced users only. Run a GPU node to help process jobs and test the network.
+                  </span>
+                </summary>
+                <div className="operator-body">
+                  <p>Run this on your GPU machine to install the node:</p>
+                  <pre>
+                    <code>{installCommand}</code>
+                  </pre>
+                  <button
+                    type="button"
+                    className="btn secondary wide operator-copy"
+                    onClick={handleCopyInstall}
+                  >
+                    Copy command
+                  </button>
+                  <p className="operator-warning">Early access software. Expect breaking changes.</p>
+                  <p>
+                    Full prerequisites, WAN I2V setup, systemd steps, and troubleshooting live on the
+                    coordinator’s install guide.
+                  </p>
+                  <a
+                    href="http://api.joinhavn.io:5001/join"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn tertiary wide"
+                  >
+                    Open full node install guide
+                  </a>
+                </div>
               </details>
             </div>
           </div>

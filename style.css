@@ -383,7 +383,7 @@ main,
   color: #f6d792;
 }
 
-.run-node-panel {
+.operator-panel {
   margin-top: 1.2rem;
   padding: 0.9rem 1rem;
   border-radius: 16px;
@@ -391,29 +391,53 @@ main,
   background: rgba(4, 9, 17, 0.92);
 }
 
-.run-node-panel summary {
+.operator-panel summary {
   cursor: pointer;
   list-style: none;
-  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   color: var(--accent-strong);
 }
 
-.run-node-panel summary::-webkit-details-marker {
+.operator-panel summary::-webkit-details-marker {
   display: none;
 }
 
-.run-node-panel summary::after {
+.operator-panel summary::after {
   content: "+";
-  float: right;
+  align-self: flex-end;
+  margin-top: -1.2rem;
   color: var(--accent-strong);
 }
 
-.run-node-panel[open] summary::after {
+.operator-panel[open] summary::after {
   content: "–";
 }
 
-.run-node-panel pre {
+.operator-title {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.operator-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.operator-body {
   margin-top: 0.8rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.operator-panel pre {
+  margin: 0;
+}
+
+.operator-warning {
+  font-size: 0.8rem;
+  color: #f6d792;
 }
 
 .hero-install-note ol {
@@ -824,8 +848,9 @@ main,
 
 .join-inner {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.2fr);
-  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 1.2rem;
+  align-items: start;
   background: rgba(4, 9, 17, 0.96);
   border-radius: 26px;
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -854,6 +879,7 @@ main,
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
+  align-items: stretch;
 }
 
 .join-note {
