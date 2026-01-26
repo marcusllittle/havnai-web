@@ -1,4 +1,5 @@
 import type { NextPage } from "next";
+import { getInviteCode } from "./invite";
 
 // Simple API helper for talking to the HavnAI coordinator.
 // Uses relative URLs so it works behind whatever proxy is fronting the core.
@@ -7,13 +8,16 @@ export interface SubmitJobResponse {
   job_id?: string;
   status?: string;
   error?: string;
+  message?: string;
 }
 
 export interface JobDetail {
   id: string;
   status: string;
   model: string;
+  wallet?: string;
   task_type?: string;
+  node_id?: string;
   timestamp?: number;
   completed_at?: number | null;
   reward?: number;
@@ -82,6 +86,26 @@ export interface WanVideoStatus {
   completed_at?: string;
 }
 
+export interface QuotaStatus {
+  max_daily: number;
+  used_today: number;
+  max_concurrent: number;
+  used_concurrent: number;
+  reset_at: string;
+}
+
+export class HavnaiApiError extends Error {
+  code?: string;
+  data?: Record<string, any>;
+  status?: number;
+  constructor(message: string, code?: string, data?: Record<string, any>, status?: number) {
+    super(message);
+    this.code = code;
+    this.data = data;
+    this.status = status;
+  }
+}
+
 export interface SubmitJobOptions {
   steps?: number;
   guidance?: number;
@@ -125,12 +149,41 @@ function apiUrl(path: string): string {
   return `${getApiBase()}${path}`;
 }
 
-function resolveAssetUrl(path: string | undefined | null): string | undefined {
+export function resolveAssetUrl(path: string | undefined | null): string | undefined {
   if (!path) return undefined;
   // If already absolute (http/https), return as-is.
   if (/^https?:\/\//i.test(path)) return path;
   // Otherwise, prefix with API_BASE so we hit the coordinator, not the Next dev server.
   return `${getApiBase()}${path}`;
+}
+
+function buildHeaders(includeInvite = false): HeadersInit {
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  if (includeInvite) {
+    const invite = getInviteCode();
+    if (invite) {
+      headers["X-INVITE-CODE"] = invite;
+    }
+  }
+  return headers;
+}
+
+async function parseErrorResponse(res: Response): Promise<HavnaiApiError> {
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    try {
+      const data = await res.json();
+      const code = data?.error;
+      const message = data?.message || data?.error || `request failed: ${res.status}`;
+      return new HavnaiApiError(message, code, data, res.status);
+    } catch {
+      // fall through
+    }
+  }
+  const text = await res.text();
+  return new HavnaiApiError(`request failed: ${res.status} ${text}`, undefined, undefined, res.status);
 }
 
 export async function submitAutoJob(
@@ -172,20 +225,17 @@ export async function submitAutoJob(
 
   const res = await fetch(apiUrl("/submit-job"), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: buildHeaders(true),
     body: JSON.stringify(body),
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`submit-job failed: ${res.status} ${text}`);
+    throw await parseErrorResponse(res);
   }
 
   const json = (await res.json()) as SubmitJobResponse;
   if (!json.job_id) {
-    throw new Error(json.error || "No job_id returned from submit-job");
+    throw new HavnaiApiError(json.message || json.error || "No job_id returned from submit-job");
   }
   return json.job_id;
 }
@@ -210,20 +260,17 @@ export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<strin
 
   const res = await fetch(apiUrl("/submit-faceswap-job"), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: buildHeaders(true),
     body: JSON.stringify(body),
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`submit-faceswap-job failed: ${res.status} ${text}`);
+    throw await parseErrorResponse(res);
   }
 
   const json = (await res.json()) as SubmitJobResponse;
   if (!json.job_id) {
-    throw new Error(json.error || "No job_id returned from submit-faceswap-job");
+    throw new HavnaiApiError(json.message || json.error || "No job_id returned from submit-faceswap-job");
   }
   return json.job_id;
 }
@@ -244,20 +291,17 @@ export async function submitWanVideoJob(request: WanVideoRequest): Promise<strin
 
   const res = await fetch(apiUrl("/generate-video"), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: buildHeaders(true),
     body: JSON.stringify(body),
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`generate-video failed: ${res.status} ${text}`);
+    throw await parseErrorResponse(res);
   }
 
   const json = (await res.json()) as SubmitJobResponse;
   if (!json.job_id) {
-    throw new Error(json.error || "No job_id returned from generate-video");
+    throw new HavnaiApiError(json.message || json.error || "No job_id returned from generate-video");
   }
   return json.job_id;
 }
@@ -301,7 +345,9 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
 }
 
 export async function fetchJob(jobId: string): Promise<JobDetailResponse> {
-  const res = await fetch(apiUrl(`/jobs/${encodeURIComponent(jobId)}`));
+  const res = await fetch(apiUrl(`/jobs/${encodeURIComponent(jobId)}`), {
+    headers: buildHeaders(true),
+  });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`fetch job failed: ${res.status} ${text}`);
@@ -324,8 +370,26 @@ export async function fetchResult(jobId: string): Promise<ResultResponse> {
   };
 }
 
+export async function fetchJobWithResult(
+  jobId: string
+): Promise<{ job: JobDetailResponse; result?: ResultResponse }> {
+  const job = await fetchJob(jobId);
+  try {
+    const result = await fetchResult(jobId);
+    return { job, result };
+  } catch (err: any) {
+    const message = typeof err?.message === "string" ? err.message : "";
+    if (message.includes("404") || message.includes("result_not_found")) {
+      return { job };
+    }
+    return { job };
+  }
+}
+
 export async function fetchWanVideoJob(jobId: string): Promise<WanVideoStatus> {
-  const res = await fetch(apiUrl(`/generate-video/${encodeURIComponent(jobId)}`));
+  const res = await fetch(apiUrl(`/generate-video/${encodeURIComponent(jobId)}`), {
+    headers: buildHeaders(true),
+  });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`fetch video job failed: ${res.status} ${text}`);
@@ -335,4 +399,15 @@ export async function fetchWanVideoJob(jobId: string): Promise<WanVideoStatus> {
     ...json,
     video_url: resolveAssetUrl(json.video_url),
   };
+}
+
+export async function fetchQuota(): Promise<QuotaStatus> {
+  const res = await fetch(apiUrl("/quota"), {
+    method: "GET",
+    headers: buildHeaders(true),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return (await res.json()) as QuotaStatus;
 }

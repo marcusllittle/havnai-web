@@ -4,14 +4,22 @@ import { HavnAIButton } from "../components/HavnAIButton";
 import { StatusBox } from "../components/StatusBox";
 import { OutputCard } from "../components/OutputCard";
 import { HistoryFeed, HistoryItem } from "../components/HistoryFeed";
+import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
 import {
   submitAutoJob,
   submitFaceSwapJob,
-  submitVideoJob,
   fetchJob,
   fetchResult,
+  fetchJobWithResult,
+  fetchQuota,
+  HavnaiApiError,
+  JobDetailResponse,
+  ResultResponse,
   SubmitJobOptions,
+  QuotaStatus,
 } from "../lib/havnai";
+import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
+import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
@@ -37,37 +45,12 @@ const FACE_SWAP_MODELS: { id: string; label: string }[] = [
   { id: "juggernautXL_ragnarokBy", label: "juggernautXL_ragnarokBy · SDXL studio" },
 ];
 
-const VIDEO_MODELS: { id: string; label: string }[] = [
-  { id: "ltx2", label: "ltx2 · Latte-1 video" },
-];
-
 type LoraDraft = {
   name: string;
   weight: string;
 };
 
-type LoraOption = {
-  name: string;
-  label: string;
-};
-
-type GeneratorMode = "image" | "face_swap" | "video";
-
-const normalizeLoraOptions = (payload: any): LoraOption[] => {
-  const list = Array.isArray(payload?.loras) ? payload.loras : [];
-  return list
-    .map((entry: any) => {
-      if (typeof entry === "string") {
-        return { name: entry, label: entry };
-      }
-      if (!entry || typeof entry !== "object") return null;
-      const name = String(entry.name || entry.filename || "").trim();
-      if (!name) return null;
-      return { name, label: name };
-    })
-    .filter((item): item is LoraOption => Boolean(item))
-    .sort((a, b) => a.name.localeCompare(b.name));
-};
+type GeneratorMode = "image" | "face_swap";
 
 const TestPage: React.FC = () => {
   const [mode, setMode] = useState<GeneratorMode>("image");
@@ -91,9 +74,6 @@ const TestPage: React.FC = () => {
   const [sampler, setSampler] = useState("");
   const [seed, setSeed] = useState("");
   const [loras, setLoras] = useState<LoraDraft[]>([]);
-  const [loraOptions, setLoraOptions] = useState<LoraOption[]>([]);
-  const [selectedLora, setSelectedLora] = useState("");
-  const [selectedLoraWeight, setSelectedLoraWeight] = useState("");
   const [faceswapModel, setFaceswapModel] = useState(FACE_SWAP_MODELS[0].id);
   const [baseImageUrl, setBaseImageUrl] = useState("");
   const [baseImageData, setBaseImageData] = useState<string | undefined>();
@@ -103,15 +83,18 @@ const TestPage: React.FC = () => {
   const [faceSourceName, setFaceSourceName] = useState<string | undefined>();
   const [faceswapStrength, setFaceswapStrength] = useState("0.8");
   const [faceswapSteps, setFaceswapSteps] = useState("20");
-  const [videoModel, setVideoModel] = useState(VIDEO_MODELS[0].id);
-  const [videoNegativePrompt, setVideoNegativePrompt] = useState("");
-  const [videoSteps, setVideoSteps] = useState("12");
-  const [videoGuidance, setVideoGuidance] = useState("6");
-  const [videoWidth, setVideoWidth] = useState("512");
-  const [videoHeight, setVideoHeight] = useState("512");
-  const [videoFrames, setVideoFrames] = useState("16");
-  const [videoFps, setVideoFps] = useState("8");
-  const [videoSeed, setVideoSeed] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerJob, setDrawerJob] = useState<JobDetailResponse | null>(null);
+  const [drawerResult, setDrawerResult] = useState<ResultResponse | null>(null);
+  const [drawerSummary, setDrawerSummary] = useState<JobSummary | null>(null);
+  const [drawerLoading, setDrawerLoading] = useState(false);
+  const [drawerError, setDrawerError] = useState<string | undefined>();
+  const [inviteCode, setInviteCodeState] = useState("");
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [savedInviteCode, setSavedInviteCode] = useState<string | undefined>();
+  const [quota, setQuota] = useState<QuotaStatus | null>(null);
+  const [quotaError, setQuotaError] = useState<string | undefined>();
+  const inviteSaved = Boolean(savedInviteCode);
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -129,30 +112,42 @@ const TestPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    let active = true;
-    const apiBase =
-      process.env.NEXT_PUBLIC_HAVNAI_API_BASE && process.env.NEXT_PUBLIC_HAVNAI_API_BASE.length > 0
-        ? process.env.NEXT_PUBLIC_HAVNAI_API_BASE
-        : "/api";
-
-    const loadLoras = async () => {
-      try {
-        const res = await fetch(`${apiBase}/loras/list`);
-        const payload = res.ok ? await res.json() : {};
-        if (!active) return;
-        setLoraOptions(normalizeLoraOptions(payload));
-      } catch {
-        if (active) {
-          setLoraOptions([]);
-        }
-      }
-    };
-
-    loadLoras();
-    return () => {
-      active = false;
-    };
+    const storedInvite = getInviteCode();
+    if (storedInvite) {
+      setInviteCodeState(storedInvite);
+      setSavedInviteCode(storedInvite);
+    }
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!savedInviteCode) {
+      setQuota(null);
+      setQuotaError(undefined);
+      return () => {
+        cancelled = true;
+      };
+    }
+    fetchQuota()
+      .then((data) => {
+        if (!cancelled) {
+          setQuota(data);
+          setQuotaError(undefined);
+        }
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        const message =
+          err instanceof HavnaiApiError
+            ? err.message
+            : err?.message || "Failed to load invite quota.";
+        setQuota(null);
+        setQuotaError(message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [savedInviteCode]);
 
   const saveHistory = (items: HistoryItem[]) => {
     setHistory(items);
@@ -175,21 +170,6 @@ const TestPage: React.FC = () => {
     setLoras((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  const addSelectedLora = () => {
-    if (!selectedLora) return;
-    const option = loraOptions.find((entry) => entry.name === selectedLora);
-    if (!option) return;
-    setLoras((prev) => {
-      if (prev.some((entry) => entry.name.trim() === option.name)) {
-        return prev;
-      }
-      const weight = selectedLoraWeight.trim();
-      return [...prev, { name: option.name, weight }];
-    });
-    setSelectedLora("");
-    setSelectedLoraWeight("");
-  };
-
   const parseOptionalInt = (value: string): number | undefined => {
     if (!value.trim()) return undefined;
     const parsed = Number.parseInt(value, 10);
@@ -202,8 +182,11 @@ const TestPage: React.FC = () => {
     return Number.isFinite(parsed) ? parsed : undefined;
   };
 
-  const clampInt = (value: number, min: number, max: number): number => {
-    return Math.max(min, Math.min(value, max));
+  const formatResetAt = (value?: string) => {
+    if (!value) return "";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return parsed.toLocaleString();
   };
 
   const readFileAsDataUrl = (file: File): Promise<string> => {
@@ -260,59 +243,24 @@ const TestPage: React.FC = () => {
     return Object.keys(options).length > 0 ? options : undefined;
   };
 
-  const renderLoraPicker = (idPrefix: string) => (
-    <div className="generator-row">
-      <div>
-        <label className="generator-label" htmlFor={`${idPrefix}-lora-picker`}>
-          LoRA preset
-        </label>
-        <select
-          id={`${idPrefix}-lora-picker`}
-          value={selectedLora}
-          onChange={(e) => setSelectedLora(e.target.value)}
-          className="generator-select"
-          disabled={loraOptions.length === 0}
-        >
-          <option value="">
-            {loraOptions.length > 0 ? "Select a LoRA" : "No LoRAs detected"}
-          </option>
-          {loraOptions.map((entry) => (
-            <option key={entry.name} value={entry.name}>
-              {entry.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="generator-label" htmlFor={`${idPrefix}-lora-weight`}>
-          Weight
-        </label>
-        <input
-          id={`${idPrefix}-lora-weight`}
-          type="number"
-          min={0}
-          max={2}
-          step={0.05}
-          className="generator-input"
-          placeholder="Optional"
-          value={selectedLoraWeight}
-          onChange={(e) => setSelectedLoraWeight(e.target.value)}
-          disabled={loraOptions.length === 0}
-        />
-      </div>
-      <div>
-        <label className="generator-label">&nbsp;</label>
-        <button
-          type="button"
-          className="generator-mini-button"
-          onClick={addSelectedLora}
-          disabled={!selectedLora}
-        >
-          Add preset
-        </button>
-      </div>
-    </div>
-  );
+  const handleInviteSave = () => {
+    const trimmed = inviteCode.trim();
+    if (!trimmed) {
+      handleInviteClear();
+      return;
+    }
+    setInviteCode(trimmed);
+    setSavedInviteCode(trimmed);
+    setInviteOpen(false);
+  };
+
+  const handleInviteClear = () => {
+    clearInviteCode();
+    setSavedInviteCode(undefined);
+    setInviteCodeState("");
+    setQuota(null);
+    setQuotaError(undefined);
+  };
 
   const handleBaseImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -391,39 +339,26 @@ const TestPage: React.FC = () => {
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
         await pollJob(id, trimmed || "Face swap", 900);
-      } else if (mode === "video") {
-        const negative = videoNegativePrompt.trim();
-        const framesValue = parseOptionalInt(videoFrames) ?? 16;
-        const fpsValue = parseOptionalInt(videoFps) ?? 8;
-        const stepsValue = parseOptionalInt(videoSteps);
-        const guidanceValue = parseOptionalFloat(videoGuidance);
-        const widthValue = parseOptionalInt(videoWidth);
-        const heightValue = parseOptionalInt(videoHeight);
-        const seedValue = parseOptionalInt(videoSeed);
-
-        const safeFrames = clampInt(framesValue, 1, 16);
-        const safeFps = clampInt(fpsValue, 1, 8);
-        const safeWidth = widthValue != null ? clampInt(widthValue, 256, 512) : undefined;
-        const safeHeight = heightValue != null ? clampInt(heightValue, 256, 512) : undefined;
-
-        const id = await submitVideoJob({
-          prompt: trimmed,
-          model: videoModel,
-          negativePrompt: negative || undefined,
-          seed: seedValue,
-          steps: stepsValue,
-          guidance: guidanceValue,
-          width: safeWidth,
-          height: safeHeight,
-          frames: safeFrames,
-          fps: safeFps,
-        });
-        setJobId(id);
-        setStatusMessage("Waiting for GPU node…");
-        await pollJob(id, trimmed, 900);
       }
     } catch (err: any) {
-      setStatusMessage(err?.message || "Failed to submit job.");
+      if (err instanceof HavnaiApiError || err?.code) {
+        const code = err.code || err?.data?.error;
+        if (code === "invite_required") {
+          setStatusMessage("Invite code required. Add your code to submit jobs.");
+          setInviteOpen(true);
+        } else if (code === "rate_limited") {
+          const resetLabel = formatResetAt(err?.data?.reset_at);
+          setStatusMessage(
+            resetLabel
+              ? `Invite quota exceeded. Resets at ${resetLabel}.`
+              : "Invite quota exceeded. Please try again later."
+          );
+        } else {
+          setStatusMessage(err.message || "Failed to submit job.");
+        }
+      } else {
+        setStatusMessage(err?.message || "Failed to submit job.");
+      }
     } finally {
       setLoading(false);
     }
@@ -461,22 +396,29 @@ const TestPage: React.FC = () => {
             return;
           }
 
+          const createdAt =
+            typeof job.timestamp === "number"
+              ? new Date(job.timestamp * 1000).toISOString()
+              : new Date().toISOString();
+          let type: LibraryItemType = "unknown";
+          if (resolvedVideo) type = "video";
+          else if (resolvedImage) type = "image";
+          addToLibrary({ job_id: id, created_at: createdAt, type });
+
           if (resolvedVideo) {
             setVideoUrl(resolvedVideo);
-          }
-          if (resolvedImage) {
+          } else if (resolvedImage) {
             setImageUrl(resolvedImage);
           }
           setRuntimeSeconds(runtime);
           setModel(job.model);
           setStatusMessage("Done.");
 
-          if (resolvedImage || resolvedVideo) {
+          if (resolvedImage) {
             const item: HistoryItem = {
               jobId: id,
               prompt: usedPrompt,
               imageUrl: resolvedImage,
-              videoUrl: resolvedVideo,
               model: job.model,
               timestamp: Date.now(),
             };
@@ -502,17 +444,19 @@ const TestPage: React.FC = () => {
   };
 
   const handleHistorySelect = (item: HistoryItem) => {
-    if (item.videoUrl) {
-      setVideoUrl(item.videoUrl);
-      setImageUrl(undefined);
-    } else {
-      setImageUrl(item.imageUrl);
-      setVideoUrl(undefined);
-    }
+    setImageUrl(item.imageUrl);
+    setVideoUrl(undefined);
     setModel(item.model);
     setRuntimeSeconds(null);
     setJobId(item.jobId);
     setStatusMessage("Showing from history. Generate again to refresh.");
+    const summary: JobSummary = {
+      job_id: item.jobId,
+      model: item.model,
+      image_url: item.imageUrl,
+      submitted_at: new Date(item.timestamp).toISOString(),
+    };
+    void openJobDetails(item.jobId, summary);
   };
 
   const handleHistoryClear = () => {
@@ -523,6 +467,22 @@ const TestPage: React.FC = () => {
     setRuntimeSeconds(null);
     setJobId(undefined);
     setStatusMessage(undefined);
+  };
+
+  const openJobDetails = async (id: string, summary?: JobSummary) => {
+    setDrawerOpen(true);
+    setDrawerLoading(true);
+    setDrawerError(undefined);
+    setDrawerSummary(summary || null);
+    try {
+      const { job, result } = await fetchJobWithResult(id);
+      setDrawerJob(job);
+      setDrawerResult(result || null);
+    } catch (err: any) {
+      setDrawerError(err?.message || "Failed to load job details.");
+    } finally {
+      setDrawerLoading(false);
+    }
   };
 
   // Mobile nav toggle (reuse behavior from index.html)
@@ -546,7 +506,7 @@ const TestPage: React.FC = () => {
           <a href="#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
-              <span className="brand-stage">Stage 7 — Alpha</span>
+              <span className="brand-stage">Stage 6 → 7 Alpha</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
@@ -555,14 +515,14 @@ const TestPage: React.FC = () => {
             <span />
           </button>
           <nav className="nav-links" id="primaryNav">
-            <a href="/generator" className="nav-primary">Generator</a>
             <a href="/">Home</a>
             <a href="https://joinhavn.io#how">How It Works</a>
+            <a href="https://joinhavn.io#smart-routing">Smart Routing</a>
+            <a href="https://joinhavn.io#rewards">Rewards</a>
             <a href="https://joinhavn.io#models">Models</a>
-            <a href="https://joinhavn.io#smart-routing" className="nav-secondary">Smart Routing</a>
-            <a href="https://joinhavn.io#rewards" className="nav-secondary">Rewards</a>
+            <a href="/library">My Library</a>
             <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" rel="noreferrer">
-              Network Dashboard (Alpha)
+              Dashboard
             </a>
             <a href="https://joinhavn.io#join">Join Alpha</a>
           </nav>
@@ -572,11 +532,10 @@ const TestPage: React.FC = () => {
       <main>
         <section className="generator-hero" id="home">
           <div className="generator-hero-inner">
-            <span className="stage-badge">Stage 7 — Alpha</span>
             <p className="hero-kicker">Creator Playground</p>
-            <h1 className="generator-hero-title">Create images &amp; videos in minutes.</h1>
+            <h1 className="generator-hero-title">Create Something Amazing.</h1>
             <p className="generator-hero-subtitle">
-              Prompt → Generate → Preview → Download. Use advanced controls when you need precision.
+              Type a description, optionally pick a model, and let the HavnAI grid render it using the same weighted routing as the live network.
             </p>
           </div>
         </section>
@@ -585,6 +544,66 @@ const TestPage: React.FC = () => {
           <div className="generator-card">
             <div className="generator-grid">
               <div className="generator-left">
+                <div className="invite-panel">
+                  <div className={`invite-badge${inviteSaved ? " is-ok" : " is-missing"}`}>
+                    {inviteSaved ? "Beta Access: OK" : "Invite required"}
+                  </div>
+                  {quota && (
+                    <div className="invite-quota">
+                      Today:{" "}
+                      {quota.max_daily > 0
+                        ? `${quota.used_today}/${quota.max_daily}`
+                        : `${quota.used_today}/unlimited`}
+                      {" • "}
+                      Concurrent:{" "}
+                      {quota.max_concurrent > 0
+                        ? `${quota.used_concurrent}/${quota.max_concurrent}`
+                        : `${quota.used_concurrent}/unlimited`}
+                    </div>
+                  )}
+                  {!quota && quotaError && (
+                    <div className="invite-quota invite-error">{quotaError}</div>
+                  )}
+                  <button
+                    type="button"
+                    className="invite-toggle"
+                    onClick={() => setInviteOpen((prev) => !prev)}
+                  >
+                    {inviteSaved ? "Manage invite" : "Add invite"}
+                  </button>
+                </div>
+                {inviteOpen && (
+                  <div className="invite-form">
+                    <label className="generator-label" htmlFor="invite-code">
+                      Invite code
+                    </label>
+                    <input
+                      id="invite-code"
+                      type="text"
+                      className="generator-input"
+                      placeholder="alpha-abc123"
+                      value={inviteCode}
+                      onChange={(e) => setInviteCodeState(e.target.value)}
+                    />
+                    <div className="invite-actions">
+                      <button
+                        type="button"
+                        className="generator-mini-button"
+                        onClick={handleInviteSave}
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        className="generator-mini-button"
+                        onClick={handleInviteClear}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <p className="generator-help">Stored locally in your browser only.</p>
+                  </div>
+                )}
                 <div className="generator-mode-tabs">
                   <button
                     type="button"
@@ -599,13 +618,6 @@ const TestPage: React.FC = () => {
                     onClick={() => setMode("face_swap")}
                   >
                     Face swap
-                  </button>
-                  <button
-                    type="button"
-                    className={`generator-mode-button${mode === "video" ? " is-active" : ""}`}
-                    onClick={() => setMode("video")}
-                  >
-                    Video
                   </button>
                 </div>
                 <label className="generator-label" htmlFor="prompt">
@@ -735,7 +747,6 @@ const TestPage: React.FC = () => {
                       ))}
                     </select>
                     <span className="generator-label">Optional LoRAs</span>
-                    {renderLoraPicker("faceswap")}
                     {loras.map((entry, index) => (
                       <div className="generator-lora-row" key={`faceswap-lora-${index}`}>
                         <input
@@ -770,150 +781,9 @@ const TestPage: React.FC = () => {
                   </div>
                 )}
 
-                {mode === "video" && (
-                  <div className="generator-advanced">
-                    <span className="generator-label">Video model</span>
-                    <select
-                      value={videoModel}
-                      onChange={(e) => setVideoModel(e.target.value)}
-                      className="generator-select"
-                    >
-                      {VIDEO_MODELS.map((opt) => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                    <label className="generator-label" htmlFor="video-negative-prompt">
-                      Negative prompt (optional)
-                    </label>
-                    <textarea
-                      id="video-negative-prompt"
-                      className="generator-input"
-                      placeholder="Optional negatives for video generation"
-                      value={videoNegativePrompt}
-                      onChange={(e) => setVideoNegativePrompt(e.target.value)}
-                      rows={2}
-                    />
-                    <span className="generator-label">Video settings</span>
-                    <div className="generator-row">
-                      <div>
-                        <label className="generator-label" htmlFor="video-frames">
-                          Frames (max 16)
-                        </label>
-                        <input
-                          id="video-frames"
-                          type="number"
-                          min={1}
-                          max={16}
-                          step={1}
-                          className="generator-input"
-                          value={videoFrames}
-                          onChange={(e) => setVideoFrames(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="generator-label" htmlFor="video-fps">
-                          FPS (max 8)
-                        </label>
-                        <input
-                          id="video-fps"
-                          type="number"
-                          min={1}
-                          max={8}
-                          step={1}
-                          className="generator-input"
-                          value={videoFps}
-                          onChange={(e) => setVideoFps(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <p className="generator-help">
-                      Latte-1 currently supports up to 16 frames. Higher values are clamped.
-                    </p>
-                    <div className="generator-row">
-                      <div>
-                        <label className="generator-label" htmlFor="video-steps">
-                          Steps
-                        </label>
-                        <input
-                          id="video-steps"
-                          type="number"
-                          min={1}
-                          max={50}
-                          step={1}
-                          className="generator-input"
-                          value={videoSteps}
-                          onChange={(e) => setVideoSteps(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="generator-label" htmlFor="video-guidance">
-                          Guidance
-                        </label>
-                        <input
-                          id="video-guidance"
-                          type="number"
-                          min={0}
-                          max={12}
-                          step={0.1}
-                          className="generator-input"
-                          value={videoGuidance}
-                          onChange={(e) => setVideoGuidance(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <div className="generator-row">
-                      <div>
-                        <label className="generator-label" htmlFor="video-width">
-                          Width
-                        </label>
-                        <input
-                          id="video-width"
-                          type="number"
-                          min={256}
-                          max={512}
-                          step={64}
-                          className="generator-input"
-                          value={videoWidth}
-                          onChange={(e) => setVideoWidth(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="generator-label" htmlFor="video-height">
-                          Height
-                        </label>
-                        <input
-                          id="video-height"
-                          type="number"
-                          min={256}
-                          max={512}
-                          step={64}
-                          className="generator-input"
-                          value={videoHeight}
-                          onChange={(e) => setVideoHeight(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <label className="generator-label" htmlFor="video-seed">
-                      Seed (optional)
-                    </label>
-                    <input
-                      id="video-seed"
-                      type="number"
-                      min={0}
-                      step={1}
-                      className="generator-input"
-                      placeholder="Random"
-                      value={videoSeed}
-                      onChange={(e) => setVideoSeed(e.target.value)}
-                    />
-                  </div>
-                )}
-
                 <div className="generator-controls">
                   <HavnAIButton
-                    label={mode === "face_swap" ? "Swap face" : mode === "video" ? "Generate video" : "Generate"}
+                    label={mode === "face_swap" ? "Swap face" : "Generate"}
                     loading={loading}
                     disabled={mode !== "face_swap" && !prompt.trim()}
                     onClick={handleSubmit}
@@ -928,7 +798,6 @@ const TestPage: React.FC = () => {
                     </button>
                   )}
                 </div>
-                <p className="generator-loop">Generate → Preview → Download</p>
 
                 {advancedOpen && mode === "image" && (
                   <div className="generator-advanced">
@@ -1076,7 +945,6 @@ const TestPage: React.FC = () => {
                     <p className="generator-help">
                       Leave blank to use server defaults. Weights are optional.
                     </p>
-                    {renderLoraPicker("image")}
                     {loras.map((entry, index) => (
                       <div className="generator-lora-row" key={`lora-${index}`}>
                         <input
@@ -1134,6 +1002,16 @@ const TestPage: React.FC = () => {
           </div>
         </section>
       </main>
+      <JobDetailsDrawer
+        open={drawerOpen}
+        jobId={drawerJob?.id || drawerSummary?.job_id || jobId}
+        summary={drawerSummary}
+        job={drawerJob}
+        result={drawerResult}
+        loading={drawerLoading}
+        error={drawerError}
+        onClose={() => setDrawerOpen(false)}
+      />
     </>
   );
 };

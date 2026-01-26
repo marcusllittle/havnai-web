@@ -7,7 +7,7 @@
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HavnAI Grid Dashboard · Stage 7 Alpha</title>
+    <title>HavnAI Grid Dashboard · Stage 6 → 7</title>
     <meta
       name="description"
       content="Development dashboard for the HavnAI decentralized GPU network: models, jobs, and nodes in real time."
@@ -29,7 +29,7 @@
         <a href="/" class="brand">
           <img src="/HavnAI-logo.png" alt="HavnAI" class="brand-logo" />
           <div class="brand-text">
-            <span class="brand-stage">Stage 7 — Alpha</span>
+            <span class="brand-stage">Stage 6 → 7 Alpha</span>
             <span class="brand-name">HavnAI Grid</span>
           </div>
         </a>
@@ -37,13 +37,13 @@
           <span></span><span></span>
         </button>
         <nav class="nav-links" id="primaryNav">
-          <a href="/generator" class="nav-primary">Generator</a>
           <a href="/#home">Home</a>
           <a href="/#how">How It Works</a>
+          <a href="/#smart-routing">Smart Routing</a>
+          <a href="/#rewards">Rewards</a>
           <a href="/#models">Models</a>
-          <a href="/#smart-routing" class="nav-secondary">Smart Routing</a>
-          <a href="/#rewards" class="nav-secondary">Rewards</a>
-          <a href="/dashboard" class="nav-active">Network Dashboard (Alpha)</a>
+          <a href="/library">My Library</a>
+          <a href="/dashboard" class="nav-active">Dashboard</a>
           <a href="https://joinhavn.io/alpha" target="_blank">Join Alpha</a>
         </nav>
       </div>
@@ -55,10 +55,6 @@
         <div class="section-header">
           <h2>Grid Telemetry</h2>
           <p>Live stats from the coordinator, powered by <code>/api/models/stats</code> and <code>/nodes</code>.</p>
-        </div>
-        <div class="alpha-disclaimer" role="note">
-          <span class="alpha-disclaimer-label">Alpha Disclaimer</span>
-          <span class="alpha-disclaimer-text">Weights and rewards are simulated in Alpha and may change. No payouts are active yet.</span>
         </div>
         <div class="summary-grid">
           <article class="summary-card">
@@ -120,7 +116,7 @@
             </thead>
             <tbody id="leaderboardBody">
               <tr>
-                <td colspan="4">Loading model registry…</td>
+                <td colspan="4">Loading model registry...</td>
               </tr>
             </tbody>
           </table>
@@ -157,7 +153,7 @@
               <tr>
                 <th>Job</th>
                 <th>Model</th>
-                <th>Reward (Simulated)</th>
+                <th>Reward</th>
                 <th>Status</th>
                 <th>Preview</th>
                 <th>Completed</th>
@@ -165,7 +161,7 @@
             </thead>
             <tbody id="jobsFeedBody">
               <tr>
-                <td colspan="6">Waiting for /api/models/stats → recent_jobs…</td>
+                <td colspan="6">Waiting for /jobs/recent...</td>
               </tr>
             </tbody>
           </table>
@@ -180,7 +176,7 @@
         </div>
         <div class="node-grid" id="nodeGrid">
           <article class="node-card placeholder">
-            <h3>Waiting for nodes…</h3>
+            <h3>Waiting for nodes...</h3>
             <p>Once <code>/nodes</code> responds, nodes will appear here.</p>
           </article>
         </div>
@@ -195,9 +191,91 @@
             >patreon.com/cw/u38989793</a
           >
         </div>
-        <p class="footer-meta">HavnAI Grid · Development dashboard · Stage 7 Alpha</p>
+        <p class="footer-meta">HavnAI Grid · Development dashboard · Stage 6 → 7 Alpha</p>
       </div>
     </footer>
+
+    <div id="jobDrawer" class="job-drawer hidden" aria-hidden="true">
+      <button class="job-drawer-backdrop" aria-label="Close job details"></button>
+      <aside class="job-drawer-panel" role="dialog" aria-modal="true">
+        <div class="job-drawer-header">
+          <div>
+            <p class="job-drawer-kicker">Job Details</p>
+            <h3>
+              <span id="drawerJobIdShort">--</span>
+              <button type="button" class="job-inline-button" id="drawerCopyId">Copy full ID</button>
+            </h3>
+            <div class="job-meta-row">
+              <span class="status-pill" id="drawerStatusPill">Running</span>
+              <span id="drawerCreatedAt"></span>
+            </div>
+          </div>
+          <button type="button" class="job-drawer-close" id="drawerClose">Close</button>
+        </div>
+        <div class="job-drawer-body">
+          <section class="job-section">
+            <h4>Status Timeline</h4>
+            <div class="status-timeline" id="drawerTimeline"></div>
+          </section>
+          <section class="job-section">
+            <h4>Preview</h4>
+            <div class="job-preview" id="drawerPreview"></div>
+          </section>
+          <section class="job-section">
+            <h4>Actions</h4>
+            <div class="job-actions">
+              <button type="button" class="job-action-button" id="drawerDownload">Download output</button>
+              <button type="button" class="job-action-button secondary" id="drawerCopyDebug">
+                Copy debug info
+              </button>
+            </div>
+            <p class="job-hint" id="drawerHint"></p>
+          </section>
+          <section class="job-section">
+            <details open>
+              <summary>Generation Params</summary>
+              <div class="job-details-grid" id="drawerParams"></div>
+            </details>
+          </section>
+          <section class="job-section">
+            <details>
+              <summary>Prompt</summary>
+              <div class="job-details-stack">
+                <div>
+                  <span class="job-label">prompt</span>
+                  <p id="drawerPrompt">--</p>
+                </div>
+                <div>
+                  <span class="job-label">negative_prompt</span>
+                  <p id="drawerNegativePrompt">--</p>
+                </div>
+              </div>
+            </details>
+          </section>
+          <section class="job-section">
+            <details>
+              <summary>Routing / Node</summary>
+              <div class="job-details-grid" id="drawerRouting"></div>
+            </details>
+          </section>
+          <section class="job-section">
+            <details>
+              <summary>Raw Job JSON</summary>
+              <pre class="job-raw" id="drawerRaw"></pre>
+            </details>
+          </section>
+          <section class="job-section job-failure" id="drawerFailure" hidden>
+            <h4>Failure Details</h4>
+            <p id="drawerError">Unknown error</p>
+            <ul>
+              <li>Retry the job or pick a smaller frame count.</li>
+              <li>Lower resolution or switch to a faster model.</li>
+              <li>Copy debug info to share with support.</li>
+            </ul>
+          </section>
+        </div>
+      </aside>
+    </div>
 
     <script>
       (function () {
@@ -385,6 +463,267 @@
           jobsChart = new Chart(ctx, config);
         }
 
+        function shortJobId(id) {
+          if (!id) return "--";
+          return id.length <= 12 ? id : `${id.slice(0, 6)}...${id.slice(-4)}`;
+        }
+
+        function normalizeStatus(rawStatus) {
+          const status = String(rawStatus || "").toLowerCase();
+          if (["failed", "error", "cancelled", "canceled"].includes(status)) {
+            return { pill: "Failed", activeIndex: 4, isFailed: true, label: "Failed" };
+          }
+          if (["success", "completed", "ready"].includes(status)) {
+            return { pill: "Ready", activeIndex: 4, isFailed: false, label: "Ready" };
+          }
+          if (["queued", "pending"].includes(status)) {
+            return { pill: "Running", activeIndex: 0, isFailed: false, label: "Queued" };
+          }
+          if (["assigned"].includes(status)) {
+            return { pill: "Running", activeIndex: 1, isFailed: false, label: "Assigned" };
+          }
+          if (["uploading"].includes(status)) {
+            return { pill: "Running", activeIndex: 3, isFailed: false, label: "Uploading" };
+          }
+          if (["running", "processing", "in_progress"].includes(status)) {
+            return { pill: "Running", activeIndex: 2, isFailed: false, label: "Running" };
+          }
+          return { pill: "Running", activeIndex: 2, isFailed: false, label: "Running (unknown)" };
+        }
+
+        function resolveAssetUrl(path) {
+          if (!path) return "";
+          if (/^https?:\/\//i.test(path)) return path;
+          return API_BASE + path;
+        }
+
+        function parseJobData(raw) {
+          if (!raw) return {};
+          if (typeof raw === "string") {
+            try {
+              const parsed = JSON.parse(raw);
+              return parsed && typeof parsed === "object" ? parsed : {};
+            } catch {
+              return {};
+            }
+          }
+          return typeof raw === "object" ? raw : {};
+        }
+
+        function truncateText(value, limit) {
+          if (!value) return value;
+          if (value.length <= limit) return value;
+          return value.slice(0, limit) + "...";
+        }
+
+        function formatIso(value) {
+          if (!value) return "";
+          const date = new Date(value);
+          return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+        }
+
+        function renderDrawerTimeline(container, normalized) {
+          const steps = normalized.isFailed
+            ? ["Queued", "Assigned", "Running", "Uploading", "Failed"]
+            : ["Queued", "Assigned", "Running", "Uploading", "Ready"];
+          container.innerHTML = steps
+            .map((label, index) => {
+              const isActive = index === normalized.activeIndex;
+              const isComplete = index < normalized.activeIndex;
+              const isFailed = normalized.isFailed && label === "Failed";
+              return `
+                <div class="timeline-step${isActive ? " is-active" : ""}${isComplete ? " is-complete" : ""}${isFailed ? " is-failed" : ""}">
+                  <span class="timeline-dot"></span>
+                  <span>${label}</span>
+                </div>
+              `;
+            })
+            .join("");
+        }
+
+        const jobDrawer = document.getElementById("jobDrawer");
+        const drawerBackdrop = jobDrawer.querySelector(".job-drawer-backdrop");
+        const drawerClose = document.getElementById("drawerClose");
+        const drawerJobIdShort = document.getElementById("drawerJobIdShort");
+        const drawerCopyId = document.getElementById("drawerCopyId");
+        const drawerStatusPill = document.getElementById("drawerStatusPill");
+        const drawerCreatedAt = document.getElementById("drawerCreatedAt");
+        const drawerTimeline = document.getElementById("drawerTimeline");
+        const drawerPreview = document.getElementById("drawerPreview");
+        const drawerDownload = document.getElementById("drawerDownload");
+        const drawerCopyDebug = document.getElementById("drawerCopyDebug");
+        const drawerHint = document.getElementById("drawerHint");
+        const drawerParams = document.getElementById("drawerParams");
+        const drawerPrompt = document.getElementById("drawerPrompt");
+        const drawerNegativePrompt = document.getElementById("drawerNegativePrompt");
+        const drawerRouting = document.getElementById("drawerRouting");
+        const drawerRaw = document.getElementById("drawerRaw");
+        const drawerFailure = document.getElementById("drawerFailure");
+        const drawerError = document.getElementById("drawerError");
+
+        const drawerState = {
+          jobId: null,
+          debugPayload: null,
+          downloadUrl: "",
+        };
+
+        function setDrawerOpen(open) {
+          if (!jobDrawer) return;
+          jobDrawer.classList.toggle("hidden", !open);
+          jobDrawer.setAttribute("aria-hidden", open ? "false" : "true");
+        }
+
+        function setStatusPill(pill) {
+          drawerStatusPill.textContent = pill;
+          drawerStatusPill.className = "status-pill status-" + pill.toLowerCase();
+        }
+
+        async function openJobDrawer(summary) {
+          if (!summary || !summary.job_id) return;
+          drawerState.jobId = summary.job_id;
+          drawerHint.textContent = "Loading job details...";
+          setDrawerOpen(true);
+
+          const normalized = normalizeStatus(summary.status);
+          setStatusPill(normalized.pill);
+          renderDrawerTimeline(drawerTimeline, normalized);
+          drawerJobIdShort.textContent = shortJobId(summary.job_id);
+          drawerCreatedAt.textContent = summary.submitted_at
+            ? "Created " + formatIso(summary.submitted_at)
+            : "";
+
+          const previewUrl = resolveAssetUrl(summary.video_url || summary.image_url);
+          drawerPreview.innerHTML = previewUrl
+            ? summary.video_url
+              ? `<video src="${previewUrl}" controls playsinline></video>`
+              : `<img src="${previewUrl}" alt="${summary.job_id} preview" />`
+            : `<div class="job-preview-empty">Preview not available</div>`;
+
+          try {
+            const jobRes = await fetch(`${API_BASE}/jobs/${encodeURIComponent(summary.job_id)}`);
+            const job = jobRes.ok ? await jobRes.json() : null;
+            let result = null;
+            try {
+              const resultRes = await fetch(`${API_BASE}/result/${encodeURIComponent(summary.job_id)}`);
+              if (resultRes.ok) {
+                result = await resultRes.json();
+              }
+            } catch {
+              result = null;
+            }
+
+            const jobData = parseJobData(job && job.data);
+            const promptText = truncateText(jobData.prompt, 500) || "--";
+            const negativeText = truncateText(jobData.negative_prompt, 500) || "--";
+
+            const params = {
+              seed: jobData.seed ?? jobData.overrides?.seed,
+              steps: jobData.steps ?? jobData.num_steps ?? jobData.overrides?.steps,
+              guidance: jobData.guidance ?? jobData.overrides?.guidance,
+              width: jobData.width ?? jobData.overrides?.width,
+              height: jobData.height ?? jobData.overrides?.height,
+              fps: jobData.fps,
+              frames: jobData.frames,
+              sampler: jobData.sampler ?? jobData.overrides?.sampler,
+            };
+
+            drawerParams.innerHTML = Object.entries(params)
+              .filter(([, value]) => value != null)
+              .map(
+                ([key, value]) => `
+                  <div>
+                    <span class="job-label">${key}</span>
+                    <span>${value}</span>
+                  </div>
+                `
+              )
+              .join("");
+
+            drawerPrompt.textContent = promptText;
+            drawerNegativePrompt.textContent = negativeText;
+            drawerRouting.innerHTML = `
+              <div>
+                <span class="job-label">node_id</span>
+                <span>${job?.node_id || "--"}</span>
+              </div>
+              <div>
+                <span class="job-label">engine</span>
+                <span>${job?.task_type || summary.task_type || "--"}</span>
+              </div>
+              <div>
+                <span class="job-label">model</span>
+                <span>${job?.model || summary.model || "--"}</span>
+              </div>
+            `;
+            drawerRaw.textContent = JSON.stringify(job?.data || summary, null, 2);
+
+            const outputImage = resolveAssetUrl(result?.image_url || summary.image_url);
+            const outputVideo = resolveAssetUrl(result?.video_url || summary.video_url);
+            drawerState.downloadUrl = outputVideo || outputImage || "";
+
+            const debugPayload = {
+              job_id: summary.job_id,
+              status: job?.status || summary.status,
+              timestamps: {
+                created_at: summary.submitted_at || "",
+                completed_at: summary.completed_at || "",
+              },
+              model: job?.model || summary.model,
+              engine: jobData.engine || job?.task_type || summary.task_type,
+              node_id: job?.node_id || jobData.node_id || jobData.worker_id,
+              worker_id: jobData.worker_id || job?.node_id,
+              params,
+              prompt: promptText,
+              negative_prompt: negativeText,
+              output_urls: {
+                image_url: outputImage,
+                video_url: outputVideo,
+              },
+              preview_url: outputImage || outputVideo,
+              error_message: jobData.error_message || jobData.error || jobData.failure_reason || undefined,
+            };
+
+            drawerState.debugPayload = debugPayload;
+            const isFailed = normalizeStatus(job?.status || summary.status).isFailed;
+            drawerFailure.hidden = !isFailed;
+            drawerError.textContent = debugPayload.error_message || "Unknown error";
+            drawerHint.textContent = "";
+          } catch (err) {
+            drawerHint.textContent = "Failed to load job details.";
+          }
+        }
+
+        drawerBackdrop.addEventListener("click", () => setDrawerOpen(false));
+        drawerClose.addEventListener("click", () => setDrawerOpen(false));
+        drawerCopyId.addEventListener("click", async () => {
+          if (!drawerState.jobId || !navigator.clipboard) return;
+          try {
+            await navigator.clipboard.writeText(drawerState.jobId);
+          } catch {}
+        });
+        drawerCopyDebug.addEventListener("click", async () => {
+          if (!drawerState.debugPayload || !navigator.clipboard) return;
+          try {
+            await navigator.clipboard.writeText(JSON.stringify(drawerState.debugPayload, null, 2));
+          } catch {}
+        });
+        drawerDownload.addEventListener("click", async () => {
+          if (!drawerState.downloadUrl) return;
+          try {
+            const res = await fetch(drawerState.downloadUrl);
+            if (!res.ok) throw new Error("download failed");
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = drawerState.downloadUrl.split("/").pop() || "havnai-output";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          } catch {}
+        });
+
         function renderJobsFeed(jobs) {
           const list = safeArray(jobs);
           if (!list.length) {
@@ -413,20 +752,12 @@
                 : "—";
               const imageUrl = job.image_url || job.preview_url || "";
               const videoUrl = job.video_url || "";
-              const previewUrl = videoUrl || imageUrl;
-              const previewType = videoUrl ? "video" : "image";
-              const preview = previewUrl
-                ? `<button class="preview-thumb" data-preview="${previewUrl}" data-preview-type="${previewType}" aria-label="Open preview for ${id}">
-                    ${
-                      previewType === "video"
-                        ? `<video src="${previewUrl}" muted playsinline preload="metadata"></video>`
-                        : `<img src="${previewUrl}" alt="${id} preview" loading="lazy" />`
-                    }
-                  </button>`
-                : "—";
+              const preview = imageUrl
+                ? `<div class="jobs-preview-tile"><img src="${imageUrl}" alt="${id} preview" loading="lazy" /></div>`
+                : `<div class="jobs-preview-tile">No preview</div>`;
 
               return `
-                <tr>
+                <tr class="jobs-row-clickable" data-job-id="${id}" data-job-model="${model}" data-job-status="${status}" data-job-task="${job.task_type || ""}" data-job-submitted="${job.submitted_at || ""}" data-job-completed="${job.completed_at || ""}" data-job-image="${imageUrl}" data-job-video="${videoUrl}">
                   <td><code>${id}</code></td>
                   <td>${model}</td>
                   <td>${reward}</td>
@@ -509,14 +840,26 @@
             const res = await fetch(API_BASE + "/models/stats", { credentials: "same-origin" });
             if (!res.ok) throw new Error("stats HTTP " + res.status);
             const data = await res.json();
-            cachedJobs = safeArray(data.recent_jobs);
             cachedModels = safeArray(data.model_registry || data.models || []);
             setSummary(data, null);
             renderLeaderboard(cachedModels);
+          } catch (err) {
+            console.error("Failed to fetch /api/models/stats", err);
+          }
+        }
+
+        async function fetchJobs() {
+          try {
+            const res = await fetch(API_BASE + "/jobs/recent?limit=25", {
+              credentials: "same-origin",
+            });
+            if (!res.ok) throw new Error("jobs HTTP " + res.status);
+            const data = await res.json();
+            cachedJobs = safeArray(data.jobs || data.feed || []);
             renderJobsFeed(cachedJobs);
             renderJobsChart(cachedJobs, "1h");
           } catch (err) {
-            console.error("Failed to fetch /api/models/stats", err);
+            console.error("Failed to fetch /jobs/recent", err);
           }
         }
 
@@ -563,7 +906,7 @@
             lb.id = "lightbox";
             lb.className = "lightbox hidden";
             lb.innerHTML =
-              '<div class="lightbox-backdrop"></div><div class="lightbox-content"><img alt="Preview" /><video controls playsinline></video><button class="lightbox-close" aria-label="Close preview">×</button></div>';
+              '<div class="lightbox-backdrop"></div><div class="lightbox-content"><img alt="Preview" /><button class="lightbox-close" aria-label="Close preview">×</button></div>';
             body.appendChild(lb);
             lb.addEventListener("click", (evt) => {
               if (
@@ -571,12 +914,6 @@
                 evt.target.classList.contains("lightbox-backdrop") ||
                 evt.target.classList.contains("lightbox-close")
               ) {
-                const video = lb.querySelector("video");
-                if (video) {
-                  video.pause();
-                  video.removeAttribute("src");
-                  video.load();
-                }
                 lb.classList.add("hidden");
               }
             });
@@ -585,34 +922,27 @@
         }
 
         jobsFeedBody.addEventListener("click", (evt) => {
-          const btn = evt.target.closest(".preview-thumb");
-          if (!btn) return;
-          const src = btn.getAttribute("data-preview");
-          if (!src) return;
-          const previewType = btn.getAttribute("data-preview-type") || "";
-          const lb = ensureLightbox();
-          const img = lb.querySelector("img");
-          const video = lb.querySelector("video");
-          if (!img || !video) return;
-          if (previewType === "video" || src.toLowerCase().endsWith(".mp4")) {
-            video.src = src;
-            video.style.display = "block";
-            img.style.display = "none";
-          } else {
-            img.src = src;
-            img.style.display = "block";
-            video.pause();
-            video.removeAttribute("src");
-            video.load();
-            video.style.display = "none";
-          }
-          lb.classList.remove("hidden");
+          const row = evt.target.closest("tr[data-job-id]");
+          if (!row) return;
+          const summary = {
+            job_id: row.getAttribute("data-job-id"),
+            model: row.getAttribute("data-job-model") || "—",
+            status: row.getAttribute("data-job-status") || "UNKNOWN",
+            task_type: row.getAttribute("data-job-task") || "",
+            submitted_at: row.getAttribute("data-job-submitted") || "",
+            completed_at: row.getAttribute("data-job-completed") || "",
+            image_url: row.getAttribute("data-job-image") || "",
+            video_url: row.getAttribute("data-job-video") || "",
+          };
+          openJobDrawer(summary);
         });
 
         // Initial load + polling
         fetchStatsAndModels();
+        fetchJobs();
         fetchNodes();
         setInterval(fetchStatsAndModels, 15000);
+        setInterval(fetchJobs, 15000);
         setInterval(fetchNodes, 20000);
       })();
     </script>

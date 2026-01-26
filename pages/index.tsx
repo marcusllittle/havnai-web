@@ -91,6 +91,12 @@ const HomePage: NextPage = () => {
         typeof success === "number" ? success.toFixed(1) + "%" : String(success);
     }
 
+    function resolveAssetUrl(path: string | undefined | null): string | undefined {
+      if (!path) return undefined;
+      if (/^https?:\/\//i.test(path)) return path;
+      return `${API_BASE}${path}`;
+    }
+
     function renderModels(registry: any[]) {
       const models = safeArray(registry);
       if (!models.length) {
@@ -109,7 +115,7 @@ const HomePage: NextPage = () => {
           const description =
             entry.description ||
             (tags.length ? "Tagged: " + tags.join(", ") : "Creator model registered on the grid.");
-          const preview = resolveAssetUrl(entry.preview_url) || "/HavnAI-logo.png";
+          const preview = resolveAssetUrl(resolveAssetUrl(entry.preview_url)) || "/HavnAI-logo.png";
           return `
                 <article class="model-card">
                   <div class="model-preview">
