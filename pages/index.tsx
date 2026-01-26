@@ -101,6 +101,12 @@ const HomePage: NextPage = () => {
         typeof success === "number" ? success.toFixed(1) + "%" : String(success);
     }
 
+    function resolveAssetUrl(path: string | undefined | null): string | undefined {
+      if (!path) return undefined;
+      if (/^https?:\/\//i.test(path)) return path;
+      return `${API_BASE}${path}`;
+    }
+
     function renderModels(registry: any[]) {
       const models = safeArray(registry);
       if (!models.length) {
@@ -119,7 +125,7 @@ const HomePage: NextPage = () => {
           const description =
             entry.description ||
             (tags.length ? "Tagged: " + tags.join(", ") : "Creator model registered on the grid.");
-          const preview = entry.preview_url || "/HavnAI-logo.png";
+          const preview = resolveAssetUrl(entry.preview_url) || "/HavnAI-logo.png";
           return `
                 <article class="model-card">
                   <div class="model-preview">
@@ -147,14 +153,16 @@ const HomePage: NextPage = () => {
     }
 
     function getPreviewInfo(job: any) {
-      const videoUrl = job.video_url || job.videoUrl || "";
-      const imageUrl =
+      const rawVideoUrl = job.video_url || job.videoUrl || "";
+      const rawImageUrl =
         job.image_url ||
         job.imageUrl ||
         job.preview_url ||
         job.output_url ||
         job.thumb_url ||
         "";
+      const videoUrl = resolveAssetUrl(rawVideoUrl) || "";
+      const imageUrl = resolveAssetUrl(rawImageUrl) || "";
       const previewUrl = videoUrl || imageUrl;
       const previewType = videoUrl ? "video" : imageUrl ? "image" : "none";
       return { previewUrl, previewType };
