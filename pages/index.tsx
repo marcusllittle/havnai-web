@@ -1,46 +1,41 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useState } from "react";
-import { AlphaDisclaimer } from "../components/AlphaDisclaimer";
+import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
+import { fetchJobWithResult, JobDetailResponse, ResultResponse } from "../lib/havnai";
 
 const HomePage: NextPage = () => {
   const [navOpen, setNavOpen] = useState(false);
-  const installCommand =
-    "curl -fsSL http://api.joinhavn.io:5001/installers/install-node.sh \\\n  | bash -s -- --server http://api.joinhavn.io:5001";
+  const [liveJobs, setLiveJobs] = useState<any[]>([]);
+  const [liveJobsLoading, setLiveJobsLoading] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerJob, setDrawerJob] = useState<JobDetailResponse | null>(null);
+  const [drawerResult, setDrawerResult] = useState<ResultResponse | null>(null);
+  const [drawerSummary, setDrawerSummary] = useState<JobSummary | null>(null);
+  const [drawerLoading, setDrawerLoading] = useState(false);
+  const [drawerError, setDrawerError] = useState<string | undefined>();
 
-  const handleCopyInstall = async () => {
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(installCommand);
-        return;
-      } catch {
-        // fallback below
+  const getApiBase = (): string => {
+    if (typeof window !== "undefined") {
+      const runtimeBase = (window as any).NEXT_PUBLIC_API_BASE_URL;
+      if (runtimeBase && String(runtimeBase).length > 0) {
+        return runtimeBase;
       }
     }
-    if (typeof document === "undefined") return;
-    const textarea = document.createElement("textarea");
-    textarea.value = installCommand;
-    textarea.setAttribute("readonly", "true");
-    textarea.style.position = "absolute";
-    textarea.style.left = "-9999px";
-    document.body.appendChild(textarea);
-    textarea.select();
-    try {
-      document.execCommand("copy");
-    } catch {
-      // no-op
-    }
-    document.body.removeChild(textarea);
+    return "/api";
+  };
+
+  const resolveAssetUrl = (path: string | undefined | null): string | undefined => {
+    if (!path) return undefined;
+    if (/^https?:\/\//i.test(path)) return path;
+    return `${getApiBase()}${path}`;
   };
 
   // Client-side behavior for stats, models, jobs, and previews.
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const API_BASE =
-      (window as any).NEXT_PUBLIC_API_BASE_URL && String((window as any).NEXT_PUBLIC_API_BASE_URL).length > 0
-        ? (window as any).NEXT_PUBLIC_API_BASE_URL
-        : "/api";
+    const API_BASE = getApiBase();
 
     const heroActiveNodes = document.getElementById("heroActiveNodes");
     const heroJobs24h = document.getElementById("heroJobs24h");
@@ -52,8 +47,6 @@ const HomePage: NextPage = () => {
     const liveSuccessRate = document.getElementById("liveSuccessRate");
 
     const modelGrid = document.getElementById("modelGrid");
-    const jobsTableBody = document.getElementById("jobsTableBody");
-    const jobsTableHead = document.getElementById("jobsTableHead");
 
     if (
       !heroActiveNodes ||
@@ -63,9 +56,7 @@ const HomePage: NextPage = () => {
       !liveActiveNodes ||
       !liveJobs24h ||
       !liveSuccessRate ||
-      !modelGrid ||
-      !jobsTableBody ||
-      !jobsTableHead
+      !modelGrid
     ) {
       return;
     }
@@ -76,7 +67,6 @@ const HomePage: NextPage = () => {
       success_rate: 0,
       top_model: "—",
       model_registry: [] as any[],
-      recent_jobs: [] as any[],
     };
 
     function safeArray(value: any): any[] {
@@ -99,12 +89,6 @@ const HomePage: NextPage = () => {
       liveJobs24h.textContent = String(jobs);
       liveSuccessRate.textContent =
         typeof success === "number" ? success.toFixed(1) + "%" : String(success);
-    }
-
-    function resolveAssetUrl(path: string | undefined | null): string | undefined {
-      if (!path) return undefined;
-      if (/^https?:\/\//i.test(path)) return path;
-      return `${API_BASE}${path}`;
     }
 
     function renderModels(registry: any[]) {
@@ -261,85 +245,62 @@ const HomePage: NextPage = () => {
         const data = await res.json();
         renderStats(data);
         renderModels(data.model_registry || data.models || []);
-        renderJobs(data.recent_jobs || []);
       } catch (err) {
         console.error("Failed to load /models/stats", err);
         renderStats(sampleStats);
         renderModels(sampleStats.model_registry);
-        renderJobs(sampleStats.recent_jobs);
+      }
+    }
+
+    async function loadJobs() {
+      try {
+        setLiveJobsLoading(true);
+        const res = await fetch(`${API_BASE}/jobs/recent?limit=10`, {
+          credentials: "same-origin",
+        });
+        if (!res.ok) throw new Error("jobs HTTP " + res.status);
+        const data = await res.json();
+        setLiveJobs(safeArray(data.jobs || data.feed || []));
+      } catch (err) {
+        console.error("Failed to load /jobs/recent", err);
+        setLiveJobs([]);
+      } finally {
+        setLiveJobsLoading(false);
       }
     }
 
     loadStats();
+    loadJobs();
     const intervalId = window.setInterval(loadStats, 15000);
-
-    const body = document.body;
-
-    function ensureLightbox(): HTMLElement {
-      let lb = document.getElementById("lightbox") as HTMLElement | null;
-      if (!lb) {
-        lb = document.createElement("div");
-        lb.id = "lightbox";
-        lb.className = "lightbox hidden";
-        lb.innerHTML =
-          '<div class="lightbox-backdrop"></div><div class="lightbox-content"><img alt="Preview" /><video controls playsinline></video><button class="lightbox-close" aria-label="Close preview">×</button></div>';
-        body.appendChild(lb);
-        lb.addEventListener("click", (evt) => {
-          const target = evt.target as HTMLElement | null;
-          if (!target) return;
-          if (
-            target === lb ||
-            target.classList.contains("lightbox-backdrop") ||
-            target.classList.contains("lightbox-close")
-          ) {
-            const video = lb!.querySelector("video") as HTMLVideoElement | null;
-            if (video) {
-              video.pause();
-              video.removeAttribute("src");
-              video.load();
-            }
-            lb!.classList.add("hidden");
-          }
-        });
-      }
-      return lb;
-    }
-
-    const jobsClickHandler = (evt: Event) => {
-      const target = evt.target as HTMLElement | null;
-      if (!target) return;
-      const btn = target.closest(".preview-thumb") as HTMLElement | null;
-      if (!btn) return;
-      if (btn.getAttribute("data-missing") === "1") return;
-      const src = btn.getAttribute("data-preview");
-      if (!src) return;
-      const previewType = btn.getAttribute("data-preview-type") || "";
-      const lb = ensureLightbox();
-      const img = lb.querySelector("img");
-      const video = lb.querySelector("video");
-      if (!img || !video) return;
-      if (previewType === "video" || src.toLowerCase().endsWith(".mp4")) {
-        (video as HTMLVideoElement).src = src;
-        (video as HTMLVideoElement).style.display = "block";
-        (img as HTMLImageElement).style.display = "none";
-      } else {
-        (img as HTMLImageElement).src = src;
-        (img as HTMLImageElement).style.display = "block";
-        (video as HTMLVideoElement).pause();
-        (video as HTMLVideoElement).removeAttribute("src");
-        (video as HTMLVideoElement).load();
-        (video as HTMLVideoElement).style.display = "none";
-      }
-      lb.classList.remove("hidden");
-    };
-
-    jobsTableBody.addEventListener("click", jobsClickHandler);
+    const jobsIntervalId = window.setInterval(loadJobs, 15000);
 
     return () => {
-      jobsTableBody.removeEventListener("click", jobsClickHandler);
       window.clearInterval(intervalId);
+      window.clearInterval(jobsIntervalId);
     };
   }, []);
+
+  const openJobDetails = async (summary: JobSummary) => {
+    const id = summary.job_id || summary.id;
+    if (!id) return;
+    setDrawerOpen(true);
+    setDrawerLoading(true);
+    setDrawerError(undefined);
+    setDrawerSummary(summary);
+    try {
+      const { job, result } = await fetchJobWithResult(id);
+      setDrawerJob(job);
+      setDrawerResult(result || null);
+    } catch (err: any) {
+      setDrawerError(err?.message || "Failed to load job details.");
+    } finally {
+      setDrawerLoading(false);
+    }
+  };
+
+  const showLivePreview = liveJobs.some(
+    (job) => job.image_url || job.preview_url || job.video_url
+  );
 
   return (
     <>
@@ -347,12 +308,12 @@ const HomePage: NextPage = () => {
         <title>HavnAI Network — Own Your Intelligence</title>
         <meta
           name="description"
-          content="Create images and videos on the HavnAI grid. Stage 7 Alpha for creators."
+          content="HavnAI is a decentralized GPU network where creators earn $HAI running AI models."
         />
         <meta property="og:title" content="HavnAI Network — Own Your Intelligence" />
         <meta
           property="og:description"
-          content="Create images and videos on the HavnAI grid. Creator-first Stage 7 Alpha."
+          content="A decentralized GPU network with weighted model routing and dynamic $HAI rewards."
         />
         <meta property="og:type" content="website" />
       </Head>
@@ -362,7 +323,7 @@ const HomePage: NextPage = () => {
           <a href="#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
-              <span className="brand-stage">Stage 7 — Alpha</span>
+              <span className="brand-stage">Stage 6 → 7 Alpha</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
@@ -381,14 +342,15 @@ const HomePage: NextPage = () => {
             id="primaryNav"
             aria-label="Primary navigation"
           >
-            <a href="/generator" className="nav-primary">Generator</a>
             <a href="#home">Home</a>
             <a href="#how">How It Works</a>
+            <a href="#smart-routing">Smart Routing</a>
+            <a href="#rewards">Rewards</a>
             <a href="#models">Models</a>
-            <a href="#smart-routing" className="nav-secondary">Smart Routing</a>
-            <a href="#rewards" className="nav-secondary">Rewards</a>
+            <a href="/test">Generator</a>
+            <a href="/library">My Library</a>
             <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" rel="noreferrer">
-              Network Dashboard (Alpha)
+              Dashboard
             </a>
             <a href="#join">Join Alpha</a>
             <a
@@ -408,19 +370,32 @@ const HomePage: NextPage = () => {
         <section id="home" className="hero">
           <div className="hero-inner">
             <div className="hero-content">
-              <span className="stage-badge">Stage 7 — Alpha</span>
-              <p className="hero-kicker">Creator-first grid</p>
-              <h1 className="hero-title">Create images &amp; videos on the HavnAI grid.</h1>
+              <p className="hero-kicker">Decentralized GPU Intelligence</p>
+              <h1 className="hero-title">OWN YOUR INTELLIGENCE</h1>
               <p className="hero-subtitle">
-                Prompt → Generate → Preview → Download. Ship visuals fast while the network quietly
-                handles routing, scheduling, and GPU execution behind the scenes.
+                A decentralized GPU network where creators earn <strong>$HAI</strong> running AI models.
+                Weighted routing, benchmark-driven model tiers, and live rewards.
               </p>
-              <div className="hero-cta">
-                <a className="btn primary btn-lg" href="/generator">
-                  Create Now
-                </a>
-                <a className="btn secondary btn-lg" href="#join">
-                  Run a Node (Alpha)
+              <div className="hero-install-note">
+                <h3>Join the HavnAI GPU Grid</h3>
+                <p>Run this on your GPU machine to install the node:</p>
+                <pre>
+                  <code>
+                    curl -fsSL http://api.joinhavn.io:5001/installers/install-node.sh \
+                    {`\n  | bash -s -- --server http://api.joinhavn.io:5001`}
+                  </code>
+                </pre>
+                <p>
+                  Full prerequisites, WAN I2V setup, systemd steps, and troubleshooting live on the
+                  coordinator’s install guide.
+                </p>
+                <a
+                  href="http://api.joinhavn.io:5001/join"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn tertiary wide"
+                >
+                  Open full node install guide
                 </a>
               </div>
             </div>
@@ -462,36 +437,39 @@ const HomePage: NextPage = () => {
         <section id="how" className="section">
           <div className="section-header">
             <h2>How It Works</h2>
-            <p>From prompt to output in four creator-friendly steps.</p>
+            <p>From GPU to $HAI rewards in four concrete steps.</p>
           </div>
           <div className="steps-grid">
             <article className="step-card">
               <div className="step-icon">1</div>
-              <h3>Write a prompt</h3>
+              <h3>Connect Your GPU Node</h3>
               <p>
-                Pick Image, Face Swap, or Video. Add advanced settings if you want full control.
+                Point the HavnAI node client at the coordinator, set your wallet, and enable{" "}
+                <code>CREATOR_MODE</code> to accept image/video jobs.
               </p>
             </article>
             <article className="step-card">
               <div className="step-icon">2</div>
-              <h3>Generate on the grid</h3>
+              <h3>Receive AI Jobs</h3>
               <p>
-                The coordinator routes your job to healthy GPU nodes and tracks progress in real time.
+                The coordinator queues jobs submitted to <code>/submit-job</code> and assigns them only to
+                compatible, healthy nodes.
               </p>
             </article>
             <article className="step-card">
               <div className="step-icon">3</div>
-              <h3>Preview instantly</h3>
+              <h3>Run Models with Weighted Routing</h3>
               <p>
-                Watch status updates, then preview your output and download when it’s ready.
+                Models are chosen with weighted random routing, favoring higher-tier, benchmarked
+                checkpoints.
               </p>
             </article>
             <article className="step-card">
               <div className="step-icon">4</div>
-              <h3>Network economics (Alpha)</h3>
+              <h3>Earn $HAI Automatically</h3>
               <p>
-                Routing weights and rewards are simulated during Stage 7 Alpha to validate the network
-                design.
+                Each completed job records runtime, model weight, and quality tier to scale your $HAI
+                rewards.
               </p>
             </article>
           </div>
@@ -500,11 +478,10 @@ const HomePage: NextPage = () => {
         {/* SMART ROUTING */}
         <section id="smart-routing" className="section section-alt">
           <div className="section-header">
-            <h2>Network Details · Smart Routing</h2>
+            <h2>Smart Routing · Weighted Models</h2>
             <p>
               Identical prompts, benchmark scores, and a registry-backed weight for every creator model.
             </p>
-            <AlphaDisclaimer />
           </div>
           <div className="routing-layout">
             <div className="routing-copy">
@@ -543,17 +520,17 @@ const HomePage: NextPage = () => {
         {/* REWARDS */}
         <section id="rewards" className="section">
           <div className="section-header">
-            <h2>Rewards (Simulated — Alpha)</h2>
-            <p>Weight tiers drive multipliers in Alpha simulations.</p>
-            <AlphaDisclaimer />
+            <h2>Dynamic $HAI Rewards</h2>
+            <p>Weight tiers drive multipliers. Better models, bigger payouts.</p>
           </div>
           <div className="table-wrapper">
             <table className="rewards-table">
               <thead>
                 <tr>
                   <th>Tier</th>
-                  <th>Weight (Simulated)</th>
+                  <th>Routing Weight</th>
                   <th>Reward Multiplier</th>
+                  <th>Example Model</th>
                 </tr>
               </thead>
               <tbody>
@@ -561,26 +538,31 @@ const HomePage: NextPage = () => {
                   <td>5</td>
                   <td>77</td>
                   <td>2.0×</td>
+                  <td>juggernautXL</td>
                 </tr>
                 <tr>
                   <td>4</td>
                   <td>70</td>
                   <td>1.7×</td>
+                  <td>majicmix</td>
                 </tr>
                 <tr>
                   <td>3</td>
                   <td>55</td>
                   <td>1.3×</td>
+                  <td>lazymix</td>
                 </tr>
                 <tr>
                   <td>2</td>
                   <td>50</td>
                   <td>1.1×</td>
+                  <td>deliberate</td>
                 </tr>
                 <tr>
                   <td>1</td>
                   <td>45</td>
                   <td>1.0×</td>
+                  <td>epicrealism</td>
                 </tr>
               </tbody>
             </table>
@@ -595,7 +577,6 @@ const HomePage: NextPage = () => {
               Models, weights, and tags pulled directly from the coordinator via{" "}
               <code>/api/models/stats</code>.
             </p>
-            <AlphaDisclaimer message="Model weights are simulated in Alpha; payouts are not active yet." />
           </div>
           <div className="model-grid" id="modelGrid">
             <div className="model-card placeholder">
@@ -613,24 +594,100 @@ const HomePage: NextPage = () => {
           <div className="section-header">
             <h2>Live Jobs Snapshot</h2>
             <p>Recent public jobs, straight from the grid.</p>
-            <AlphaDisclaimer message="Reward totals are simulated in Alpha and are informational only." />
           </div>
           <div className="live-layout">
             <div className="table-wrapper">
               <table className="jobs-table">
-                <thead id="jobsTableHead">
+                <thead>
                   <tr>
                     <th>Job</th>
                     <th>Model</th>
-                    <th>Reward (Simulated)</th>
+                    <th>Reward</th>
                     <th>Status</th>
-                    <th>Output</th>
+                    {showLivePreview ? (
+                      <th>Preview</th>
+                    ) : (
+                      <th>Output Type</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody id="jobsTableBody">
-                  <tr>
-                    <td colSpan={5}>Waiting for recent jobs from /api/models/stats…</td>
-                  </tr>
+                  {liveJobsLoading ? (
+                    <tr>
+                      <td colSpan={5}>Waiting for recent jobs from /jobs/recent…</td>
+                    </tr>
+                  ) : liveJobs.length ? (
+                    liveJobs.slice(0, 10).map((job) => {
+                      const id = job.job_id || job.id || "";
+                      const model = job.model || "--";
+                      const reward =
+                        typeof job.reward_hai === "number"
+                          ? job.reward_hai.toFixed(6)
+                          : typeof job.reward === "number"
+                          ? job.reward.toFixed(6)
+                          : "--";
+                      const status = (job.status || "UNKNOWN").toString().toUpperCase();
+                      const previewUrl = resolveAssetUrl(
+                        job.image_url || job.preview_url || job.video_url
+                      );
+                      const outputType =
+                        typeof job.task_type === "string" &&
+                        job.task_type.toUpperCase().includes("VIDEO")
+                          ? "Video"
+                          : "Image";
+                      const summary: JobSummary = {
+                        job_id: job.job_id || job.id,
+                        model: job.model,
+                        status: job.status,
+                        task_type: job.task_type,
+                        submitted_at: job.submitted_at,
+                        completed_at: job.completed_at,
+                        image_url: job.image_url,
+                        video_url: job.video_url,
+                      };
+                      return (
+                        <tr
+                          key={id}
+                          className="jobs-row-clickable"
+                          tabIndex={0}
+                          role="button"
+                          onClick={() => openJobDetails(summary)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              openJobDetails(summary);
+                            }
+                          }}
+                        >
+                          <td>
+                            <code>{id}</code>
+                          </td>
+                          <td>{model}</td>
+                          <td>{reward}</td>
+                          <td>{status}</td>
+                          {showLivePreview ? (
+                            <td>
+                              {previewUrl ? (
+                                <img
+                                  src={previewUrl}
+                                  alt={`${id} preview`}
+                                  className="jobs-preview-tile"
+                                />
+                              ) : (
+                                <div className="jobs-preview-tile">No preview</div>
+                              )}
+                            </td>
+                          ) : (
+                            <td>{outputType}</td>
+                          )}
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={5}>No recent public jobs reported yet.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -658,17 +715,16 @@ const HomePage: NextPage = () => {
         <section id="join" className="section join-section">
           <div className="join-inner">
             <div className="join-copy">
-              <h2>Join Stage 7 — Alpha</h2>
+              <h2>Join Stage 6 → 7 Alpha</h2>
               <p>
-                We are validating creator workflows, weighted routing, and the reward engine across a
+                We are validating weighted routing, benchmark-driven tiers, and the reward engine across a
                 small set of GPUs before opening the grid. If you are comfortable running bleeding-edge AI
                 infra, we want you in the loop.
               </p>
               <ul>
-                <li>Linux (Ubuntu/Debian/RHEL) or macOS 12+ with Python 3.10+ and curl.</li>
-                <li>NVIDIA GPU + drivers; 12&nbsp;GB+ recommended for creator/video workloads.</li>
-                <li>EVM wallet address (simulated rewards in Alpha).</li>
-                <li>Solid upstream bandwidth and willingness to iterate on configs.</li>
+                <li>12&nbsp;GB+ NVIDIA GPU (3060 / 3080 / 4090 class).</li>
+                <li>Solid upstream bandwidth and uptime.</li>
+                <li>Willingness to iterate on configs and report issues.</li>
               </ul>
             </div>
             <div className="join-actions">
@@ -676,49 +732,11 @@ const HomePage: NextPage = () => {
                 Join Alpha (Typeform)
               </a>
               <a href="http://api.joinhavn.io:5001/dashboard" className="btn tertiary wide">
-                View Network Dashboard (Alpha)
+                View Live Dashboard
               </a>
               <p className="join-note">
                 After joining, you’ll receive updated install + config steps tailored to your GPU and OS.
               </p>
-              <details className="operator-panel" id="run-node">
-                <summary>
-                  <span className="operator-title">Operator Setup (Alpha)</span>
-                  <span className="operator-subtitle">
-                    Advanced users only. Run a GPU node to help process jobs and test the network.
-                  </span>
-                </summary>
-                <div className="operator-body">
-                  <p>Run this on your GPU machine to install the node:</p>
-                  <pre>
-                    <code>{installCommand}</code>
-                  </pre>
-                  <p className="operator-hint">
-                    If you have a join token, append <code>--token &lt;TOKEN&gt;</code>. To prefill a wallet,
-                    add <code>--wallet 0x...</code>.
-                  </p>
-                  <button
-                    type="button"
-                    className="btn secondary wide operator-copy"
-                    onClick={handleCopyInstall}
-                  >
-                    Copy command
-                  </button>
-                  <p className="operator-warning">Early access software. Expect breaking changes.</p>
-                  <p>
-                    Full prerequisites, systemd steps, and troubleshooting live on the coordinator’s
-                    install guide.
-                  </p>
-                  <a
-                    href="http://api.joinhavn.io:5001/join"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn tertiary wide"
-                  >
-                    Open full node install guide
-                  </a>
-                </div>
-              </details>
             </div>
           </div>
         </section>
@@ -787,6 +805,16 @@ const HomePage: NextPage = () => {
           </div>
         </div>
       </footer>
+      <JobDetailsDrawer
+        open={drawerOpen}
+        jobId={drawerJob?.id || drawerSummary?.job_id}
+        summary={drawerSummary}
+        job={drawerJob}
+        result={drawerResult}
+        loading={drawerLoading}
+        error={drawerError}
+        onClose={() => setDrawerOpen(false)}
+      />
     </>
   );
 };
