@@ -4,13 +4,22 @@ import { HavnAIButton } from "../components/HavnAIButton";
 import { StatusBox } from "../components/StatusBox";
 import { OutputCard } from "../components/OutputCard";
 import { HistoryFeed, HistoryItem } from "../components/HistoryFeed";
+import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
 import {
   submitAutoJob,
   submitFaceSwapJob,
   fetchJob,
   fetchResult,
+  fetchJobWithResult,
+  fetchQuota,
+  HavnaiApiError,
+  JobDetailResponse,
+  ResultResponse,
   SubmitJobOptions,
+  QuotaStatus,
 } from "../lib/havnai";
+import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
+import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
@@ -74,6 +83,18 @@ const TestPage: React.FC = () => {
   const [faceSourceName, setFaceSourceName] = useState<string | undefined>();
   const [faceswapStrength, setFaceswapStrength] = useState("0.8");
   const [faceswapSteps, setFaceswapSteps] = useState("20");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerJob, setDrawerJob] = useState<JobDetailResponse | null>(null);
+  const [drawerResult, setDrawerResult] = useState<ResultResponse | null>(null);
+  const [drawerSummary, setDrawerSummary] = useState<JobSummary | null>(null);
+  const [drawerLoading, setDrawerLoading] = useState(false);
+  const [drawerError, setDrawerError] = useState<string | undefined>();
+  const [inviteCode, setInviteCodeState] = useState("");
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [savedInviteCode, setSavedInviteCode] = useState<string | undefined>();
+  const [quota, setQuota] = useState<QuotaStatus | null>(null);
+  const [quotaError, setQuotaError] = useState<string | undefined>();
+  const inviteSaved = Boolean(savedInviteCode);
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -89,6 +110,44 @@ const TestPage: React.FC = () => {
       // ignore
     }
   }, []);
+
+  useEffect(() => {
+    const storedInvite = getInviteCode();
+    if (storedInvite) {
+      setInviteCodeState(storedInvite);
+      setSavedInviteCode(storedInvite);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!savedInviteCode) {
+      setQuota(null);
+      setQuotaError(undefined);
+      return () => {
+        cancelled = true;
+      };
+    }
+    fetchQuota()
+      .then((data) => {
+        if (!cancelled) {
+          setQuota(data);
+          setQuotaError(undefined);
+        }
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        const message =
+          err instanceof HavnaiApiError
+            ? err.message
+            : err?.message || "Failed to load invite quota.";
+        setQuota(null);
+        setQuotaError(message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [savedInviteCode]);
 
   const saveHistory = (items: HistoryItem[]) => {
     setHistory(items);
@@ -121,6 +180,13 @@ const TestPage: React.FC = () => {
     if (!value.trim()) return undefined;
     const parsed = Number.parseFloat(value);
     return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  const formatResetAt = (value?: string) => {
+    if (!value) return "";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return parsed.toLocaleString();
   };
 
   const readFileAsDataUrl = (file: File): Promise<string> => {
@@ -175,6 +241,25 @@ const TestPage: React.FC = () => {
     }
 
     return Object.keys(options).length > 0 ? options : undefined;
+  };
+
+  const handleInviteSave = () => {
+    const trimmed = inviteCode.trim();
+    if (!trimmed) {
+      handleInviteClear();
+      return;
+    }
+    setInviteCode(trimmed);
+    setSavedInviteCode(trimmed);
+    setInviteOpen(false);
+  };
+
+  const handleInviteClear = () => {
+    clearInviteCode();
+    setSavedInviteCode(undefined);
+    setInviteCodeState("");
+    setQuota(null);
+    setQuotaError(undefined);
   };
 
   const handleBaseImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -256,7 +341,24 @@ const TestPage: React.FC = () => {
         await pollJob(id, trimmed || "Face swap", 900);
       }
     } catch (err: any) {
-      setStatusMessage(err?.message || "Failed to submit job.");
+      if (err instanceof HavnaiApiError || err?.code) {
+        const code = err.code || err?.data?.error;
+        if (code === "invite_required") {
+          setStatusMessage("Invite code required. Add your code to submit jobs.");
+          setInviteOpen(true);
+        } else if (code === "rate_limited") {
+          const resetLabel = formatResetAt(err?.data?.reset_at);
+          setStatusMessage(
+            resetLabel
+              ? `Invite quota exceeded. Resets at ${resetLabel}.`
+              : "Invite quota exceeded. Please try again later."
+          );
+        } else {
+          setStatusMessage(err.message || "Failed to submit job.");
+        }
+      } else {
+        setStatusMessage(err?.message || "Failed to submit job.");
+      }
     } finally {
       setLoading(false);
     }
@@ -293,6 +395,15 @@ const TestPage: React.FC = () => {
             setStatusMessage("Job finished, but no output was found.");
             return;
           }
+
+          const createdAt =
+            typeof job.timestamp === "number"
+              ? new Date(job.timestamp * 1000).toISOString()
+              : new Date().toISOString();
+          let type: LibraryItemType = "unknown";
+          if (resolvedVideo) type = "video";
+          else if (resolvedImage) type = "image";
+          addToLibrary({ job_id: id, created_at: createdAt, type });
 
           if (resolvedVideo) {
             setVideoUrl(resolvedVideo);
@@ -339,6 +450,13 @@ const TestPage: React.FC = () => {
     setRuntimeSeconds(null);
     setJobId(item.jobId);
     setStatusMessage("Showing from history. Generate again to refresh.");
+    const summary: JobSummary = {
+      job_id: item.jobId,
+      model: item.model,
+      image_url: item.imageUrl,
+      submitted_at: new Date(item.timestamp).toISOString(),
+    };
+    void openJobDetails(item.jobId, summary);
   };
 
   const handleHistoryClear = () => {
@@ -349,6 +467,22 @@ const TestPage: React.FC = () => {
     setRuntimeSeconds(null);
     setJobId(undefined);
     setStatusMessage(undefined);
+  };
+
+  const openJobDetails = async (id: string, summary?: JobSummary) => {
+    setDrawerOpen(true);
+    setDrawerLoading(true);
+    setDrawerError(undefined);
+    setDrawerSummary(summary || null);
+    try {
+      const { job, result } = await fetchJobWithResult(id);
+      setDrawerJob(job);
+      setDrawerResult(result || null);
+    } catch (err: any) {
+      setDrawerError(err?.message || "Failed to load job details.");
+    } finally {
+      setDrawerLoading(false);
+    }
   };
 
   // Mobile nav toggle (reuse behavior from index.html)
@@ -386,6 +520,7 @@ const TestPage: React.FC = () => {
             <a href="https://joinhavn.io#smart-routing">Smart Routing</a>
             <a href="https://joinhavn.io#rewards">Rewards</a>
             <a href="https://joinhavn.io#models">Models</a>
+            <a href="/library">My Library</a>
             <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" rel="noreferrer">
               Dashboard
             </a>
@@ -409,6 +544,66 @@ const TestPage: React.FC = () => {
           <div className="generator-card">
             <div className="generator-grid">
               <div className="generator-left">
+                <div className="invite-panel">
+                  <div className={`invite-badge${inviteSaved ? " is-ok" : " is-missing"}`}>
+                    {inviteSaved ? "Beta Access: OK" : "Invite required"}
+                  </div>
+                  {quota && (
+                    <div className="invite-quota">
+                      Today:{" "}
+                      {quota.max_daily > 0
+                        ? `${quota.used_today}/${quota.max_daily}`
+                        : `${quota.used_today}/unlimited`}
+                      {" • "}
+                      Concurrent:{" "}
+                      {quota.max_concurrent > 0
+                        ? `${quota.used_concurrent}/${quota.max_concurrent}`
+                        : `${quota.used_concurrent}/unlimited`}
+                    </div>
+                  )}
+                  {!quota && quotaError && (
+                    <div className="invite-quota invite-error">{quotaError}</div>
+                  )}
+                  <button
+                    type="button"
+                    className="invite-toggle"
+                    onClick={() => setInviteOpen((prev) => !prev)}
+                  >
+                    {inviteSaved ? "Manage invite" : "Add invite"}
+                  </button>
+                </div>
+                {inviteOpen && (
+                  <div className="invite-form">
+                    <label className="generator-label" htmlFor="invite-code">
+                      Invite code
+                    </label>
+                    <input
+                      id="invite-code"
+                      type="text"
+                      className="generator-input"
+                      placeholder="alpha-abc123"
+                      value={inviteCode}
+                      onChange={(e) => setInviteCodeState(e.target.value)}
+                    />
+                    <div className="invite-actions">
+                      <button
+                        type="button"
+                        className="generator-mini-button"
+                        onClick={handleInviteSave}
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        className="generator-mini-button"
+                        onClick={handleInviteClear}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <p className="generator-help">Stored locally in your browser only.</p>
+                  </div>
+                )}
                 <div className="generator-mode-tabs">
                   <button
                     type="button"
@@ -807,6 +1002,16 @@ const TestPage: React.FC = () => {
           </div>
         </section>
       </main>
+      <JobDetailsDrawer
+        open={drawerOpen}
+        jobId={drawerJob?.id || drawerSummary?.job_id || jobId}
+        summary={drawerSummary}
+        job={drawerJob}
+        result={drawerResult}
+        loading={drawerLoading}
+        error={drawerError}
+        onClose={() => setDrawerOpen(false)}
+      />
     </>
   );
 };

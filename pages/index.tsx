@@ -1,9 +1,19 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useState } from "react";
+import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
+import { fetchJobWithResult, JobDetailResponse, ResultResponse } from "../lib/havnai";
 
 const HomePage: NextPage = () => {
   const [navOpen, setNavOpen] = useState(false);
+  const [liveJobs, setLiveJobs] = useState<any[]>([]);
+  const [liveJobsLoading, setLiveJobsLoading] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerJob, setDrawerJob] = useState<JobDetailResponse | null>(null);
+  const [drawerResult, setDrawerResult] = useState<ResultResponse | null>(null);
+  const [drawerSummary, setDrawerSummary] = useState<JobSummary | null>(null);
+  const [drawerLoading, setDrawerLoading] = useState(false);
+  const [drawerError, setDrawerError] = useState<string | undefined>();
 
   // Client-side behavior for stats, models, jobs, and previews.
   useEffect(() => {
@@ -24,7 +34,6 @@ const HomePage: NextPage = () => {
     const liveSuccessRate = document.getElementById("liveSuccessRate");
 
     const modelGrid = document.getElementById("modelGrid");
-    const jobsTableBody = document.getElementById("jobsTableBody");
 
     if (
       !heroActiveNodes ||
@@ -34,8 +43,7 @@ const HomePage: NextPage = () => {
       !liveActiveNodes ||
       !liveJobs24h ||
       !liveSuccessRate ||
-      !modelGrid ||
-      !jobsTableBody
+      !modelGrid
     ) {
       return;
     }
@@ -46,7 +54,6 @@ const HomePage: NextPage = () => {
       success_rate: 0,
       top_model: "—",
       model_registry: [] as any[],
-      recent_jobs: [] as any[],
     };
 
     function safeArray(value: any): any[] {
@@ -116,47 +123,6 @@ const HomePage: NextPage = () => {
       modelGrid.innerHTML = cards;
     }
 
-    function renderJobs(jobs: any[]) {
-      const list = safeArray(jobs);
-      if (!list.length) {
-        jobsTableBody.innerHTML =
-          '<tr><td colspan="5">No recent public jobs reported yet.</td></tr>';
-        return;
-      }
-
-      const rows = list
-        .slice(0, 10)
-        .map((job) => {
-          const id = job.job_id || job.id || "—";
-          const model = job.model || "—";
-          const reward =
-            typeof job.reward_hai === "number"
-              ? job.reward_hai.toFixed(6)
-              : typeof job.reward === "number"
-              ? job.reward.toFixed(6)
-              : "—";
-          const status = (job.status || "UNKNOWN").toString().toUpperCase();
-          const imageUrl = job.image_url || job.preview_url || "";
-          const preview = imageUrl
-            ? `<button class="preview-thumb" data-preview="${imageUrl}" aria-label="Open preview for ${id}">
-                    <img src="${imageUrl}" alt="${id} preview" loading="lazy" />
-                  </button>`
-            : "—";
-          return `
-                <tr>
-                  <td><code>${id}</code></td>
-                  <td>${model}</td>
-                  <td>${reward || "—"}</td>
-                  <td>${status}</td>
-                  <td>${preview}</td>
-                </tr>
-              `;
-        })
-        .join("");
-
-      jobsTableBody.innerHTML = rows;
-    }
-
     async function loadStats() {
       try {
         const res = await fetch(`${API_BASE}/models/stats`, { credentials: "same-origin" });
@@ -164,65 +130,62 @@ const HomePage: NextPage = () => {
         const data = await res.json();
         renderStats(data);
         renderModels(data.model_registry || data.models || []);
-        renderJobs(data.recent_jobs || []);
       } catch (err) {
         console.error("Failed to load /models/stats", err);
         renderStats(sampleStats);
         renderModels(sampleStats.model_registry);
-        renderJobs(sampleStats.recent_jobs);
+      }
+    }
+
+    async function loadJobs() {
+      try {
+        setLiveJobsLoading(true);
+        const res = await fetch(`${API_BASE}/jobs/recent?limit=10`, {
+          credentials: "same-origin",
+        });
+        if (!res.ok) throw new Error("jobs HTTP " + res.status);
+        const data = await res.json();
+        setLiveJobs(safeArray(data.jobs || data.feed || []));
+      } catch (err) {
+        console.error("Failed to load /jobs/recent", err);
+        setLiveJobs([]);
+      } finally {
+        setLiveJobsLoading(false);
       }
     }
 
     loadStats();
+    loadJobs();
     const intervalId = window.setInterval(loadStats, 15000);
-
-    const body = document.body;
-
-    function ensureLightbox(): HTMLElement {
-      let lb = document.getElementById("lightbox") as HTMLElement | null;
-      if (!lb) {
-        lb = document.createElement("div");
-        lb.id = "lightbox";
-        lb.className = "lightbox hidden";
-        lb.innerHTML =
-          '<div class="lightbox-backdrop"></div><div class="lightbox-content"><img alt="Preview" /><button class="lightbox-close" aria-label="Close preview">×</button></div>';
-        body.appendChild(lb);
-        lb.addEventListener("click", (evt) => {
-          const target = evt.target as HTMLElement | null;
-          if (!target) return;
-          if (
-            target === lb ||
-            target.classList.contains("lightbox-backdrop") ||
-            target.classList.contains("lightbox-close")
-          ) {
-            lb!.classList.add("hidden");
-          }
-        });
-      }
-      return lb;
-    }
-
-    const jobsClickHandler = (evt: Event) => {
-      const target = evt.target as HTMLElement | null;
-      if (!target) return;
-      const btn = target.closest(".preview-thumb") as HTMLElement | null;
-      if (!btn) return;
-      const src = btn.getAttribute("data-preview");
-      if (!src) return;
-      const lb = ensureLightbox();
-      const img = lb.querySelector("img");
-      if (!img) return;
-      (img as HTMLImageElement).src = src;
-      lb.classList.remove("hidden");
-    };
-
-    jobsTableBody.addEventListener("click", jobsClickHandler);
+    const jobsIntervalId = window.setInterval(loadJobs, 15000);
 
     return () => {
-      jobsTableBody.removeEventListener("click", jobsClickHandler);
       window.clearInterval(intervalId);
+      window.clearInterval(jobsIntervalId);
     };
   }, []);
+
+  const openJobDetails = async (summary: JobSummary) => {
+    const id = summary.job_id || summary.id;
+    if (!id) return;
+    setDrawerOpen(true);
+    setDrawerLoading(true);
+    setDrawerError(undefined);
+    setDrawerSummary(summary);
+    try {
+      const { job, result } = await fetchJobWithResult(id);
+      setDrawerJob(job);
+      setDrawerResult(result || null);
+    } catch (err: any) {
+      setDrawerError(err?.message || "Failed to load job details.");
+    } finally {
+      setDrawerLoading(false);
+    }
+  };
+
+  const showLivePreview = liveJobs.some(
+    (job) => job.image_url || job.preview_url || job.video_url
+  );
 
   return (
     <>
@@ -270,6 +233,7 @@ const HomePage: NextPage = () => {
             <a href="#rewards">Rewards</a>
             <a href="#models">Models</a>
             <a href="/test">Generator</a>
+            <a href="/library">My Library</a>
             <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" rel="noreferrer">
               Dashboard
             </a>
@@ -525,13 +489,88 @@ const HomePage: NextPage = () => {
                     <th>Model</th>
                     <th>Reward</th>
                     <th>Status</th>
-                    <th>Preview</th>
+                    {showLivePreview ? (
+                      <th>Preview</th>
+                    ) : (
+                      <th>Output Type</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody id="jobsTableBody">
-                  <tr>
-                    <td colSpan={5}>Waiting for recent jobs from /api/models/stats…</td>
-                  </tr>
+                  {liveJobsLoading ? (
+                    <tr>
+                      <td colSpan={5}>Waiting for recent jobs from /jobs/recent…</td>
+                    </tr>
+                  ) : liveJobs.length ? (
+                    liveJobs.slice(0, 10).map((job) => {
+                      const id = job.job_id || job.id || "";
+                      const model = job.model || "--";
+                      const reward =
+                        typeof job.reward_hai === "number"
+                          ? job.reward_hai.toFixed(6)
+                          : typeof job.reward === "number"
+                          ? job.reward.toFixed(6)
+                          : "--";
+                      const status = (job.status || "UNKNOWN").toString().toUpperCase();
+                      const previewUrl = job.image_url || job.preview_url || job.video_url || "";
+                      const outputType =
+                        typeof job.task_type === "string" &&
+                        job.task_type.toUpperCase().includes("VIDEO")
+                          ? "Video"
+                          : "Image";
+                      const summary: JobSummary = {
+                        job_id: job.job_id || job.id,
+                        model: job.model,
+                        status: job.status,
+                        task_type: job.task_type,
+                        submitted_at: job.submitted_at,
+                        completed_at: job.completed_at,
+                        image_url: job.image_url,
+                        video_url: job.video_url,
+                      };
+                      return (
+                        <tr
+                          key={id}
+                          className="jobs-row-clickable"
+                          tabIndex={0}
+                          role="button"
+                          onClick={() => openJobDetails(summary)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              openJobDetails(summary);
+                            }
+                          }}
+                        >
+                          <td>
+                            <code>{id}</code>
+                          </td>
+                          <td>{model}</td>
+                          <td>{reward}</td>
+                          <td>{status}</td>
+                          {showLivePreview ? (
+                            <td>
+                              {previewUrl ? (
+                                <img
+                                  src={previewUrl}
+                                  alt={`${id} preview`}
+                                  className="jobs-preview-tile"
+                                />
+                              ) : (
+                                <div className="jobs-preview-tile">No preview</div>
+                              )}
+                            </td>
+                          ) : (
+                            <td>{outputType}</td>
+                          )}
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={5}>No recent public jobs reported yet.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -649,6 +688,16 @@ const HomePage: NextPage = () => {
           </div>
         </div>
       </footer>
+      <JobDetailsDrawer
+        open={drawerOpen}
+        jobId={drawerJob?.id || drawerSummary?.job_id}
+        summary={drawerSummary}
+        job={drawerJob}
+        result={drawerResult}
+        loading={drawerLoading}
+        error={drawerError}
+        onClose={() => setDrawerOpen(false)}
+      />
     </>
   );
 };
