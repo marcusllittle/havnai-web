@@ -8,6 +8,7 @@ import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
 import {
   submitAutoJob,
   submitFaceSwapJob,
+  submitVideoJob,
   fetchJob,
   fetchResult,
   fetchJobWithResult,
@@ -50,7 +51,7 @@ type LoraDraft = {
   weight: string;
 };
 
-type GeneratorMode = "image" | "face_swap";
+type GeneratorMode = "image" | "face_swap" | "video";
 
 const TestPage: React.FC = () => {
   const [mode, setMode] = useState<GeneratorMode>("image");
@@ -71,6 +72,8 @@ const TestPage: React.FC = () => {
   const [guidance, setGuidance] = useState("");
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
+  const [frames, setFrames] = useState("");
+  const [fps, setFps] = useState("");
   const [sampler, setSampler] = useState("");
   const [seed, setSeed] = useState("");
   const [loras, setLoras] = useState<LoraDraft[]>([]);
@@ -243,6 +246,28 @@ const TestPage: React.FC = () => {
     return Object.keys(options).length > 0 ? options : undefined;
   };
 
+  const buildVideoRequest = (promptText: string) => {
+    const request: Record<string, any> = { prompt: promptText };
+    const trimmedNegative = negativePrompt.trim();
+    if (trimmedNegative) request.negativePrompt = trimmedNegative;
+    const seedValue = parseOptionalInt(seed);
+    request.seed =
+      seedValue !== undefined ? seedValue : Math.floor(Math.random() * 1_000_000_000);
+    const stepsValue = parseOptionalInt(steps);
+    const guidanceValue = parseOptionalFloat(guidance);
+    const widthValue = parseOptionalInt(width);
+    const heightValue = parseOptionalInt(height);
+    const framesValue = parseOptionalInt(frames);
+    const fpsValue = parseOptionalInt(fps);
+    if (stepsValue !== undefined) request.steps = stepsValue;
+    if (guidanceValue !== undefined) request.guidance = guidanceValue;
+    if (widthValue !== undefined) request.width = widthValue;
+    if (heightValue !== undefined) request.height = heightValue;
+    if (framesValue !== undefined) request.frames = framesValue;
+    if (fpsValue !== undefined) request.fps = fpsValue;
+    return request;
+  };
+
   const handleInviteSave = () => {
     const trimmed = inviteCode.trim();
     if (!trimmed) {
@@ -339,6 +364,12 @@ const TestPage: React.FC = () => {
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
         await pollJob(id, trimmed || "Face swap", 900);
+      } else if (mode === "video") {
+        const request = buildVideoRequest(trimmed);
+        const id = await submitVideoJob(request);
+        setJobId(id);
+        setStatusMessage("Waiting for GPU node…");
+        await pollJob(id, trimmed, 900);
       }
     } catch (err: any) {
       if (err instanceof HavnaiApiError || err?.code) {
@@ -407,18 +438,21 @@ const TestPage: React.FC = () => {
 
           if (resolvedVideo) {
             setVideoUrl(resolvedVideo);
+            setImageUrl(undefined);
           } else if (resolvedImage) {
             setImageUrl(resolvedImage);
+            setVideoUrl(undefined);
           }
           setRuntimeSeconds(runtime);
           setModel(job.model);
           setStatusMessage("Done.");
 
-          if (resolvedImage) {
+          if (resolvedImage || resolvedVideo) {
             const item: HistoryItem = {
               jobId: id,
               prompt: usedPrompt,
               imageUrl: resolvedImage,
+              videoUrl: resolvedVideo,
               model: job.model,
               timestamp: Date.now(),
             };
@@ -444,8 +478,13 @@ const TestPage: React.FC = () => {
   };
 
   const handleHistorySelect = (item: HistoryItem) => {
-    setImageUrl(item.imageUrl);
-    setVideoUrl(undefined);
+    if (item.videoUrl) {
+      setVideoUrl(item.videoUrl);
+      setImageUrl(undefined);
+    } else {
+      setImageUrl(item.imageUrl);
+      setVideoUrl(undefined);
+    }
     setModel(item.model);
     setRuntimeSeconds(null);
     setJobId(item.jobId);
@@ -454,6 +493,7 @@ const TestPage: React.FC = () => {
       job_id: item.jobId,
       model: item.model,
       image_url: item.imageUrl,
+      video_url: item.videoUrl,
       submitted_at: new Date(item.timestamp).toISOString(),
     };
     void openJobDetails(item.jobId, summary);
@@ -611,6 +651,13 @@ const TestPage: React.FC = () => {
                     onClick={() => setMode("image")}
                   >
                     Image
+                  </button>
+                  <button
+                    type="button"
+                    className={`generator-mode-button${mode === "video" ? " is-active" : ""}`}
+                    onClick={() => setMode("video")}
+                  >
+                    Video
                   </button>
                   <button
                     type="button"
@@ -783,12 +830,18 @@ const TestPage: React.FC = () => {
 
                 <div className="generator-controls">
                   <HavnAIButton
-                    label={mode === "face_swap" ? "Swap face" : "Generate"}
+                    label={
+                      mode === "face_swap"
+                        ? "Swap face"
+                        : mode === "video"
+                        ? "Generate video"
+                        : "Generate"
+                    }
                     loading={loading}
                     disabled={mode !== "face_swap" && !prompt.trim()}
                     onClick={handleSubmit}
                   />
-                  {mode === "image" && (
+                  {mode !== "face_swap" && (
                     <button
                       type="button"
                       className="generator-advanced-toggle"
@@ -976,6 +1029,146 @@ const TestPage: React.FC = () => {
                     <button type="button" className="generator-mini-button" onClick={addLora}>
                       Add LoRA
                     </button>
+                  </div>
+                )}
+
+                {advancedOpen && mode === "video" && (
+                  <div className="generator-advanced">
+                    <span className="generator-label">Video settings</span>
+                    <p className="generator-help">
+                      LTX2 videos default to 48 frames at 8fps (about 6 seconds) if left blank.
+                    </p>
+                    <label className="generator-label" htmlFor="negative-prompt-video">
+                      Negative prompt (optional)
+                    </label>
+                    <textarea
+                      id="negative-prompt-video"
+                      className="generator-input"
+                      placeholder="Optional negatives"
+                      value={negativePrompt}
+                      onChange={(e) => setNegativePrompt(e.target.value)}
+                      rows={2}
+                    />
+                    <span className="generator-label">Generation settings</span>
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="steps">
+                          Steps
+                        </label>
+                        <input
+                          id="steps"
+                          type="number"
+                          min={1}
+                          max={50}
+                          step={1}
+                          className="generator-input"
+                          placeholder="Default 25"
+                          value={steps}
+                          onChange={(e) => setSteps(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="generator-label" htmlFor="guidance">
+                          Guidance
+                        </label>
+                        <input
+                          id="guidance"
+                          type="number"
+                          min={0}
+                          max={12}
+                          step={0.1}
+                          className="generator-input"
+                          placeholder="Default 6"
+                          value={guidance}
+                          onChange={(e) => setGuidance(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="width">
+                          Width
+                        </label>
+                        <input
+                          id="width"
+                          type="number"
+                          min={256}
+                          max={512}
+                          step={64}
+                          className="generator-input"
+                          placeholder="Default 512"
+                          value={width}
+                          onChange={(e) => setWidth(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="generator-label" htmlFor="height">
+                          Height
+                        </label>
+                        <input
+                          id="height"
+                          type="number"
+                          min={256}
+                          max={512}
+                          step={64}
+                          className="generator-input"
+                          placeholder="Default 512"
+                          value={height}
+                          onChange={(e) => setHeight(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="frames">
+                          Frames
+                        </label>
+                        <input
+                          id="frames"
+                          type="number"
+                          min={1}
+                          max={48}
+                          step={1}
+                          className="generator-input"
+                          placeholder="Default 48"
+                          value={frames}
+                          onChange={(e) => setFrames(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="generator-label" htmlFor="fps">
+                          FPS
+                        </label>
+                        <input
+                          id="fps"
+                          type="number"
+                          min={1}
+                          max={8}
+                          step={1}
+                          className="generator-input"
+                          placeholder="Default 8"
+                          value={fps}
+                          onChange={(e) => setFps(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="seed">
+                          Seed
+                        </label>
+                        <input
+                          id="seed"
+                          type="number"
+                          min={0}
+                          step={1}
+                          className="generator-input"
+                          placeholder="Random"
+                          value={seed}
+                          onChange={(e) => setSeed(e.target.value)}
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
 

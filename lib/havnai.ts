@@ -153,6 +153,8 @@ export function resolveAssetUrl(path: string | undefined | null): string | undef
   if (!path) return undefined;
   // If already absolute (http/https), return as-is.
   if (/^https?:\/\//i.test(path)) return path;
+  // If already routed through the API proxy, leave it alone.
+  if (path.startsWith("/api/")) return path;
   // Otherwise, prefix with API_BASE so we hit the coordinator, not the Next dev server.
   return `${getApiBase()}${path}`;
 }
