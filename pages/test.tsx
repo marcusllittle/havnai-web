@@ -77,6 +77,8 @@ const TestPage: React.FC = () => {
   const [sampler, setSampler] = useState("");
   const [seed, setSeed] = useState("");
   const [loras, setLoras] = useState<LoraDraft[]>([]);
+  const [availableLoras, setAvailableLoras] = useState<string[]>([]);
+  const [loraLoadError, setLoraLoadError] = useState<string | undefined>();
   const [faceswapModel, setFaceswapModel] = useState(FACE_SWAP_MODELS[0].id);
   const [baseImageUrl, setBaseImageUrl] = useState("");
   const [baseImageData, setBaseImageData] = useState<string | undefined>();
@@ -99,6 +101,16 @@ const TestPage: React.FC = () => {
   const [quotaError, setQuotaError] = useState<string | undefined>();
   const inviteSaved = Boolean(savedInviteCode);
 
+  const getApiBase = () => {
+    if (typeof window !== "undefined") {
+      const runtimeBase = (window as any).NEXT_PUBLIC_API_BASE_URL;
+      if (runtimeBase && String(runtimeBase).length > 0) {
+        return String(runtimeBase);
+      }
+    }
+    return "/api";
+  };
+
   // Load history from localStorage on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -120,6 +132,38 @@ const TestPage: React.FC = () => {
       setInviteCodeState(storedInvite);
       setSavedInviteCode(storedInvite);
     }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadLoras = async () => {
+      if (typeof window === "undefined") return;
+      try {
+        const res = await fetch(`${getApiBase()}/loras/list`, { credentials: "same-origin" });
+        if (!res.ok) throw new Error(`loras HTTP ${res.status}`);
+        const data = await res.json();
+        const raw = Array.isArray(data?.loras) ? data.loras : [];
+        const names = raw
+          .map((entry: any) => entry?.name || entry?.filename)
+          .filter((value: any) => typeof value === "string" && value.length > 0)
+          .map((value: string) => value.trim())
+          .filter(Boolean);
+        const deduped = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+        if (active) {
+          setAvailableLoras(deduped);
+          setLoraLoadError(undefined);
+        }
+      } catch (err: any) {
+        if (active) {
+          setAvailableLoras([]);
+          setLoraLoadError(err?.message || "Failed to load LoRAs.");
+        }
+      }
+    };
+    void loadLoras();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -244,6 +288,15 @@ const TestPage: React.FC = () => {
     }
 
     return Object.keys(options).length > 0 ? options : undefined;
+  };
+
+  const addLoraByName = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setLoras((prev) => {
+      if (prev.some((entry) => entry.name.trim() === trimmed)) return prev;
+      return [...prev, { name: trimmed, weight: "" }];
+    });
   };
 
   const buildVideoRequest = (promptText: string) => {
@@ -793,36 +846,81 @@ const TestPage: React.FC = () => {
                         </option>
                       ))}
                     </select>
+                    <>
+                      <label className="generator-label" htmlFor="faceswap-lora-library">
+                        LoRA library
+                      </label>
+                      <select
+                        id="faceswap-lora-library"
+                        className="generator-select"
+                        defaultValue=""
+                        disabled={!availableLoras.length}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (!value) return;
+                          addLoraByName(value);
+                          e.currentTarget.value = "";
+                        }}
+                      >
+                        <option value="">
+                          {availableLoras.length ? "Add LoRA from library…" : "No LoRAs available"}
+                        </option>
+                        {availableLoras.map((name) => (
+                          <option key={`faceswap-lora-${name}`} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                    {loraLoadError && (
+                      <p className="generator-help">LoRA library unavailable: {loraLoadError}</p>
+                    )}
                     <span className="generator-label">Optional LoRAs</span>
-                    {loras.map((entry, index) => (
-                      <div className="generator-lora-row" key={`faceswap-lora-${index}`}>
-                        <input
-                          type="text"
-                          className="generator-input"
-                          placeholder="LoRA name"
-                          value={entry.name}
-                          onChange={(e) => updateLora(index, "name", e.target.value)}
-                        />
-                        <input
-                          type="number"
-                          min={0}
-                          max={2}
-                          step={0.05}
-                          className="generator-input"
-                          placeholder="Weight"
-                          value={entry.weight}
-                          onChange={(e) => updateLora(index, "weight", e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          className="generator-mini-button"
-                          onClick={() => removeLora(index)}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                    <button type="button" className="generator-mini-button" onClick={addLora}>
+                    {loras.map((entry, index) => {
+                      const options = entry.name && !availableLoras.includes(entry.name)
+                        ? [entry.name, ...availableLoras]
+                        : availableLoras;
+                      return (
+                        <div className="generator-lora-row" key={`faceswap-lora-${index}`}>
+                          <select
+                            className="generator-select"
+                            value={entry.name}
+                            disabled={!availableLoras.length && !entry.name}
+                            onChange={(e) => updateLora(index, "name", e.target.value)}
+                          >
+                            <option value="">Select LoRA…</option>
+                            {options.map((name) => (
+                              <option key={`faceswap-lora-option-${index}-${name}`} value={name}>
+                                {name}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            min={0}
+                            max={2}
+                            step={0.05}
+                            className="generator-input"
+                            placeholder="Weight"
+                            value={entry.weight}
+                            onChange={(e) => updateLora(index, "weight", e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="generator-mini-button"
+                            onClick={() => removeLora(index)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      className="generator-mini-button"
+                      onClick={addLora}
+                      disabled={!availableLoras.length}
+                    >
                       Add LoRA
                     </button>
                   </div>
@@ -998,35 +1096,80 @@ const TestPage: React.FC = () => {
                     <p className="generator-help">
                       Leave blank to use server defaults. Weights are optional.
                     </p>
-                    {loras.map((entry, index) => (
-                      <div className="generator-lora-row" key={`lora-${index}`}>
-                        <input
-                          type="text"
-                          className="generator-input"
-                          placeholder="LoRA name (e.g. Handv2)"
-                          value={entry.name}
-                          onChange={(e) => updateLora(index, "name", e.target.value)}
-                        />
-                        <input
-                          type="number"
-                          min={0}
-                          max={2}
-                          step={0.05}
-                          className="generator-input"
-                          placeholder="Weight"
-                          value={entry.weight}
-                          onChange={(e) => updateLora(index, "weight", e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          className="generator-mini-button"
-                          onClick={() => removeLora(index)}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                    <button type="button" className="generator-mini-button" onClick={addLora}>
+                    <>
+                      <label className="generator-label" htmlFor="lora-library">
+                        LoRA library
+                      </label>
+                      <select
+                        id="lora-library"
+                        className="generator-select"
+                        defaultValue=""
+                        disabled={!availableLoras.length}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (!value) return;
+                          addLoraByName(value);
+                          e.currentTarget.value = "";
+                        }}
+                      >
+                        <option value="">
+                          {availableLoras.length ? "Add LoRA from library…" : "No LoRAs available"}
+                        </option>
+                        {availableLoras.map((name) => (
+                          <option key={`lora-${name}`} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                    {loraLoadError && (
+                      <p className="generator-help">LoRA library unavailable: {loraLoadError}</p>
+                    )}
+                    {loras.map((entry, index) => {
+                      const options = entry.name && !availableLoras.includes(entry.name)
+                        ? [entry.name, ...availableLoras]
+                        : availableLoras;
+                      return (
+                        <div className="generator-lora-row" key={`lora-${index}`}>
+                          <select
+                            className="generator-select"
+                            value={entry.name}
+                            disabled={!availableLoras.length && !entry.name}
+                            onChange={(e) => updateLora(index, "name", e.target.value)}
+                          >
+                            <option value="">Select LoRA…</option>
+                            {options.map((name) => (
+                              <option key={`lora-option-${index}-${name}`} value={name}>
+                                {name}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            min={0}
+                            max={2}
+                            step={0.05}
+                            className="generator-input"
+                            placeholder="Weight"
+                            value={entry.weight}
+                            onChange={(e) => updateLora(index, "weight", e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="generator-mini-button"
+                            onClick={() => removeLora(index)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      className="generator-mini-button"
+                      onClick={addLora}
+                      disabled={!availableLoras.length}
+                    >
                       Add LoRA
                     </button>
                   </div>
