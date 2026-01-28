@@ -26,7 +26,6 @@ const HISTORY_KEY = "havnai_test_history_v1";
 
 const MODEL_OPTIONS: { id: string; label: string }[] = [
   { id: "auto", label: "Auto (let grid choose best)" },
-  { id: "zimage", label: "Z-Image · diffusers transformer" },
   { id: "juggernautXL_ragnarokBy", label: "juggernautXL_ragnarokBy · SDXL studio" },
   { id: "epicrealismXL_vxviiCrystalclear", label: "epicrealismXL_vxviiCrystalclear · SDXL daylight" },
   { id: "epicrealismXL_purefix", label: "epicrealismXL_purefix · SDXL realism" },
