@@ -33,6 +33,7 @@ const MODEL_OPTIONS: { id: string; label: string }[] = [
   { id: "zavychromaxl_v100", label: "zavychromaxl_v100 · SDXL realism" },
   { id: "babesByStableYogiPony_xlV4", label: "babesByStableYogiPony_xlV4 · SDXL stylized" },
   { id: "perfectdeliberate_v5SD15", label: "perfectdeliberate_v5SD15 · portraits" },
+  { id: "beastGirlSD15", label: "beastGirlSD15 · SD1.5 custom" },
   { id: "divineelegancemix_V10", label: "divineelegancemix_V10 · SD1.5 realism" },
   { id: "uberRealisticPornMerge_v23Final", label: "uberRealisticPornMerge_v23Final · glossy studio" },
   { id: "triomerge_v10", label: "triomerge_v10 · fantasy stylized" },
