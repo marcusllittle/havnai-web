@@ -59,6 +59,8 @@ const TestPage: React.FC = () => {
   const [negativePrompt, setNegativePrompt] = useState("");
   const [jobId, setJobId] = useState<string | undefined>();
   const [statusMessage, setStatusMessage] = useState<string | undefined>();
+  const [pollTimedOut, setPollTimedOut] = useState(false);
+  const [lastUsedPrompt, setLastUsedPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | undefined>();
   const [videoUrl, setVideoUrl] = useState<string | undefined>();
@@ -379,6 +381,8 @@ const TestPage: React.FC = () => {
     setRuntimeSeconds(null);
     setModel(undefined);
     setJobId(undefined);
+    setPollTimedOut(false);
+    setLastUsedPrompt(trimmed || "Face swap");
 
     try {
       if (mode === "image") {
@@ -392,7 +396,7 @@ const TestPage: React.FC = () => {
         );
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
-        await pollJob(id, trimmed, 360);
+        await pollJob(id, trimmed, 1800);
       } else if (mode === "face_swap") {
         const baseUrl = baseImageData || baseImageUrl.trim();
         const faceUrl = faceSourceData || faceSourceUrl.trim();
@@ -416,13 +420,13 @@ const TestPage: React.FC = () => {
         });
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
-        await pollJob(id, trimmed || "Face swap", 900);
+        await pollJob(id, trimmed || "Face swap", 1800);
       } else if (mode === "video") {
         const request = buildVideoRequest(trimmed);
         const id = await submitVideoJob(request);
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
-        await pollJob(id, trimmed, 900);
+        await pollJob(id, trimmed, 2400);
       }
     } catch (err: any) {
       if (err instanceof HavnaiApiError || err?.code) {
@@ -450,6 +454,7 @@ const TestPage: React.FC = () => {
 
   const pollJob = async (id: string, usedPrompt: string, maxWaitSeconds = 600) => {
     const start = Date.now();
+    setPollTimedOut(false);
 
     while ((Date.now() - start) / 1000 < maxWaitSeconds) {
       try {
@@ -499,6 +504,7 @@ const TestPage: React.FC = () => {
           setRuntimeSeconds(runtime);
           setModel(job.model);
           setStatusMessage("Done.");
+          setPollTimedOut(false);
 
           if (resolvedImage || resolvedVideo) {
             const item: HistoryItem = {
@@ -515,6 +521,7 @@ const TestPage: React.FC = () => {
           return;
         } else if (status === "FAILED") {
           setStatusMessage("Job failed on the grid.");
+          setPollTimedOut(false);
           return;
         } else {
           setStatusMessage(`Status: ${status || "Unknown"}`);
@@ -527,7 +534,69 @@ const TestPage: React.FC = () => {
     }
 
     const elapsed = (Date.now() - start) / 1000;
-    setStatusMessage(`Gave up after ${elapsed.toFixed(1)} seconds without completion.`);
+    try {
+      const job = await fetchJob(id).catch(() => null);
+      const result = await fetchResult(id).catch(() => null);
+      const resolvedImage = result?.image_url;
+      const resolvedVideo = result?.video_url;
+      if (resolvedImage || resolvedVideo) {
+        if (resolvedVideo) {
+          setVideoUrl(resolvedVideo);
+          setImageUrl(undefined);
+        } else {
+          setImageUrl(resolvedImage);
+          setVideoUrl(undefined);
+        }
+        if (
+          job &&
+          typeof job.timestamp === "number" &&
+          typeof job.completed_at === "number"
+        ) {
+          setRuntimeSeconds(Math.max(0, job.completed_at - job.timestamp));
+        }
+        if (job?.model) setModel(job.model);
+        const createdAt =
+          job && typeof job.timestamp === "number"
+            ? new Date(job.timestamp * 1000).toISOString()
+            : new Date().toISOString();
+        let type: LibraryItemType = "unknown";
+        if (resolvedVideo) type = "video";
+        else if (resolvedImage) type = "image";
+        addToLibrary({ job_id: id, created_at: createdAt, type });
+        const item: HistoryItem = {
+          jobId: id,
+          prompt: usedPrompt,
+          imageUrl: resolvedImage,
+          videoUrl: resolvedVideo,
+          model: job?.model,
+          timestamp: Date.now(),
+        };
+        const next = [item, ...history].slice(0, 5);
+        saveHistory(next);
+        setStatusMessage("Done.");
+        setPollTimedOut(false);
+        return;
+      }
+    } catch {
+      // Ignore result fetch errors on timeout.
+    }
+
+    setPollTimedOut(true);
+    setStatusMessage(
+      `Still running after ${elapsed.toFixed(
+        1
+      )} seconds. Click “Check status” to keep waiting.`
+    );
+  };
+
+  const handleCheckStatus = async () => {
+    if (!jobId) return;
+    setLoading(true);
+    try {
+      await pollJob(jobId, lastUsedPrompt || prompt || "Job", mode === "video" ? 2400 : 1800);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleHistorySelect = (item: HistoryItem) => {
@@ -1316,6 +1385,16 @@ const TestPage: React.FC = () => {
                 )}
 
                 <StatusBox message={statusMessage} />
+                {pollTimedOut && jobId ? (
+                  <button
+                    type="button"
+                    className="generator-mini-button"
+                    onClick={handleCheckStatus}
+                    disabled={loading}
+                  >
+                    Check status
+                  </button>
+                ) : null}
               </div>
 
               <div className="generator-right">
