@@ -1305,7 +1305,7 @@ const TestPage: React.FC = () => {
                           id="width"
                           type="number"
                           min={256}
-                          max={512}
+                          max={768}
                           step={64}
                           className="generator-input"
                           placeholder="Default 512"
@@ -1321,7 +1321,7 @@ const TestPage: React.FC = () => {
                           id="height"
                           type="number"
                           min={256}
-                          max={512}
+                          max={768}
                           step={64}
                           className="generator-input"
                           placeholder="Default 512"
@@ -1339,10 +1339,10 @@ const TestPage: React.FC = () => {
                           id="frames"
                           type="number"
                           min={1}
-                          max={48}
+                          max={16}
                           step={1}
                           className="generator-input"
-                          placeholder="Default 48"
+                          placeholder="Default 16"
                           value={frames}
                           onChange={(e) => setFrames(e.target.value)}
                         />
