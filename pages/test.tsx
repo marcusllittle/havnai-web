@@ -85,6 +85,9 @@ const TestPage: React.FC = () => {
   const [baseImageUrl, setBaseImageUrl] = useState("");
   const [baseImageData, setBaseImageData] = useState<string | undefined>();
   const [baseImageName, setBaseImageName] = useState<string | undefined>();
+  const [videoInitUrl, setVideoInitUrl] = useState("");
+  const [videoInitData, setVideoInitData] = useState<string | undefined>();
+  const [videoInitName, setVideoInitName] = useState<string | undefined>();
   const [faceSourceUrl, setFaceSourceUrl] = useState("");
   const [faceSourceData, setFaceSourceData] = useState<string | undefined>();
   const [faceSourceName, setFaceSourceName] = useState<string | undefined>();
@@ -320,6 +323,8 @@ const TestPage: React.FC = () => {
     if (heightValue !== undefined) request.height = heightValue;
     if (framesValue !== undefined) request.frames = framesValue;
     if (fpsValue !== undefined) request.fps = fpsValue;
+    const initImageValue = (videoInitData || videoInitUrl).trim();
+    if (initImageValue) request.initImage = initImageValue;
     return request;
   };
 
@@ -365,6 +370,19 @@ const TestPage: React.FC = () => {
       setFaceSourceUrl("");
     } catch (err: any) {
       setStatusMessage(err?.message || "Failed to read face source image.");
+    }
+  };
+
+  const handleVideoInitUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await readFileAsDataUrl(file);
+      setVideoInitData(data);
+      setVideoInitName(file.name);
+      setVideoInitUrl("");
+    } catch (err: any) {
+      setStatusMessage(err?.message || "Failed to read init image file.");
     }
   };
 
@@ -1248,7 +1266,7 @@ const TestPage: React.FC = () => {
                   <div className="generator-advanced">
                     <span className="generator-label">Video settings</span>
                     <p className="generator-help">
-                      LTX2 videos default to 48 frames at 8fps (about 6 seconds) if left blank.
+                      LTX2 videos default to 16 frames at 8fps (about 2 seconds) if left blank.
                     </p>
                     <label className="generator-label" htmlFor="negative-prompt-video">
                       Negative prompt (optional)
@@ -1261,6 +1279,37 @@ const TestPage: React.FC = () => {
                       onChange={(e) => setNegativePrompt(e.target.value)}
                       rows={2}
                     />
+                    <span className="generator-label">Init image (optional)</span>
+                    <label className="generator-label" htmlFor="video-init-url">
+                      Init image URL
+                    </label>
+                    <input
+                      id="video-init-url"
+                      type="text"
+                      className="generator-input"
+                      placeholder="https://... or data:image/..."
+                      value={videoInitUrl}
+                      onChange={(e) => {
+                        setVideoInitUrl(e.target.value);
+                        if (e.target.value.trim()) {
+                          setVideoInitData(undefined);
+                          setVideoInitName(undefined);
+                        }
+                      }}
+                    />
+                    <label className="generator-label" htmlFor="video-init-upload">
+                      Upload init image
+                    </label>
+                    <input
+                      id="video-init-upload"
+                      type="file"
+                      accept="image/*"
+                      className="generator-input"
+                      onChange={handleVideoInitUpload}
+                    />
+                    {videoInitName && (
+                      <p className="generator-help">Using uploaded file: {videoInitName}</p>
+                    )}
                     <span className="generator-label">Generation settings</span>
                     <div className="generator-row">
                       <div>
