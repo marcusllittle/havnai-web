@@ -324,7 +324,10 @@ const TestPage: React.FC = () => {
     if (framesValue !== undefined) request.frames = framesValue;
     if (fpsValue !== undefined) request.fps = fpsValue;
     const initImageValue = (videoInitData || videoInitUrl).trim();
-    if (initImageValue) request.initImage = initImageValue;
+    if (initImageValue) {
+      request.initImage = initImageValue;
+      request.model = "animatediff";
+    }
     return request;
   };
 
@@ -647,6 +650,15 @@ const TestPage: React.FC = () => {
     setRuntimeSeconds(null);
     setJobId(undefined);
     setStatusMessage(undefined);
+  };
+
+  const handleUseLastFrame = (dataUrl: string) => {
+    setMode("video");
+    setAdvancedOpen(true);
+    setVideoInitData(dataUrl);
+    setVideoInitName("last-frame.png");
+    setVideoInitUrl("");
+    setStatusMessage("Loaded last frame as init image.");
   };
 
   const openJobDetails = async (id: string, summary?: JobSummary) => {
@@ -1266,7 +1278,7 @@ const TestPage: React.FC = () => {
                   <div className="generator-advanced">
                     <span className="generator-label">Video settings</span>
                     <p className="generator-help">
-                      LTX2 videos default to 16 frames at 8fps (about 2 seconds) if left blank.
+                      LTX2 defaults to 16 frames at 8fps (~2s). AnimateDiff can go longer but is heavier.
                     </p>
                     <label className="generator-label" htmlFor="negative-prompt-video">
                       Negative prompt (optional)
@@ -1388,7 +1400,7 @@ const TestPage: React.FC = () => {
                           id="frames"
                           type="number"
                           min={1}
-                          max={16}
+                          max={64}
                           step={1}
                           className="generator-input"
                           placeholder="Default 16"
@@ -1404,7 +1416,7 @@ const TestPage: React.FC = () => {
                           id="fps"
                           type="number"
                           min={1}
-                          max={12}
+                          max={24}
                           step={1}
                           className="generator-input"
                           placeholder="Default 8"
@@ -1454,6 +1466,7 @@ const TestPage: React.FC = () => {
                   model={model}
                   runtimeSeconds={runtimeSeconds || null}
                   jobId={jobId}
+                  onUseLastFrame={handleUseLastFrame}
                 />
               </div>
             </div>

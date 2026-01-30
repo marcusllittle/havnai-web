@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 interface OutputCardProps {
   imageUrl?: string;
@@ -6,6 +6,7 @@ interface OutputCardProps {
   model?: string;
   runtimeSeconds?: number | null;
   jobId?: string;
+  onUseLastFrame?: (dataUrl: string) => void;
 }
 
 export const OutputCard: React.FC<OutputCardProps> = ({
@@ -14,7 +15,9 @@ export const OutputCard: React.FC<OutputCardProps> = ({
   model,
   runtimeSeconds,
   jobId,
+  onUseLastFrame,
 }) => {
+  const [frameBusy, setFrameBusy] = useState(false);
   if (!imageUrl && !videoUrl) return null;
   const runtimeDisplay =
     typeof runtimeSeconds === "number"
@@ -41,6 +44,50 @@ export const OutputCard: React.FC<OutputCardProps> = ({
     } catch {
       // Fallback: open in a new tab if direct download is blocked by CORS.
       window.open(url, "_blank", "noopener");
+    }
+  };
+
+  const handleUseLastFrame = async () => {
+    if (!videoUrl || !onUseLastFrame || frameBusy) return;
+    setFrameBusy(true);
+    let objectUrl: string | null = null;
+    try {
+      const res = await fetch(videoUrl);
+      if (!res.ok) throw new Error(`download failed: ${res.status}`);
+      const blob = await res.blob();
+      objectUrl = URL.createObjectURL(blob);
+      const video = document.createElement("video");
+      video.src = objectUrl;
+      video.muted = true;
+      video.playsInline = true;
+      await new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = () => resolve();
+        video.onerror = () => reject(new Error("Failed to load video metadata"));
+      });
+      const targetTime = Math.max(0, (video.duration || 0) - 0.1);
+      video.currentTime = targetTime;
+      await new Promise<void>((resolve, reject) => {
+        const onSeeked = () => {
+          video.onseeked = null;
+          resolve();
+        };
+        video.onseeked = onSeeked;
+        video.onerror = () => reject(new Error("Failed to seek video"));
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 1;
+      canvas.height = video.videoHeight || 1;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas unavailable");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/png");
+      onUseLastFrame(dataUrl);
+    } catch (err) {
+      // Best-effort only; keep the UI usable even if capture fails.
+      console.error("Failed to capture last frame", err);
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setFrameBusy(false);
     }
   };
 
@@ -79,6 +126,16 @@ export const OutputCard: React.FC<OutputCardProps> = ({
           >
             {videoUrl ? "Download video" : "Download image"}
           </button>
+          {videoUrl && onUseLastFrame ? (
+            <button
+              type="button"
+              onClick={handleUseLastFrame}
+              className="generator-download"
+              disabled={frameBusy}
+            >
+              {frameBusy ? "Capturing frame…" : "Use last frame"}
+            </button>
+          ) : null}
         </div>
       )}
     </div>
