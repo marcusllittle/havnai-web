@@ -1355,7 +1355,7 @@ const TestPage: React.FC = () => {
                           id="fps"
                           type="number"
                           min={1}
-                          max={8}
+                          max={12}
                           step={1}
                           className="generator-input"
                           placeholder="Default 8"

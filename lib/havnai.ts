@@ -328,20 +328,17 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
 
   const res = await fetch(apiUrl("/submit-job"), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: buildHeaders(true),
     body: JSON.stringify(body),
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`submit-job failed: ${res.status} ${text}`);
+    throw await parseErrorResponse(res);
   }
 
   const json = (await res.json()) as SubmitJobResponse;
   if (!json.job_id) {
-    throw new Error(json.error || "No job_id returned from submit-job");
+    throw new HavnaiApiError(json.message || json.error || "No job_id returned from submit-job");
   }
   return json.job_id;
 }
