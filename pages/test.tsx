@@ -94,6 +94,7 @@ const TestPage: React.FC = () => {
   const [videoInitUrl, setVideoInitUrl] = useState("");
   const [videoInitData, setVideoInitData] = useState<string | undefined>();
   const [videoInitName, setVideoInitName] = useState<string | undefined>();
+  const [videoInitStrength, setVideoInitStrength] = useState("0.55");
   const [faceSourceUrl, setFaceSourceUrl] = useState("");
   const [faceSourceData, setFaceSourceData] = useState<string | undefined>();
   const [faceSourceName, setFaceSourceName] = useState<string | undefined>();
@@ -338,6 +339,10 @@ const TestPage: React.FC = () => {
     if (initImageValue) {
       request.initImage = initImageValue;
       request.model = "animatediff";
+    }
+    const strengthValue = parseOptionalFloat(videoInitStrength);
+    if (strengthValue !== undefined) {
+      request.strength = strengthValue;
     }
     return request;
   };
@@ -1333,6 +1338,23 @@ const TestPage: React.FC = () => {
                     {videoInitName && (
                       <p className="generator-help">Using uploaded file: {videoInitName}</p>
                     )}
+                    <label className="generator-label" htmlFor="video-init-strength">
+                      Init image strength
+                    </label>
+                    <input
+                      id="video-init-strength"
+                      type="number"
+                      min={0.1}
+                      max={0.95}
+                      step={0.05}
+                      className="generator-input"
+                      placeholder="0.55"
+                      value={videoInitStrength}
+                      onChange={(e) => setVideoInitStrength(e.target.value)}
+                    />
+                    <p className="generator-help">
+                      Lower values preserve the photo more (0.35–0.6 recommended).
+                    </p>
                     <span className="generator-label">Generation settings</span>
                     <div className="generator-row">
                       <div>

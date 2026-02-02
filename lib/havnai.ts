@@ -75,6 +75,7 @@ export interface VideoJobRequest {
   fps?: number;
   initImage?: string;
   extendChunks?: number;
+  strength?: number;
 }
 
 export interface WanVideoStatus {
@@ -329,6 +330,7 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   if (request.fps != null) body.fps = request.fps;
   if (request.initImage) body.init_image = request.initImage;
   if (request.extendChunks != null) body.extend_chunks = request.extendChunks;
+  if (request.strength != null) body.strength = request.strength;
 
   const res = await fetch(apiUrl("/submit-job"), {
     method: "POST",
