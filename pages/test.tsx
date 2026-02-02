@@ -37,6 +37,7 @@ const MODEL_OPTIONS: { id: string; label: string }[] = [
   { id: "cyberrealisticPony_v160", label: "cyberrealisticPony_v160 · SDXL realism" },
   { id: "ponyDiffusionV6XL_v615", label: "ponyDiffusionV6XL_v615 · SD1.5 stylized" },
   { id: "realisticVisionV60B1_v51HyperVAE", label: "realisticVisionV60B1_v51HyperVAE · SD1.5 realism" },
+  { id: "lyriel_v16", label: "lyriel_v16 · SD1.5 anime" },
   { id: "divineelegancemix_V10", label: "divineelegancemix_V10 · SD1.5 realism" },
   { id: "uberRealisticPornMerge_v23Final", label: "uberRealisticPornMerge_v23Final · glossy studio" },
   { id: "triomerge_v10", label: "triomerge_v10 · fantasy stylized" },
@@ -80,6 +81,7 @@ const TestPage: React.FC = () => {
   const [height, setHeight] = useState("");
   const [frames, setFrames] = useState("");
   const [fps, setFps] = useState("");
+  const [extendChunks, setExtendChunks] = useState("0");
   const [sampler, setSampler] = useState("");
   const [seed, setSeed] = useState("");
   const [loras, setLoras] = useState<LoraDraft[]>([]);
@@ -321,12 +323,17 @@ const TestPage: React.FC = () => {
     const heightValue = parseOptionalInt(height);
     const framesValue = parseOptionalInt(frames);
     const fpsValue = parseOptionalInt(fps);
+    const extendValue = parseOptionalInt(extendChunks);
     if (stepsValue !== undefined) request.steps = stepsValue;
     if (guidanceValue !== undefined) request.guidance = guidanceValue;
     if (widthValue !== undefined) request.width = widthValue;
     if (heightValue !== undefined) request.height = heightValue;
     if (framesValue !== undefined) request.frames = framesValue;
     if (fpsValue !== undefined) request.fps = fpsValue;
+    if (extendValue !== undefined && extendValue > 0) {
+      request.extendChunks = extendValue;
+      request.model = "animatediff";
+    }
     const initImageValue = (videoInitData || videoInitUrl).trim();
     if (initImageValue) {
       request.initImage = initImageValue;
@@ -1427,6 +1434,27 @@ const TestPage: React.FC = () => {
                           value={fps}
                           onChange={(e) => setFps(e.target.value)}
                         />
+                      </div>
+                    </div>
+                    <div className="generator-row">
+                      <div>
+                        <label className="generator-label" htmlFor="extend-chunks">
+                          Auto-extend chunks
+                        </label>
+                        <input
+                          id="extend-chunks"
+                          type="number"
+                          min={0}
+                          max={6}
+                          step={1}
+                          className="generator-input"
+                          placeholder="0"
+                          value={extendChunks}
+                          onChange={(e) => setExtendChunks(e.target.value)}
+                        />
+                        <p className="generator-help">
+                          Generates additional back-to-back clips (uses last frame as the next init image).
+                        </p>
                       </div>
                     </div>
                     <div className="generator-row">
