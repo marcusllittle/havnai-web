@@ -13,6 +13,7 @@ import {
   fetchResult,
   fetchJobWithResult,
   fetchQuota,
+  stitchVideos,
   HavnaiApiError,
   JobDetailResponse,
   ResultResponse,
@@ -85,6 +86,7 @@ const TestPage: React.FC = () => {
   const [sampler, setSampler] = useState("");
   const [seed, setSeed] = useState("");
   const [loras, setLoras] = useState<LoraDraft[]>([]);
+  const [autoStitch, setAutoStitch] = useState(false);
   const [availableLoras, setAvailableLoras] = useState<string[]>([]);
   const [loraLoadError, setLoraLoadError] = useState<string | undefined>();
   const [faceswapModel, setFaceswapModel] = useState(FACE_SWAP_MODELS[0].id);
@@ -263,6 +265,38 @@ const TestPage: React.FC = () => {
     });
   };
 
+  const captureLastFrameFromVideoUrl = async (url: string): Promise<string> => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`download failed: ${res.status}`);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      const video = document.createElement("video");
+      video.src = objectUrl;
+      video.muted = true;
+      video.playsInline = true;
+      await new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = () => resolve();
+        video.onerror = () => reject(new Error("Failed to load video metadata"));
+      });
+      const targetTime = Math.max(0, (video.duration || 0) - 0.1);
+      video.currentTime = targetTime;
+      await new Promise<void>((resolve, reject) => {
+        video.onseeked = () => resolve();
+        video.onerror = () => reject(new Error("Failed to seek video"));
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 1;
+      canvas.height = video.videoHeight || 1;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas unavailable");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/png");
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
+
   const buildLoraPayload = (): { name: string; weight?: number }[] => {
     return loras
       .map((entry) => {
@@ -311,7 +345,11 @@ const TestPage: React.FC = () => {
     });
   };
 
-  const buildVideoRequest = (promptText: string) => {
+  const buildVideoRequest = (
+    promptText: string,
+    initOverride?: string | null,
+    forceAnimatediff = false
+  ) => {
     const request: Record<string, any> = { prompt: promptText };
     const trimmedNegative = negativePrompt.trim();
     if (trimmedNegative) request.negativePrompt = trimmedNegative;
@@ -324,18 +362,13 @@ const TestPage: React.FC = () => {
     const heightValue = parseOptionalInt(height);
     const framesValue = parseOptionalInt(frames);
     const fpsValue = parseOptionalInt(fps);
-    const extendValue = parseOptionalInt(extendChunks);
     if (stepsValue !== undefined) request.steps = stepsValue;
     if (guidanceValue !== undefined) request.guidance = guidanceValue;
     if (widthValue !== undefined) request.width = widthValue;
     if (heightValue !== undefined) request.height = heightValue;
     if (framesValue !== undefined) request.frames = framesValue;
     if (fpsValue !== undefined) request.fps = fpsValue;
-    if (extendValue !== undefined && extendValue > 0) {
-      request.extendChunks = extendValue;
-      request.model = "animatediff";
-    }
-    const initImageValue = (videoInitData || videoInitUrl).trim();
+    const initImageValue = (initOverride ?? (videoInitData || videoInitUrl).trim()).trim();
     if (initImageValue) {
       request.initImage = initImageValue;
       request.model = "animatediff";
@@ -344,7 +377,49 @@ const TestPage: React.FC = () => {
     if (strengthValue !== undefined) {
       request.strength = strengthValue;
     }
+    if (forceAnimatediff) {
+      request.model = "animatediff";
+    }
     return request;
+  };
+
+  const runVideoChain = async (promptText: string, extraChunks: number) => {
+    const total = Math.max(1, 1 + extraChunks);
+    const jobIds: string[] = [];
+    let initImage = (videoInitData || videoInitUrl).trim();
+    for (let index = 0; index < total; index += 1) {
+      const request = buildVideoRequest(promptText, initImage || undefined, true);
+      const id = await submitVideoJob(request);
+      setJobId(id);
+      setStatusMessage(`Waiting for GPU node… (${index + 1}/${total})`);
+      const result = await pollJob(id, promptText, 2400);
+      if (!result || !result.videoUrl) {
+        setStatusMessage("Chain stopped (no video output).");
+        return;
+      }
+      jobIds.push(id);
+      try {
+        initImage = await captureLastFrameFromVideoUrl(result.videoUrl);
+        setVideoInitData(initImage);
+        setVideoInitName(`clip-${index + 1}-lastframe.png`);
+        setVideoInitUrl("");
+      } catch (err: any) {
+        setStatusMessage(err?.message || "Failed to capture last frame.");
+        return;
+      }
+    }
+
+    if (autoStitch && jobIds.length > 1) {
+      setStatusMessage("Stitching clips…");
+      try {
+        const stitched = await stitchVideos(jobIds);
+        setVideoUrl(stitched.video_url);
+        setImageUrl(undefined);
+        setStatusMessage("Stitched video ready.");
+      } catch (err: any) {
+        setStatusMessage(err?.message || "Auto-stitch failed.");
+      }
+    }
   };
 
   const handleInviteSave = () => {
@@ -421,6 +496,8 @@ const TestPage: React.FC = () => {
     setPollTimedOut(false);
     setLastUsedPrompt(trimmed || "Face swap");
 
+    const extendValue = parseOptionalInt(extendChunks) ?? 0;
+
     try {
       if (mode === "image") {
         const options = buildOptions();
@@ -459,11 +536,15 @@ const TestPage: React.FC = () => {
         setStatusMessage("Waiting for GPU node…");
         await pollJob(id, trimmed || "Face swap", 1800);
       } else if (mode === "video") {
-        const request = buildVideoRequest(trimmed);
-        const id = await submitVideoJob(request);
-        setJobId(id);
-        setStatusMessage("Waiting for GPU node…");
-        await pollJob(id, trimmed, 2400);
+        if (extendValue > 0) {
+          await runVideoChain(trimmed, extendValue);
+        } else {
+          const request = buildVideoRequest(trimmed);
+          const id = await submitVideoJob(request);
+          setJobId(id);
+          setStatusMessage("Waiting for GPU node…");
+          await pollJob(id, trimmed, 2400);
+        }
       }
     } catch (err: any) {
       if (err instanceof HavnaiApiError || err?.code) {
@@ -519,7 +600,7 @@ const TestPage: React.FC = () => {
           const resolvedVideo = result.video_url;
           if (!resolvedImage && !resolvedVideo) {
             setStatusMessage("Job finished, but no output was found.");
-            return;
+            return null;
           }
 
           const createdAt =
@@ -555,11 +636,11 @@ const TestPage: React.FC = () => {
             const next = [item, ...history].slice(0, 5);
             saveHistory(next);
           }
-          return;
+          return { videoUrl: resolvedVideo, imageUrl: resolvedImage, job };
         } else if (status === "FAILED") {
           setStatusMessage("Job failed on the grid.");
           setPollTimedOut(false);
-          return;
+          return null;
         } else {
           setStatusMessage(`Status: ${status || "Unknown"}`);
         }
@@ -612,7 +693,7 @@ const TestPage: React.FC = () => {
         saveHistory(next);
         setStatusMessage("Done.");
         setPollTimedOut(false);
-        return;
+        return { videoUrl: resolvedVideo, imageUrl: resolvedImage, job: job || undefined };
       }
     } catch {
       // Ignore result fetch errors on timeout.
@@ -624,6 +705,7 @@ const TestPage: React.FC = () => {
         1
       )} seconds. Click “Check status” to keep waiting.`
     );
+    return null;
   };
 
   const handleCheckStatus = async () => {
@@ -1477,6 +1559,14 @@ const TestPage: React.FC = () => {
                         <p className="generator-help">
                           Generates additional back-to-back clips (uses last frame as the next init image).
                         </p>
+                        <label className="generator-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={autoStitch}
+                            onChange={(e) => setAutoStitch(e.target.checked)}
+                          />
+                          <span>Auto-stitch clips (requires ffmpeg on coordinator)</span>
+                        </label>
                       </div>
                     </div>
                     <div className="generator-row">

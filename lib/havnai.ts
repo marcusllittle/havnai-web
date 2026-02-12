@@ -97,6 +97,10 @@ export interface QuotaStatus {
   reset_at: string;
 }
 
+export interface StitchResponse {
+  video_url: string;
+}
+
 export class HavnaiApiError extends Error {
   code?: string;
   data?: Record<string, any>;
@@ -372,6 +376,24 @@ export async function fetchResult(jobId: string): Promise<ResultResponse> {
     ...json,
     image_url: resolveAssetUrl(json.image_url),
     video_url: resolveAssetUrl(json.video_url),
+  };
+}
+
+export async function stitchVideos(jobIds: string[], outputName?: string): Promise<StitchResponse> {
+  const body: Record<string, any> = { job_ids: jobIds };
+  if (outputName) body.output_name = outputName;
+  const res = await fetch(apiUrl("/videos/stitch"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  const json = (await res.json()) as StitchResponse;
+  return {
+    ...json,
+    video_url: resolveAssetUrl(json.video_url) || json.video_url,
   };
 }
 
