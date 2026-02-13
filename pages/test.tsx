@@ -13,12 +13,14 @@ import {
   fetchResult,
   fetchJobWithResult,
   fetchQuota,
+  fetchCredits,
   stitchVideos,
   HavnaiApiError,
   JobDetailResponse,
   ResultResponse,
   SubmitJobOptions,
   QuotaStatus,
+  CreditBalance,
 } from "../lib/havnai";
 import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
 import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
@@ -113,6 +115,7 @@ const TestPage: React.FC = () => {
   const [savedInviteCode, setSavedInviteCode] = useState<string | undefined>();
   const [quota, setQuota] = useState<QuotaStatus | null>(null);
   const [quotaError, setQuotaError] = useState<string | undefined>();
+  const [credits, setCredits] = useState<CreditBalance | null>(null);
   const inviteSaved = Boolean(savedInviteCode);
 
   const getApiBase = () => {
@@ -209,6 +212,20 @@ const TestPage: React.FC = () => {
       cancelled = true;
     };
   }, [savedInviteCode]);
+
+  // Fetch credit balance on mount and after each job completes
+  useEffect(() => {
+    let cancelled = false;
+    fetchCredits()
+      .then((data) => {
+        if (!cancelled) setCredits(data);
+      })
+      .catch(() => {
+        // credits not enabled or endpoint unavailable — that's fine
+        if (!cancelled) setCredits(null);
+      });
+    return () => { cancelled = true; };
+  }, [loading]); // re-fetch when loading toggles (i.e. after a job finishes)
 
   const saveHistory = (items: HistoryItem[]) => {
     setHistory(items);
@@ -549,7 +566,11 @@ const TestPage: React.FC = () => {
     } catch (err: any) {
       if (err instanceof HavnaiApiError || err?.code) {
         const code = err.code || err?.data?.error;
-        if (code === "invite_required") {
+        if (code === "insufficient_credits") {
+          const bal = err?.data?.balance ?? "?";
+          const cost = err?.data?.cost ?? "?";
+          setStatusMessage(`Not enough credits — need ${cost} but you have ${bal}.`);
+        } else if (code === "invite_required") {
           setStatusMessage("Invite code required. Add your code to submit jobs.");
           setInviteOpen(true);
         } else if (code === "rate_limited") {
@@ -853,6 +874,11 @@ const TestPage: React.FC = () => {
                   )}
                   {!quota && quotaError && (
                     <div className="invite-quota invite-error">{quotaError}</div>
+                  )}
+                  {credits && credits.credits_enabled && (
+                    <div className="invite-quota">
+                      Credits: {credits.balance.toFixed(1)}
+                    </div>
                   )}
                   <button
                     type="button"

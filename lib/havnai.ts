@@ -101,6 +101,21 @@ export interface StitchResponse {
   video_url: string;
 }
 
+export interface CreditBalance {
+  wallet: string;
+  balance: number;
+  total_deposited: number;
+  total_spent: number;
+  credits_enabled: boolean;
+  updated_at?: number;
+}
+
+export interface CreditCost {
+  model: string;
+  cost: number;
+  credits_enabled: boolean;
+}
+
 export class HavnaiApiError extends Error {
   code?: string;
   data?: Record<string, any>;
@@ -437,4 +452,26 @@ export async function fetchQuota(): Promise<QuotaStatus> {
     throw await parseErrorResponse(res);
   }
   return (await res.json()) as QuotaStatus;
+}
+
+export async function fetchCredits(): Promise<CreditBalance> {
+  const res = await fetch(apiUrl(`/credits/balance?wallet=${encodeURIComponent(WALLET)}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return (await res.json()) as CreditBalance;
+}
+
+export async function fetchCreditCost(model: string, taskType?: string): Promise<CreditCost> {
+  let url = `/credits/cost?model=${encodeURIComponent(model)}`;
+  if (taskType) url += `&task_type=${encodeURIComponent(taskType)}`;
+  const res = await fetch(apiUrl(url), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return (await res.json()) as CreditCost;
 }
