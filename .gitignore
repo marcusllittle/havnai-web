@@ -3,5 +3,5 @@
 InstantID/
 node_modules/
 
-InstantID/
-node_modules/
+# Build output
+tsconfig.tsbuildinfo
