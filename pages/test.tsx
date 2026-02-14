@@ -1943,7 +1943,7 @@ const TestPage: React.FC = () => {
                       onChange={(e) => setVideoInitStrength(e.target.value)}
                     />
                     <p className="generator-help">
-                      Lower values preserve the photo more (0.35–0.6 recommended).
+                      Lower = more preservation (0.35–0.5). Higher = more motion/change (0.6–0.75). Start with 0.55 and adjust.
                     </p>
                     <span className="generator-label">Generation settings</span>
                     <div className="generator-row">
@@ -2048,6 +2048,9 @@ const TestPage: React.FC = () => {
                         />
                       </div>
                     </div>
+                    <p className="generator-help">
+                      16 frames @ 8fps = 2 seconds. For image-to-video, use 48-64 frames @ 8fps (6-8s) or 32-48 frames @ 16fps (2-3s) for smooth motion. Short clips flicker.
+                    </p>
                     <div className="generator-row">
                       <div>
                         <label className="generator-label" htmlFor="extend-chunks">
