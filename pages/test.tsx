@@ -827,16 +827,14 @@ const TestPage: React.FC = () => {
           </button>
           <nav className="nav-links" id="primaryNav">
             <a href="/">Home</a>
-            <a href="https://joinhavn.io#how">How It Works</a>
-            <a href="https://joinhavn.io#smart-routing">Smart Routing</a>
-            <a href="https://joinhavn.io#rewards">Rewards</a>
-            <a href="https://joinhavn.io#models">Models</a>
+            <a href="/#how">How It Works</a>
+            <a href="/#models">Models</a>
+            <a href="/test" className="nav-active">Generator</a>
             <a href="/library">My Library</a>
             <a href="/pricing">Buy Credits</a>
             <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" rel="noreferrer">
               Dashboard
             </a>
-            <a href="https://joinhavn.io#join">Join Alpha</a>
           </nav>
         </div>
       </header>

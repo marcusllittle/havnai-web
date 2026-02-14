@@ -262,6 +262,7 @@ const LibraryPage: NextPage = () => {
             <a href="/library" className="nav-active">
               My Library
             </a>
+            <a href="/pricing">Buy Credits</a>
             <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" rel="noreferrer">
               Dashboard
             </a>

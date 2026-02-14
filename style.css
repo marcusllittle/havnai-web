@@ -1633,7 +1633,7 @@ main,
   top: 0;
   right: 0;
   height: 100%;
-  width: min(540px, 92vw);
+  width: min(540px, 95vw);
   background: #0f1826;
   color: #e4f1ff;
   box-shadow: -12px 0 32px rgba(0, 0, 0, 0.4);
@@ -2030,6 +2030,27 @@ img.jobs-preview-tile {
 @media (max-width: 900px) {
   .generator-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .generator-hero {
+    padding: 1.25rem 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .generator-output-card {
+    padding: 0.6rem 0.5rem 0.75rem;
+  }
+
+  .generator-output-card img,
+  .generator-output-card video {
+    max-height: 50vh;
+    border-radius: 10px;
+  }
+
+  .generator-input,
+  .generator-textarea {
+    font-size: 0.9rem;
   }
 }
 
