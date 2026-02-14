@@ -24,6 +24,7 @@ import {
 } from "../lib/havnai";
 import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
 import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
+import { getJobSSE, SSEEvent } from "../lib/sse";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
@@ -768,93 +769,165 @@ const TestPage: React.FC = () => {
     }
   };
 
+  // Helper to finalize a completed job
+  const finalizeJob = async (
+    id: string,
+    usedPrompt: string,
+    job: JobDetailResponse
+  ): Promise<{
+    videoUrl?: string;
+    imageUrl?: string;
+    job: JobDetailResponse;
+  } | null> => {
+    let runtime: number | null = null;
+    if (
+      typeof job.timestamp === "number" &&
+      typeof job.completed_at === "number"
+    ) {
+      runtime = Math.max(0, job.completed_at - job.timestamp);
+    }
+
+    const result = await fetchResult(id);
+    const resolvedImage = result.image_url;
+    const resolvedVideo = result.video_url;
+    if (!resolvedImage && !resolvedVideo) {
+      setStatusMessage("Job finished, but no output was found.");
+      return null;
+    }
+
+    const createdAt =
+      typeof job.timestamp === "number"
+        ? new Date(job.timestamp * 1000).toISOString()
+        : new Date().toISOString();
+    let type: LibraryItemType = "unknown";
+    if (resolvedVideo) type = "video";
+    else if (resolvedImage) type = "image";
+    addToLibrary({ job_id: id, created_at: createdAt, type });
+
+    if (resolvedVideo) {
+      setVideoUrl(resolvedVideo);
+      setImageUrl(undefined);
+    } else if (resolvedImage) {
+      setImageUrl(resolvedImage);
+      setVideoUrl(undefined);
+    }
+    setRuntimeSeconds(runtime);
+    setModel(job.model);
+    setStatusMessage("Done.");
+    setPollTimedOut(false);
+
+    if (resolvedImage || resolvedVideo) {
+      const item: HistoryItem = {
+        jobId: id,
+        prompt: usedPrompt,
+        imageUrl: resolvedImage,
+        videoUrl: resolvedVideo,
+        model: job.model,
+        timestamp: Date.now(),
+      };
+      const next = [item, ...history].slice(0, 5);
+      saveHistory(next);
+    }
+    return { videoUrl: resolvedVideo, imageUrl: resolvedImage, job };
+  };
+
   const pollJob = async (id: string, usedPrompt: string, maxWaitSeconds = 600) => {
     const start = Date.now();
     setPollTimedOut(false);
 
-    while ((Date.now() - start) / 1000 < maxWaitSeconds) {
+    // Try SSE-accelerated polling: listen for real-time updates via SSE and
+    // only fall back to HTTP polling every 5s (instead of 1.5s) as a safety net.
+    const sse = getJobSSE();
+    let sseResolved = false;
+
+    const ssePromise = new Promise<"completed" | "failed" | null>((resolve) => {
+      const timeout = setTimeout(() => resolve(null), maxWaitSeconds * 1000);
+      const unsub = sse.subscribe((event: SSEEvent) => {
+        if (event.event !== "job_update") return;
+        if (event.job_id !== id) return;
+        const status = (event.status || "").toUpperCase();
+        if (status === "QUEUED") {
+          setStatusMessage("Job queued...");
+        } else if (status === "RUNNING") {
+          setStatusMessage("Rendering on HavnAI node...");
+        } else if (status === "SUCCESS" || status === "COMPLETED") {
+          setStatusMessage("Finalizing output...");
+          sseResolved = true;
+          clearTimeout(timeout);
+          unsub();
+          resolve("completed");
+        } else if (status === "FAILED") {
+          sseResolved = true;
+          clearTimeout(timeout);
+          unsub();
+          resolve("failed");
+        }
+      });
+
+      // Also start SSE connection
+      sse.connect();
+    });
+
+    // Run SSE listener and fallback polling in parallel
+    const pollFallback = async (): Promise<"completed" | "failed" | "timeout"> => {
+      while ((Date.now() - start) / 1000 < maxWaitSeconds) {
+        if (sseResolved) return "completed"; // SSE already resolved it
+
+        try {
+          const job = await fetchJob(id);
+          const status = (job.status || "").toUpperCase();
+
+          if (status === "QUEUED") {
+            setStatusMessage("Job queued...");
+          } else if (status === "RUNNING") {
+            setStatusMessage("Rendering on HavnAI node...");
+          } else if (status === "SUCCESS" || status === "COMPLETED") {
+            setStatusMessage("Finalizing output...");
+            return "completed";
+          } else if (status === "FAILED") {
+            return "failed";
+          } else {
+            setStatusMessage(`Status: ${status || "Unknown"}`);
+          }
+        } catch (err: any) {
+          setStatusMessage(err?.message || "Error while polling job.");
+        }
+
+        // Poll every 5s (SSE handles fast updates)
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+      return "timeout";
+    };
+
+    const result = await Promise.race([
+      ssePromise,
+      pollFallback(),
+    ]);
+
+    // Finalize based on result
+    if (result === "completed") {
       try {
         const job = await fetchJob(id);
-        const status = (job.status || "").toUpperCase();
-
-        if (status === "QUEUED") {
-          setStatusMessage("Job queued…");
-        } else if (status === "RUNNING") {
-          setStatusMessage("Rendering on HavnAI node…");
-        } else if (status === "SUCCESS" || status === "COMPLETED") {
-          setStatusMessage("Finalizing output…");
-
-          // Compute runtime from timestamps if available
-          let runtime: number | null = null;
-          if (
-            typeof job.timestamp === "number" &&
-            typeof job.completed_at === "number"
-          ) {
-            runtime = Math.max(0, job.completed_at - job.timestamp);
-          }
-
-          const result = await fetchResult(id);
-          const resolvedImage = result.image_url;
-          const resolvedVideo = result.video_url;
-          if (!resolvedImage && !resolvedVideo) {
-            setStatusMessage("Job finished, but no output was found.");
-            return null;
-          }
-
-          const createdAt =
-            typeof job.timestamp === "number"
-              ? new Date(job.timestamp * 1000).toISOString()
-              : new Date().toISOString();
-          let type: LibraryItemType = "unknown";
-          if (resolvedVideo) type = "video";
-          else if (resolvedImage) type = "image";
-          addToLibrary({ job_id: id, created_at: createdAt, type });
-
-          if (resolvedVideo) {
-            setVideoUrl(resolvedVideo);
-            setImageUrl(undefined);
-          } else if (resolvedImage) {
-            setImageUrl(resolvedImage);
-            setVideoUrl(undefined);
-          }
-          setRuntimeSeconds(runtime);
-          setModel(job.model);
-          setStatusMessage("Done.");
-          setPollTimedOut(false);
-
-          if (resolvedImage || resolvedVideo) {
-            const item: HistoryItem = {
-              jobId: id,
-              prompt: usedPrompt,
-              imageUrl: resolvedImage,
-              videoUrl: resolvedVideo,
-              model: job.model,
-              timestamp: Date.now(),
-            };
-            const next = [item, ...history].slice(0, 5);
-            saveHistory(next);
-          }
-          return { videoUrl: resolvedVideo, imageUrl: resolvedImage, job };
-        } else if (status === "FAILED") {
-          setStatusMessage("Job failed on the grid.");
-          setPollTimedOut(false);
-          return null;
-        } else {
-          setStatusMessage(`Status: ${status || "Unknown"}`);
-        }
-      } catch (err: any) {
-        setStatusMessage(err?.message || "Error while polling job.");
+        return await finalizeJob(id, usedPrompt, job);
+      } catch {
+        setStatusMessage("Job completed but failed to fetch result.");
+        return null;
       }
-
-      await new Promise((resolve) => setTimeout(resolve, 1500));
     }
 
+    if (result === "failed") {
+      setStatusMessage("Job failed on the grid.");
+      setPollTimedOut(false);
+      return null;
+    }
+
+    // Timeout - try final check
     const elapsed = (Date.now() - start) / 1000;
     try {
       const job = await fetchJob(id).catch(() => null);
-      const result = await fetchResult(id).catch(() => null);
-      const resolvedImage = result?.image_url;
-      const resolvedVideo = result?.video_url;
+      const fetchedResult = await fetchResult(id).catch(() => null);
+      const resolvedImage = fetchedResult?.image_url;
+      const resolvedVideo = fetchedResult?.video_url;
       if (resolvedImage || resolvedVideo) {
         if (resolvedVideo) {
           setVideoUrl(resolvedVideo);
@@ -894,14 +967,14 @@ const TestPage: React.FC = () => {
         return { videoUrl: resolvedVideo, imageUrl: resolvedImage, job: job || undefined };
       }
     } catch {
-      // Ignore result fetch errors on timeout.
+      // Ignore
     }
 
     setPollTimedOut(true);
     setStatusMessage(
       `Still running after ${elapsed.toFixed(
         1
-      )} seconds. Click “Check status” to keep waiting.`
+      )} seconds. Click "Check status" to keep waiting.`
     );
     return null;
   };
