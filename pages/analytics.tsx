@@ -95,33 +95,33 @@ const AnalyticsPage: NextPage = () => {
             <div className="stats-grid">
               <div className="stat-card">
                 <div className="stat-label">Total Jobs</div>
-                <div className="stat-value">{overview.total_jobs.toLocaleString()}</div>
+                <div className="stat-value">{(overview.total_jobs ?? 0).toLocaleString()}</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Jobs Today</div>
-                <div className="stat-value">{overview.jobs_today.toLocaleString()}</div>
+                <div className="stat-value">{(overview.jobs_today ?? 0).toLocaleString()}</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Success Rate</div>
-                <div className="stat-value">{(overview.success_rate * 100).toFixed(1)}%</div>
+                <div className="stat-value">{((overview.success_rate ?? 0) * 100).toFixed(1)}%</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Active Nodes</div>
-                <div className="stat-value">{overview.active_nodes}</div>
+                <div className="stat-value">{overview.active_nodes ?? overview.online_nodes ?? 0}</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Total HAI Distributed</div>
-                <div className="stat-value">{overview.total_rewards.toFixed(2)}</div>
+                <div className="stat-value">{(overview.total_rewards ?? 0).toFixed(2)}</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Credits Spent</div>
-                <div className="stat-value">{overview.total_credits_spent.toFixed(1)}</div>
+                <div className="stat-value">{(overview.total_credits_spent ?? 0).toFixed(1)}</div>
               </div>
             </div>
           )}
 
           {/* Jobs over time */}
-          {!loading && jobs && (
+          {!loading && jobs && Array.isArray(jobs.days) && jobs.days.length > 0 && (
             <div className="chart-section">
               <div className="chart-header">
                 <h3 className="chart-title">Jobs Over Time</h3>
@@ -141,9 +141,9 @@ const AnalyticsPage: NextPage = () => {
                     <tr key={d.date}>
                       <td>{d.date}</td>
                       <td>{d.count}</td>
-                      <td style={{ color: "#8ff0b6" }}>{d.success}</td>
-                      <td style={{ color: "#ffb3b3" }}>{d.failed}</td>
-                      <td>{d.count ? ((d.success / d.count) * 100).toFixed(0) + "%" : "--"}</td>
+                      <td style={{ color: "#8ff0b6" }}>{d.success ?? 0}</td>
+                      <td style={{ color: "#ffb3b3" }}>{d.failed ?? 0}</td>
+                      <td>{d.count ? (((d.success ?? 0) / d.count) * 100).toFixed(0) + "%" : "--"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -171,11 +171,11 @@ const AnalyticsPage: NextPage = () => {
           )}
 
           {/* Cost breakdown */}
-          {!loading && costs && costs.by_model.length > 0 && (
+          {!loading && costs && Array.isArray(costs.by_model) && costs.by_model.length > 0 && (
             <div className="chart-section">
               <div className="chart-header">
                 <h3 className="chart-title">Cost Breakdown by Model</h3>
-                <span className="stat-sub">Total: {costs.total_spent.toFixed(1)} credits</span>
+                <span className="stat-sub">Total: {(costs.total_spent ?? 0).toFixed(1)} credits</span>
               </div>
               <table className="data-table">
                 <thead>
@@ -186,7 +186,7 @@ const AnalyticsPage: NextPage = () => {
                     <tr key={m.model}>
                       <td>{m.model}</td>
                       <td>{m.job_count}</td>
-                      <td>{m.total_cost.toFixed(1)}</td>
+                      <td>{(m.total_cost ?? 0).toFixed(1)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -195,11 +195,11 @@ const AnalyticsPage: NextPage = () => {
           )}
 
           {/* Rewards by node */}
-          {!loading && rewards && rewards.by_node.length > 0 && (
+          {!loading && rewards && Array.isArray(rewards.by_node) && rewards.by_node.length > 0 && (
             <div className="chart-section">
               <div className="chart-header">
                 <h3 className="chart-title">Rewards by Node</h3>
-                <span className="stat-sub">Total: {rewards.total.toFixed(4)} HAI</span>
+                <span className="stat-sub">Total: {(rewards.total ?? 0).toFixed(4)} HAI</span>
               </div>
               <table className="data-table">
                 <thead>
@@ -210,7 +210,7 @@ const AnalyticsPage: NextPage = () => {
                     <tr key={n.node_id}>
                       <td>{n.node_name || n.node_id}</td>
                       <td>{n.count}</td>
-                      <td>{n.total.toFixed(4)}</td>
+                      <td>{(n.total ?? 0).toFixed(4)}</td>
                     </tr>
                   ))}
                 </tbody>
