@@ -1030,16 +1030,51 @@ const TestPage: React.FC = () => {
                     {inviteSaved ? "Beta Access: OK" : "Invite required"}
                   </div>
                   {quota && (
-                    <div className="invite-quota">
-                      Today:{" "}
-                      {quota.max_daily > 0
-                        ? `${quota.used_today}/${quota.max_daily}`
-                        : `${quota.used_today}/unlimited`}
-                      {" • "}
-                      Concurrent:{" "}
-                      {quota.max_concurrent > 0
-                        ? `${quota.used_concurrent}/${quota.max_concurrent}`
-                        : `${quota.used_concurrent}/unlimited`}
+                    <div className="quota-bars">
+                      <div className="quota-bar-group">
+                        <span className="quota-bar-label">Daily</span>
+                        <div className="quota-bar-track">
+                          <div
+                            className={`quota-bar-fill ${
+                              quota.max_daily > 0 && quota.used_today / quota.max_daily > 0.85
+                                ? "is-high"
+                                : ""
+                            }`}
+                            style={{
+                              width: quota.max_daily > 0
+                                ? `${Math.min((quota.used_today / quota.max_daily) * 100, 100)}%`
+                                : "0%",
+                            }}
+                          />
+                        </div>
+                        <span className="quota-bar-value">
+                          {quota.max_daily > 0
+                            ? `${quota.used_today}/${quota.max_daily}`
+                            : `${quota.used_today}`}
+                        </span>
+                      </div>
+                      <div className="quota-bar-group">
+                        <span className="quota-bar-label">Active</span>
+                        <div className="quota-bar-track">
+                          <div
+                            className={`quota-bar-fill ${
+                              quota.max_concurrent > 0 && quota.used_concurrent / quota.max_concurrent > 0.85
+                                ? "is-high"
+                                : ""
+                            }`}
+                            style={{
+                              width: quota.max_concurrent > 0
+                                ? `${Math.min((quota.used_concurrent / quota.max_concurrent) * 100, 100)}%`
+                                : "0%",
+                            }}
+                          />
+                        </div>
+                        <span className="quota-bar-value">
+                          {quota.max_concurrent > 0
+                            ? `${quota.used_concurrent}/${quota.max_concurrent}`
+                            : `${quota.used_concurrent}`}
+                        </span>
+                      </div>
                     </div>
                   )}
                   {!quota && quotaError && (
@@ -1067,7 +1102,7 @@ const TestPage: React.FC = () => {
                       id="invite-code"
                       type="text"
                       className="generator-input"
-                      placeholder="alpha-abc123"
+                      placeholder="Enter your invite code"
                       value={inviteCode}
                       onChange={(e) => setInviteCodeState(e.target.value)}
                     />
@@ -1133,7 +1168,7 @@ const TestPage: React.FC = () => {
                       id="base-image-url"
                       type="text"
                       className="generator-input"
-                      placeholder="http://server/static/outputs/<job_id>.png"
+                      placeholder="https://example.com/photo.png"
                       value={baseImageUrl}
                       onChange={(e) => {
                         setBaseImageUrl(e.target.value);
@@ -1166,7 +1201,7 @@ const TestPage: React.FC = () => {
                       id="face-source-url"
                       type="text"
                       className="generator-input"
-                      placeholder="http://server/static/outputs/<job_id>.png"
+                      placeholder="https://example.com/photo.png"
                       value={faceSourceUrl}
                       onChange={(e) => {
                         setFaceSourceUrl(e.target.value);
@@ -1907,6 +1942,7 @@ const TestPage: React.FC = () => {
 
             <HistoryFeed
               items={history}
+              activeJobId={jobId || undefined}
               onSelect={handleHistorySelect}
               onClear={handleHistoryClear}
             />
