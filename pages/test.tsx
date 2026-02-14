@@ -42,6 +42,13 @@ type LoraDraft = {
   weight: string;
 };
 
+type LoraInfo = {
+  name: string;
+  filename?: string;
+  pipeline?: string;
+  label?: string;
+};
+
 type GeneratorMode = "image" | "face_swap" | "video";
 
 const TestPage: React.FC = () => {
@@ -83,9 +90,11 @@ const TestPage: React.FC = () => {
   const [loras, setLoras] = useState<LoraDraft[]>([]);
   const [autoStitch, setAutoStitch] = useState(false);
   const [availableLoras, setAvailableLoras] = useState<string[]>([]);
+  const [allLoraInfo, setAllLoraInfo] = useState<LoraInfo[]>([]);
   const [loraLoadError, setLoraLoadError] = useState<string | undefined>();
   const [loraSearch, setLoraSearch] = useState("");
   const [loraBrowserOpen, setLoraBrowserOpen] = useState(false);
+  const [modelPipelines, setModelPipelines] = useState<Record<string, string>>({});
   const [faceswapModel, setFaceswapModel] = useState("epicrealismXL_vxviiCrystalclear");
   const [baseImageUrl, setBaseImageUrl] = useState("");
   const [baseImageData, setBaseImageData] = useState<string | undefined>();
@@ -146,27 +155,55 @@ const TestPage: React.FC = () => {
     }
   }, []);
 
+  // Determine current model's pipeline for LoRA filtering
+  const currentPipeline = selectedModel && selectedModel !== "auto"
+    ? modelPipelines[selectedModel.toLowerCase()] || ""
+    : "";
+
   useEffect(() => {
     let active = true;
     const loadLoras = async () => {
       if (typeof window === "undefined") return;
       try {
-        const res = await fetch(`${getApiBase()}/loras/list`, { credentials: "same-origin" });
+        // Build URL with optional pipeline filter
+        let url = `${getApiBase()}/loras/list`;
+        if (currentPipeline) {
+          url += `?pipeline=${encodeURIComponent(currentPipeline)}`;
+        }
+        const res = await fetch(url, { credentials: "same-origin" });
         if (!res.ok) throw new Error(`loras HTTP ${res.status}`);
         const data = await res.json();
-        const raw = Array.isArray(data?.loras) ? data.loras : [];
-        const names = raw
-          .map((entry: any) => entry?.name || entry?.filename)
-          .filter((value: any) => typeof value === "string" && value.length > 0)
-          .map((value: string) => value.trim())
-          .filter(Boolean);
-        const deduped = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+        const raw: any[] = Array.isArray(data?.loras) ? data.loras : [];
+
+        // Store full LoRA info objects (with pipeline metadata)
+        const infoList: LoraInfo[] = raw
+          .map((entry: any) => ({
+            name: String(entry?.name || entry?.filename || "").trim(),
+            filename: entry?.filename ? String(entry.filename).trim() : undefined,
+            pipeline: entry?.pipeline ? String(entry.pipeline).trim().toLowerCase() : undefined,
+          }))
+          .filter((info: LoraInfo) => info.name.length > 0);
+
+        // Deduplicate by name
+        const seen = new Set<string>();
+        const deduped: LoraInfo[] = [];
+        for (const info of infoList) {
+          const key = info.name.toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            deduped.push(info);
+          }
+        }
+        deduped.sort((a, b) => a.name.localeCompare(b.name));
+
         if (active) {
-          setAvailableLoras(deduped);
+          setAllLoraInfo(deduped);
+          setAvailableLoras(deduped.map((l) => l.name));
           setLoraLoadError(undefined);
         }
       } catch (err: any) {
         if (active) {
+          setAllLoraInfo([]);
           setAvailableLoras([]);
           setLoraLoadError(err?.message || "Failed to load LoRAs.");
         }
@@ -176,7 +213,7 @@ const TestPage: React.FC = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [currentPipeline]);
 
   // Load models from backend
   useEffect(() => {
@@ -270,6 +307,15 @@ const TestPage: React.FC = () => {
         setImageModels(imageOptions);
         if (videoOptions.length > 0) setVideoModels(videoOptions);
         if (faceSwapOptions.length > 0) setFaceSwapModels(faceSwapOptions);
+
+        // Build model→pipeline lookup for LoRA filtering
+        const pipelines: Record<string, string> = {};
+        for (const m of models) {
+          if (m.name && m.pipeline) {
+            pipelines[m.name.toLowerCase()] = String(m.pipeline).toLowerCase();
+          }
+        }
+        if (active) setModelPipelines(pipelines);
       } catch (err: any) {
         console.error("Failed to load models from /api/models/list:", err);
         // Keep fallback models on error
@@ -411,6 +457,13 @@ const TestPage: React.FC = () => {
   };
 
   const selectedLoraNames = new Set(loras.map((l) => l.name.trim()).filter(Boolean));
+
+  // Build a lookup from name → LoraInfo for pipeline badges
+  const loraInfoMap = new Map<string, LoraInfo>();
+  for (const info of allLoraInfo) {
+    loraInfoMap.set(info.name, info);
+  }
+
   const filteredLoras = availableLoras.filter((name) => {
     if (loraSearch.trim()) {
       return name.toLowerCase().includes(loraSearch.toLowerCase());
@@ -1383,12 +1436,23 @@ const TestPage: React.FC = () => {
                             value={loraSearch}
                             onChange={(e) => setLoraSearch(e.target.value)}
                           />
+                          {currentPipeline && (
+                            <p className="lora-compat-hint">
+                              Showing LoRAs compatible with <strong>{currentPipeline.toUpperCase()}</strong>
+                            </p>
+                          )}
                           <div className="lora-chip-grid">
                             {filteredLoras.length === 0 && (
-                              <p className="lora-empty">No LoRAs match &ldquo;{loraSearch}&rdquo;</p>
+                              <p className="lora-empty">
+                                {loraSearch.trim()
+                                  ? <>No LoRAs match &ldquo;{loraSearch}&rdquo;</>
+                                  : <>No compatible LoRAs found</>}
+                              </p>
                             )}
                             {filteredLoras.map((name) => {
                               const isSelected = selectedLoraNames.has(name);
+                              const info = loraInfoMap.get(name);
+                              const pipelineTag = info?.pipeline?.toUpperCase();
                               return (
                                 <button
                                   key={`fs-chip-${name}`}
@@ -1405,6 +1469,7 @@ const TestPage: React.FC = () => {
                                   title={isSelected ? "Click to remove" : "Click to add"}
                                 >
                                   <span className="lora-chip-name">{cleanLoraDisplayName(name)}</span>
+                                  {pipelineTag && <span className="lora-chip-pipeline">{pipelineTag}</span>}
                                   <span className="lora-chip-icon">{isSelected ? "\u2715" : "+"}</span>
                                 </button>
                               );
@@ -1662,7 +1727,9 @@ const TestPage: React.FC = () => {
                           onClick={() => setLoraBrowserOpen(!loraBrowserOpen)}
                           disabled={!availableLoras.length}
                         >
-                          {loraBrowserOpen ? "Close browser" : `Browse ${availableLoras.length} LoRAs`}
+                          {loraBrowserOpen
+                            ? "Close browser"
+                            : `Browse ${availableLoras.length} LoRA${availableLoras.length !== 1 ? "s" : ""}${currentPipeline ? ` (${currentPipeline.toUpperCase()})` : ""}`}
                         </button>
                       </div>
                       {loraLoadError && (
@@ -1682,12 +1749,25 @@ const TestPage: React.FC = () => {
                             onChange={(e) => setLoraSearch(e.target.value)}
                             autoFocus
                           />
+                          {currentPipeline && (
+                            <p className="lora-compat-hint">
+                              Showing LoRAs compatible with <strong>{currentPipeline.toUpperCase()}</strong> models
+                            </p>
+                          )}
                           <div className="lora-chip-grid">
                             {filteredLoras.length === 0 && (
-                              <p className="lora-empty">No LoRAs match &ldquo;{loraSearch}&rdquo;</p>
+                              <p className="lora-empty">
+                                {loraSearch.trim()
+                                  ? <>No LoRAs match &ldquo;{loraSearch}&rdquo;</>
+                                  : currentPipeline
+                                    ? <>No compatible LoRAs found for {currentPipeline.toUpperCase()}</>
+                                    : <>No LoRAs available</>}
+                              </p>
                             )}
                             {filteredLoras.map((name) => {
                               const isSelected = selectedLoraNames.has(name);
+                              const info = loraInfoMap.get(name);
+                              const pipelineTag = info?.pipeline?.toUpperCase();
                               return (
                                 <button
                                   key={`chip-${name}`}
@@ -1704,6 +1784,7 @@ const TestPage: React.FC = () => {
                                   title={isSelected ? "Click to remove from stack" : "Click to add to stack"}
                                 >
                                   <span className="lora-chip-name">{cleanLoraDisplayName(name)}</span>
+                                  {pipelineTag && <span className="lora-chip-pipeline">{pipelineTag}</span>}
                                   <span className="lora-chip-icon">{isSelected ? "\u2715" : "+"}</span>
                                 </button>
                               );
