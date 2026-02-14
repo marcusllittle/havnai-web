@@ -98,6 +98,9 @@ const PricingPage: NextPage = () => {
             <a href="/test">Generator</a>
             <a href="/library">My Library</a>
             <a href="/pricing" className="nav-active">Buy Credits</a>
+            <a href="/analytics">Analytics</a>
+            <a href="/nodes">Nodes</a>
+            <a href="/marketplace">Marketplace</a>
           </nav>
         </div>
       </header>
