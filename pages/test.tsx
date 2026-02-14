@@ -27,31 +27,13 @@ import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
-const MODEL_OPTIONS: { id: string; label: string }[] = [
+// Fallback models for offline development
+const FALLBACK_IMAGE_MODELS: { id: string; label: string }[] = [
   { id: "auto", label: "Auto (let grid choose best)" },
-  { id: "juggernautXL_ragnarokBy", label: "juggernautXL_ragnarokBy · SDXL studio" },
-  { id: "epicrealismXL_vxviiCrystalclear", label: "epicrealismXL_vxviiCrystalclear · SDXL daylight" },
-  { id: "epicrealismXL_purefix", label: "epicrealismXL_purefix · SDXL realism" },
-  { id: "perfectdeliberate_v60", label: "perfectdeliberate_v60 · SDXL realism" },
-  { id: "zavychromaxl_v100", label: "zavychromaxl_v100 · SDXL realism" },
-  { id: "babesByStableYogiPony_xlV4", label: "babesByStableYogiPony_xlV4 · SDXL stylized" },
-  { id: "perfectdeliberate_v5SD15", label: "perfectdeliberate_v5SD15 · portraits" },
-  { id: "aMixIllustrious_aMix", label: "aMixIllustrious_aMix · SDXL custom" },
-  { id: "cyberrealisticPony_v160", label: "cyberrealisticPony_v160 · SDXL realism" },
-  { id: "ponyDiffusionV6XL_v615", label: "ponyDiffusionV6XL_v615 · SD1.5 stylized" },
-  { id: "realisticVisionV60B1_v51HyperVAE", label: "realisticVisionV60B1_v51HyperVAE · SD1.5 realism" },
-  { id: "lyriel_v16", label: "lyriel_v16 · SD1.5 anime" },
-  { id: "divineelegancemix_V10", label: "divineelegancemix_V10 · SD1.5 realism" },
-  { id: "uberRealisticPornMerge_v23Final", label: "uberRealisticPornMerge_v23Final · glossy studio" },
-  { id: "triomerge_v10", label: "triomerge_v10 · fantasy stylized" },
-  { id: "unstablePornhwa_beta", label: "unstablePornhwa_beta · manhwa" },
-  { id: "disneyPixarCartoon_v10", label: "disneyPixarCartoon_v10 · cartoon" },
-  { id: "kizukiAnimeHentai_animeHentaiV4", label: "kizukiAnimeHentai_animeHentaiV4 · anime" },
-];
-
-const FACE_SWAP_MODELS: { id: string; label: string }[] = [
-  { id: "epicrealismXL_vxviiCrystalclear", label: "epicrealismXL_vxviiCrystalclear · SDXL daylight" },
-  { id: "juggernautXL_ragnarokBy", label: "juggernautXL_ragnarokBy · SDXL studio" },
+  { id: "juggernautXL_ragnarokBy", label: "Juggernaut XL · Tier S · SDXL" },
+  { id: "epicrealismXL_vxviiCrystalclear", label: "Epic Realism XL · Tier S · SDXL" },
+  { id: "perfectdeliberate_v5SD15", label: "Perfect Deliberate · Tier A · SD1.5" },
+  { id: "cyberrealisticPony_v160", label: "Cyberrealistic Pony · Tier B · SDXL" },
 ];
 
 type LoraDraft = {
@@ -78,6 +60,15 @@ const TestPage: React.FC = () => {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>("auto");
   const [useStandardNegative, setUseStandardNegative] = useState(true);
+  const [imageModels, setImageModels] = useState<{ id: string; label: string }[]>(FALLBACK_IMAGE_MODELS);
+  const [videoModels, setVideoModels] = useState<{ id: string; label: string }[]>([
+    { id: "ltx2", label: "LTX2 · Tier S · Video" },
+    { id: "animatediff", label: "AnimateDiff · Tier A · Animation" },
+  ]);
+  const [faceSwapModels, setFaceSwapModels] = useState<{ id: string; label: string }[]>([
+    { id: "epicrealismXL_vxviiCrystalclear", label: "Epic Realism XL · Tier S · SDXL" },
+    { id: "juggernautXL_ragnarokBy", label: "Juggernaut XL · Tier S · SDXL" },
+  ]);
   const [steps, setSteps] = useState("");
   const [guidance, setGuidance] = useState("");
   const [width, setWidth] = useState("");
@@ -91,7 +82,7 @@ const TestPage: React.FC = () => {
   const [autoStitch, setAutoStitch] = useState(false);
   const [availableLoras, setAvailableLoras] = useState<string[]>([]);
   const [loraLoadError, setLoraLoadError] = useState<string | undefined>();
-  const [faceswapModel, setFaceswapModel] = useState(FACE_SWAP_MODELS[0].id);
+  const [faceswapModel, setFaceswapModel] = useState("epicrealismXL_vxviiCrystalclear");
   const [baseImageUrl, setBaseImageUrl] = useState("");
   const [baseImageData, setBaseImageData] = useState<string | undefined>();
   const [baseImageName, setBaseImageName] = useState<string | undefined>();
@@ -182,6 +173,147 @@ const TestPage: React.FC = () => {
       active = false;
     };
   }, []);
+
+  // Load models from backend
+  useEffect(() => {
+    let active = true;
+
+    // Clean up technical model names for better UX
+    const cleanModelName = (name: string): string => {
+      // Remove version suffixes like _v5SD15, _vxviiCrystalclear, _v23Final, _beta, etc.
+      let cleaned = name
+        .replace(/_v\d+SD15/i, "")
+        .replace(/_v[xvi]+[a-z]*/i, "") // Removes _vxviiCrystalclear, _v23Final, etc.
+        .replace(/_v\d+/i, "")
+        .replace(/By$/i, "")
+        .replace(/_beta$/i, " (Beta)")
+        .replace(/_final$/i, "")
+        .replace(/Merge$/i, "")
+        .replace(/Porn/gi, "")
+        .replace(/_/g, " ");
+
+      // Special case replacements for readability
+      cleaned = cleaned
+        .replace(/XL /g, "XL ")
+        .replace(/SD15/g, "")
+        .replace(/amix/i, "aMix")
+        .replace(/pony/i, "Pony");
+
+      // Capitalize first letter of each word
+      cleaned = cleaned
+        .split(" ")
+        .map((word) => {
+          if (!word) return "";
+          // Keep acronyms and versions uppercase
+          if (word === "XL" || word === "v5" || word === "v60" || word === "V10") return word;
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
+        .join(" ")
+        .trim();
+
+      return cleaned;
+    };
+
+    const loadModels = async () => {
+      if (typeof window === "undefined") return;
+      try {
+        const res = await fetch(`${getApiBase()}/models/list`, { credentials: "same-origin" });
+        if (!res.ok) throw new Error(`models HTTP ${res.status}`);
+        const data = await res.json();
+        const models = Array.isArray(data?.models) ? data.models : [];
+
+        if (!active) return;
+
+        // Separate models by task type
+        const imageModelsData = models.filter((m: any) => {
+          const taskType = String(m.task_type || "").toUpperCase();
+          return taskType === "IMAGE_GEN" || !taskType;
+        });
+        const videoModelsData = models.filter((m: any) => {
+          const taskType = String(m.task_type || "").toUpperCase();
+          return taskType === "VIDEO_GEN" || taskType === "ANIMATEDIFF";
+        });
+
+        // Face swap models: only SDXL tier S models for now
+        const faceSwapModelsData = imageModelsData.filter((m: any) => {
+          const pipeline = String(m.pipeline || "").toLowerCase();
+          const tier = String(m.tier || "");
+          return pipeline.includes("sdxl") && tier === "S";
+        });
+
+        // Transform to dropdown format with tier badges and clean names
+        const imageOptions = [
+          { id: "auto", label: "Auto (let grid choose best)" },
+          ...imageModelsData.map((m: any) => ({
+            id: m.name,
+            label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${m.pipeline.toUpperCase()}`,
+          })),
+        ];
+
+        const videoOptions = videoModelsData.map((m: any) => {
+          const typeLabel = m.task_type === "ANIMATEDIFF" ? "Animation" : "Video";
+          return {
+            id: m.name,
+            label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${typeLabel}`,
+          };
+        });
+
+        const faceSwapOptions = faceSwapModelsData.map((m: any) => ({
+          id: m.name,
+          label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${m.pipeline.toUpperCase()}`,
+        }));
+
+        setImageModels(imageOptions);
+        if (videoOptions.length > 0) setVideoModels(videoOptions);
+        if (faceSwapOptions.length > 0) setFaceSwapModels(faceSwapOptions);
+      } catch (err: any) {
+        console.error("Failed to load models from /api/models/list:", err);
+        // Keep fallback models on error
+      }
+    };
+    void loadModels();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Reset mode-specific options when switching modes
+  useEffect(() => {
+    if (mode === "image") {
+      // Reset video-specific options
+      setFrames("");
+      setFps("");
+      setExtendChunks("0");
+      setVideoInitUrl("");
+      setVideoInitData(undefined);
+      setVideoInitName(undefined);
+      // Reset face swap options
+      setFaceSourceUrl("");
+      setFaceSourceData(undefined);
+      setFaceSourceName(undefined);
+      // Set default model to auto for image mode
+      setSelectedModel("auto");
+    } else if (mode === "video") {
+      // Reset sampler (not used in video mode)
+      setSampler("");
+      // Reset face swap options
+      setFaceSourceUrl("");
+      setFaceSourceData(undefined);
+      setFaceSourceName(undefined);
+      // Set default video model (ltx2 or first available)
+      setSelectedModel(videoModels.length > 0 ? videoModels[0].id : "ltx2");
+    } else if (mode === "face_swap") {
+      // Reset video-specific options
+      setFrames("");
+      setFps("");
+      setExtendChunks("0");
+      setVideoInitUrl("");
+      setVideoInitData(undefined);
+      setVideoInitName(undefined);
+      // Set default face swap model
+      setSelectedModel(faceSwapModels.length > 0 ? faceSwapModels[0].id : "epicrealismXL_vxviiCrystalclear");
+    }
+  }, [mode, videoModels, faceSwapModels]);
 
   useEffect(() => {
     let cancelled = false;
@@ -396,6 +528,9 @@ const TestPage: React.FC = () => {
     }
     if (forceAnimatediff) {
       request.model = "animatediff";
+    } else if (!request.model) {
+      // Use selected video model (ltx2, animatediff, etc.)
+      request.model = selectedModel || "ltx2";
     }
     return request;
   };
@@ -1062,7 +1197,7 @@ const TestPage: React.FC = () => {
                       onChange={(e) => setFaceswapModel(e.target.value)}
                       className="generator-select"
                     >
-                      {FACE_SWAP_MODELS.map((opt) => (
+                      {faceSwapModels.map((opt) => (
                         <option key={opt.id} value={opt.id}>
                           {opt.label}
                         </option>
@@ -1180,7 +1315,7 @@ const TestPage: React.FC = () => {
                       onChange={(e) => setSelectedModel(e.target.value)}
                       className="generator-select"
                     >
-                      {MODEL_OPTIONS.map((opt) => (
+                      {imageModels.map((opt) => (
                         <option key={opt.id} value={opt.id}>
                           {opt.label}
                         </option>
@@ -1403,6 +1538,21 @@ const TestPage: React.FC = () => {
                     <p className="generator-help">
                       LTX2 defaults to 16 frames at 8fps (~2s). AnimateDiff can go longer but is heavier.
                     </p>
+                    <label className="generator-label" htmlFor="video-model">
+                      Video model
+                    </label>
+                    <select
+                      id="video-model"
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      className="generator-select"
+                    >
+                      {videoModels.map((opt) => (
+                        <option key={opt.id} value={opt.id}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                     <label className="generator-label" htmlFor="negative-prompt-video">
                       Negative prompt (optional)
                     </label>
