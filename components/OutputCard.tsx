@@ -9,6 +9,21 @@ interface OutputCardProps {
   onUseLastFrame?: (dataUrl: string) => void;
 }
 
+/** Clean up model name for display */
+function friendlyModel(name?: string): string {
+  if (!name) return "Auto";
+  return name
+    .replace(/_v\d+SD15/i, "")
+    .replace(/_v[xvi]+[a-z]*/i, "")
+    .replace(/_v\d+/i, "")
+    .replace(/By$/i, "")
+    .replace(/_beta$/i, "")
+    .replace(/_final$/i, "")
+    .replace(/Merge$/i, "")
+    .replace(/_/g, " ")
+    .trim() || name;
+}
+
 export const OutputCard: React.FC<OutputCardProps> = ({
   imageUrl,
   videoUrl,
@@ -18,13 +33,14 @@ export const OutputCard: React.FC<OutputCardProps> = ({
   onUseLastFrame,
 }) => {
   const [frameBusy, setFrameBusy] = useState(false);
+  const [idCopied, setIdCopied] = useState(false);
   if (!imageUrl && !videoUrl) return null;
   const runtimeDisplay =
     typeof runtimeSeconds === "number"
       ? runtimeSeconds.toFixed(1)
       : undefined;
-  const label = videoUrl ? "Generated video" : "Generated image";
-  const downloadName = `${jobId || "havnai-output"}.${videoUrl ? "mp4" : "png"}`;
+  const label = videoUrl ? "Video" : "Image";
+  const downloadName = `havnai-${(jobId || "output").slice(0, 8)}.${videoUrl ? "mp4" : "png"}`;
 
   const handleDownload = async () => {
     if (!videoUrl && !imageUrl) return;
@@ -42,8 +58,18 @@ export const OutputCard: React.FC<OutputCardProps> = ({
       anchor.remove();
       URL.revokeObjectURL(objectUrl);
     } catch {
-      // Fallback: open in a new tab if direct download is blocked by CORS.
       window.open(url, "_blank", "noopener");
+    }
+  };
+
+  const handleCopyId = async () => {
+    if (!jobId) return;
+    try {
+      await navigator.clipboard.writeText(jobId);
+      setIdCopied(true);
+      setTimeout(() => setIdCopied(false), 2000);
+    } catch {
+      // Fallback: do nothing
     }
   };
 
@@ -83,7 +109,6 @@ export const OutputCard: React.FC<OutputCardProps> = ({
       const dataUrl = canvas.toDataURL("image/png");
       onUseLastFrame(dataUrl);
     } catch (err) {
-      // Best-effort only; keep the UI usable even if capture fails.
       console.error("Failed to capture last frame", err);
     } finally {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -105,16 +130,18 @@ export const OutputCard: React.FC<OutputCardProps> = ({
       )}
 
       <div className="generator-output-meta">
-        <span>{label}</span>
-        <span>
-          {` · `}
-          <strong>{model || "auto-selected model"}</strong>
-        </span>
-        {runtimeDisplay && <span>{` · ${runtimeDisplay}s`}</span>}
+        <span className="output-meta-badge">{label}</span>
+        <span className="output-meta-model">{friendlyModel(model)}</span>
+        {runtimeDisplay && <span className="output-meta-time">{runtimeDisplay}s</span>}
         {jobId && (
-          <span>{` · Job ID: `}
-            <code>{jobId}</code>
-          </span>
+          <button
+            type="button"
+            className="output-meta-id"
+            onClick={handleCopyId}
+            title="Copy job ID"
+          >
+            {idCopied ? "Copied!" : `#${jobId.slice(0, 8)}`}
+          </button>
         )}
       </div>
       {(videoUrl || imageUrl) && (
@@ -124,7 +151,7 @@ export const OutputCard: React.FC<OutputCardProps> = ({
             onClick={handleDownload}
             className="generator-download"
           >
-            {videoUrl ? "Download video" : "Download image"}
+            {videoUrl ? "\u2913 Download" : "\u2913 Download"}
           </button>
           {videoUrl && onUseLastFrame ? (
             <button
@@ -133,7 +160,7 @@ export const OutputCard: React.FC<OutputCardProps> = ({
               className="generator-download"
               disabled={frameBusy}
             >
-              {frameBusy ? "Capturing frame…" : "Use last frame"}
+              {frameBusy ? "Capturing\u2026" : "\u21BB Use last frame"}
             </button>
           ) : null}
         </div>
