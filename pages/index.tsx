@@ -115,7 +115,7 @@ const HomePage: NextPage = () => {
           const description =
             entry.description ||
             (tags.length ? "Tagged: " + tags.join(", ") : "Creator model registered on the grid.");
-          const preview = resolveAssetUrl(resolveAssetUrl(entry.preview_url)) || "/HavnAI-logo.png";
+          const preview = resolveAssetUrl(entry.preview_url) || "/HavnAI-logo.png";
           return `
                 <article class="model-card">
                   <div class="model-preview">
