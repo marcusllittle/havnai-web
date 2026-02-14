@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 
 interface HavnAIPromptProps {
   value: string;
@@ -13,6 +13,11 @@ export const HavnAIPrompt: React.FC<HavnAIPromptProps> = ({
   onSubmit,
   disabled,
 }) => {
+  const modKey = useMemo(() => {
+    if (typeof navigator === "undefined") return "Ctrl";
+    return /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent) ? "\u2318" : "Ctrl";
+  }, []);
+
   return (
     <div>
       <textarea
@@ -30,7 +35,7 @@ export const HavnAIPrompt: React.FC<HavnAIPromptProps> = ({
         }}
       />
       <p className="generator-help">
-        Press <strong>Ctrl+Enter</strong> to generate.
+        Press <strong>{modKey}+Enter</strong> to generate.
       </p>
     </div>
   );

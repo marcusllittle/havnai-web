@@ -3611,3 +3611,165 @@ details[open] .faq-icon {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Polish: Advanced toggle chevron ── */
+
+.generator-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toggle-chevron {
+  transition: transform 0.25s ease;
+}
+
+.toggle-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+/* ── Polish: Grouped sub-sections ── */
+
+.adv-group {
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.adv-group:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.adv-group-title {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent-strong);
+  margin-bottom: 0.5rem;
+}
+
+/* ── Polish: Disabled negative prompt helper ── */
+
+.generator-input.is-disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.muted-hint {
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* ── Polish: Video chain summary card ── */
+
+.chain-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0.65rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(0, 234, 255, 0.08);
+  border: 1px solid rgba(0, 234, 255, 0.22);
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.chain-summary-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* ── Polish: Job drawer raw JSON wrapper ── */
+
+.job-raw-wrapper {
+  position: relative;
+}
+
+.job-raw-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #c9def2;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.job-raw-copy:hover {
+  background: rgba(0, 234, 255, 0.2);
+}
+
+/* ── Polish: Mobile responsiveness for generator ── */
+
+@media (max-width: 640px) {
+  .generator-card {
+    padding: 1rem 0.9rem 1.1rem;
+  }
+
+  .generator-advanced {
+    padding: 0.65rem 0.7rem;
+  }
+
+  .generator-advanced-toggle {
+    font-size: 0.75rem;
+  }
+
+  .generator-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .generator-controls {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .job-drawer-panel {
+    width: 100vw;
+  }
+
+  .job-drawer-header {
+    padding: 16px;
+  }
+
+  .job-drawer-body {
+    padding: 16px;
+  }
+
+  .job-actions {
+    flex-direction: column;
+  }
+
+  .job-action-button {
+    width: 100%;
+    text-align: center;
+  }
+
+  .job-details-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .generator-prompt {
+    font-size: 0.9rem;
+  }
+
+  .chain-summary {
+    font-size: 0.78rem;
+    padding: 0.5rem 0.7rem;
+  }
+
+  .adv-group-title {
+    font-size: 0.7rem;
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { JobDetailResponse, ResultResponse, resolveAssetUrl } from "../lib/havnai";
 import { downloadAsset } from "../lib/download";
 import { getTimelineSteps, normalizeJobStatus, shortJobId } from "../lib/jobStatus";
@@ -247,7 +247,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
 
         <div className="job-drawer-body">
           <section className="job-section">
-            <h4>Status Timeline</h4>
+            <h4>Progress</h4>
             <div className="status-timeline">
               {timelineSteps.map((step, index) => {
                 const isActive = index === normalized.activeIndex;
@@ -269,7 +269,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
           </section>
 
           <section className="job-section">
-            <h4>Preview</h4>
+            <h4>Result</h4>
             <div className="job-preview">
               {previewVideo ? (
                 <video src={previewVideo} controls playsInline />
@@ -288,7 +288,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
           </section>
 
           <section className="job-section">
-            <h4>Actions</h4>
+            <h4>Quick actions</h4>
             <div className="job-actions">
               <button
                 type="button"
@@ -329,7 +329,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
 
           <section className="job-section">
             <details open>
-              <summary>Generation Params</summary>
+              <summary>Settings used</summary>
               <div className="job-details-grid">
                 {Object.entries(params).map(([key, value]) =>
                   value != null ? (
@@ -373,7 +373,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
 
           <section className="job-section">
             <details>
-              <summary>Routing / Node</summary>
+              <summary>Routing info</summary>
               <div className="job-details-grid">
                 <div>
                   <span className="job-label">node_id</span>
@@ -393,16 +393,25 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
 
           <section className="job-section">
             <details>
-              <summary>Raw Job JSON</summary>
-              <pre className="job-raw">
-                {JSON.stringify(job?.data || summary || {}, null, 2)}
-              </pre>
+              <summary>Debug JSON</summary>
+              <div className="job-raw-wrapper">
+                <button
+                  type="button"
+                  className="job-raw-copy"
+                  onClick={() => handleCopy(JSON.stringify(job?.data || summary || {}, null, 2))}
+                >
+                  Copy
+                </button>
+                <pre className="job-raw">
+                  {JSON.stringify(job?.data || summary || {}, null, 2)}
+                </pre>
+              </div>
             </details>
           </section>
 
           {normalized.isFailed && (
             <section className="job-section job-failure">
-              <h4>Failure Details</h4>
+              <h4>Something went wrong</h4>
               <p>{jobData.error_message || jobData.error || "Unknown error"}</p>
               <ul>
                 <li>Retry the job or pick a smaller frame count.</li>

@@ -54,6 +54,7 @@ const TestPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | undefined>();
   const [videoUrl, setVideoUrl] = useState<string | undefined>();
+  const [chainSummary, setChainSummary] = useState<{ clips: number; stitched: boolean } | null>(null);
   const [model, setModel] = useState<string | undefined>();
   const [runtimeSeconds, setRuntimeSeconds] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -574,6 +575,7 @@ const TestPage: React.FC = () => {
   const runVideoChain = async (promptText: string, extraChunks: number) => {
     const total = Math.max(1, 1 + extraChunks);
     const jobIds: string[] = [];
+    setChainSummary(null);
     let initImage = (videoInitData || videoInitUrl).trim();
     for (let index = 0; index < total; index += 1) {
       const request = buildVideoRequest(promptText, initImage || undefined, true);
@@ -604,9 +606,13 @@ const TestPage: React.FC = () => {
         setVideoUrl(stitched.video_url);
         setImageUrl(undefined);
         setStatusMessage("Stitched video ready.");
+        setChainSummary({ clips: jobIds.length, stitched: true });
       } catch (err: any) {
         setStatusMessage(err?.message || "Auto-stitch failed.");
+        setChainSummary({ clips: jobIds.length, stitched: false });
       }
+    } else if (jobIds.length > 1) {
+      setChainSummary({ clips: jobIds.length, stitched: false });
     }
   };
 
@@ -1400,7 +1406,21 @@ const TestPage: React.FC = () => {
                       type="button"
                       className="generator-advanced-toggle"
                       onClick={() => setAdvancedOpen((v) => !v)}
+                      aria-expanded={advancedOpen}
                     >
+                      <svg
+                        className={`toggle-chevron${advancedOpen ? " is-open" : ""}`}
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
                       {advancedOpen ? "Hide advanced options" : "Show advanced options"}
                     </button>
                   )}
@@ -1408,48 +1428,56 @@ const TestPage: React.FC = () => {
 
                 {advancedOpen && mode === "image" && (
                   <div className="generator-advanced">
-                    <span className="generator-label">Model</span>
-                    <select
-                      value={selectedModel}
-                      onChange={(e) => setSelectedModel(e.target.value)}
-                      className="generator-select"
-                    >
-                      {imageModels.map((opt) => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="generator-help">
-                      Auto routes to the highest-performing model based on weight and pipeline. Choosing a specific model overrides auto routing for this job only.
-                    </p>
-                    <label className="generator-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={useStandardNegative}
-                        onChange={(e) => setUseStandardNegative(e.target.checked)}
+                    <div className="adv-group">
+                      <span className="adv-group-title">Model</span>
+                      <select
+                        value={selectedModel}
+                        onChange={(e) => setSelectedModel(e.target.value)}
+                        className="generator-select"
+                      >
+                        {imageModels.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="generator-help">
+                        Auto routes to the best model by weight and pipeline. Choosing a specific model overrides auto routing for this job.
+                      </p>
+                    </div>
+                    <div className="adv-group">
+                      <span className="adv-group-title">Negative prompt</span>
+                      <label className="generator-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={useStandardNegative}
+                          onChange={(e) => setUseStandardNegative(e.target.checked)}
+                        />
+                        <span>Use standard negative prompt (recommended)</span>
+                      </label>
+                      <p className="generator-help">
+                        When enabled, the coordinator appends the model negative + global negatives automatically.
+                      </p>
+                      <label className="generator-label" htmlFor="negative-prompt">
+                        Extra negatives
+                      </label>
+                      <textarea
+                        id="negative-prompt"
+                        className={`generator-input${useStandardNegative ? " is-disabled" : ""}`}
+                        placeholder={useStandardNegative ? "Disable standard negative to type here" : "Optional extra negatives to append"}
+                        value={negativePrompt}
+                        onChange={(e) => setNegativePrompt(e.target.value)}
+                        rows={2}
+                        disabled={useStandardNegative}
                       />
-                      <span>Use standard negative prompt (recommended)</span>
-                    </label>
-                    <p className="generator-help">
-                      When enabled, the coordinator appends the model negative + global negatives automatically.
-                    </p>
-                    <label className="generator-label" htmlFor="negative-prompt">
-                      Negative prompt (extra)
-                    </label>
-                    <textarea
-                      id="negative-prompt"
-                      className="generator-input"
-                      placeholder="Optional extra negatives to append"
-                      value={negativePrompt}
-                      onChange={(e) => setNegativePrompt(e.target.value)}
-                      rows={2}
-                      disabled={useStandardNegative}
-                    />
-                    <p className="generator-help">
-                      Only used when the standard negative prompt is disabled.
-                    </p>
-                    <span className="generator-label">Generation settings</span>
+                      {useStandardNegative && (
+                        <p className="generator-help muted-hint">
+                          Uncheck &ldquo;Use standard negative prompt&rdquo; above to enter custom negatives.
+                        </p>
+                      )}
+                    </div>
+                    <div className="adv-group">
+                      <span className="adv-group-title">Generation settings</span>
                     <div className="generator-row">
                       <div>
                         <label className="generator-label" htmlFor="steps">
@@ -1547,6 +1575,7 @@ const TestPage: React.FC = () => {
                           onChange={(e) => setSeed(e.target.value)}
                         />
                       </div>
+                    </div>
                     </div>
                     {/* LoRA Browser + Stack */}
                     <div className="lora-section">
@@ -1915,6 +1944,17 @@ const TestPage: React.FC = () => {
                 )}
 
                 <StatusBox message={statusMessage} />
+                {chainSummary && (
+                  <div className="chain-summary">
+                    <span className="chain-summary-icon">{chainSummary.stitched ? "\u2714" : "\u26A0"}</span>
+                    <span>
+                      {chainSummary.clips} clip{chainSummary.clips !== 1 ? "s" : ""} generated
+                      {chainSummary.stitched
+                        ? " and stitched into a single video."
+                        : " (stitching skipped or failed)."}
+                    </span>
+                  </div>
+                )}
                 {pollTimedOut && jobId ? (
                   <button
                     type="button"
