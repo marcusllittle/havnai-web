@@ -46,8 +46,6 @@ const HomePage: NextPage = () => {
     const liveJobs24h = document.getElementById("liveJobs24h");
     const liveSuccessRate = document.getElementById("liveSuccessRate");
 
-    const modelGrid = document.getElementById("modelGrid");
-
     if (
       !heroActiveNodes ||
       !heroJobs24h ||
@@ -55,8 +53,7 @@ const HomePage: NextPage = () => {
       !heroTopModel ||
       !liveActiveNodes ||
       !liveJobs24h ||
-      !liveSuccessRate ||
-      !modelGrid
+      !liveSuccessRate
     ) {
       return;
     }
@@ -66,7 +63,6 @@ const HomePage: NextPage = () => {
       jobs_completed_24h: 0,
       success_rate: 0,
       top_model: "—",
-      model_registry: [] as any[],
     };
 
     function safeArray(value: any): any[] {
@@ -91,68 +87,15 @@ const HomePage: NextPage = () => {
         typeof success === "number" ? success.toFixed(1) + "%" : String(success);
     }
 
-    function resolveAssetUrl(path: string | undefined | null): string | undefined {
-      if (!path) return undefined;
-      if (/^https?:\/\//i.test(path)) return path;
-      return `${API_BASE}${path}`;
-    }
-
-    function renderModels(registry: any[]) {
-      const models = safeArray(registry);
-      if (!models.length) {
-        modelGrid.innerHTML =
-          '<div class="model-card placeholder"><p class="model-name">No models registered yet.</p><p class="model-weight">Weight —</p><p class="model-desc">Once the coordinator exposes the registry, models will appear here automatically.</p></div>';
-        return;
-      }
-
-      const cards = models
-        .sort((a, b) => (b.weight || 0) - (a.weight || 0))
-        .slice(0, 12)
-        .map((entry) => {
-          const name = entry.name || entry.model || "unnamed-model";
-          const weight = entry.weight ?? entry.reward_weight ?? 0;
-          const tags = safeArray(entry.tags);
-          const description =
-            entry.description ||
-            (tags.length ? "Tagged: " + tags.join(", ") : "Creator model registered on the grid.");
-          const preview = resolveAssetUrl(entry.preview_url) || "/HavnAI-logo.png";
-          return `
-                <article class="model-card">
-                  <div class="model-preview">
-                    <img src="${preview}" alt="${name} preview" loading="lazy" />
-                  </div>
-                  <div class="model-body">
-                    <h3 class="model-name">${name}</h3>
-                    <p class="model-weight">Weight: <strong>${weight}</strong></p>
-                    <p class="model-desc">${description}</p>
-                    ${
-                      tags.length
-                        ? `<div class="model-tags">${tags
-                            .slice(0, 4)
-                            .map((t: string) => `<span class="tag">${t}</span>`)
-                            .join("")}</div>`
-                        : ""
-                    }
-                  </div>
-                </article>
-              `;
-        })
-        .join("");
-
-      modelGrid.innerHTML = cards;
-    }
-
     async function loadStats() {
       try {
         const res = await fetch(`${API_BASE}/models/stats`, { credentials: "same-origin" });
         if (!res.ok) throw new Error("stats HTTP " + res.status);
         const data = await res.json();
         renderStats(data);
-        renderModels(data.model_registry || data.models || []);
       } catch (err) {
         console.error("Failed to load /models/stats", err);
         renderStats(sampleStats);
-        renderModels(sampleStats.model_registry);
       }
     }
 
@@ -250,7 +193,6 @@ const HomePage: NextPage = () => {
             <a href="#how">How It Works</a>
             <a href="#smart-routing">Smart Routing</a>
             <a href="#rewards">Rewards</a>
-            <a href="#models">Models</a>
             <a href="/test">Generator</a>
             <a href="/library">My Library</a>
             <a href="/pricing">Buy Credits</a>
@@ -332,7 +274,7 @@ const HomePage: NextPage = () => {
                 </div>
               </div>
               <div className="stat-footnote">
-                Backed by <code>/api/models/stats</code> from the live coordinator.
+                Live data from the HavnAI coordinator.
               </div>
             </div>
           </div>
@@ -471,26 +413,6 @@ const HomePage: NextPage = () => {
                 </tr>
               </tbody>
             </table>
-          </div>
-        </section>
-
-        {/* MODEL SHOWCASE */}
-        <section id="models" className="section section-alt">
-          <div className="section-header">
-            <h2>Live Model Catalog</h2>
-            <p>
-              Models, weights, and tags pulled directly from the coordinator via{" "}
-              <code>/api/models/stats</code>.
-            </p>
-          </div>
-          <div className="model-grid" id="modelGrid">
-            <div className="model-card placeholder">
-              <p className="model-name">Loading models…</p>
-              <p className="model-weight">Weight —</p>
-              <p className="model-desc">
-                Once the coordinator responds, you’ll see the live registry here.
-              </p>
-            </div>
           </div>
         </section>
 
@@ -658,7 +580,7 @@ const HomePage: NextPage = () => {
                 <p className="footer-tagline">Decentralized GPU network for AI creators.</p>
               </div>
             </div>
-            <p className="footer-copy">© 2025 HavnAI Network</p>
+            <p className="footer-copy">© 2026 HavnAI Network</p>
           </div>
 
           <div className="footer-col footer-col-center">
