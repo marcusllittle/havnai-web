@@ -1943,7 +1943,7 @@ const TestPage: React.FC = () => {
                       onChange={(e) => setVideoInitStrength(e.target.value)}
                     />
                     <p className="generator-help">
-                      Lower values preserve the photo more (0.35–0.6 recommended).
+                      Lower = more preservation (0.35–0.5). Higher = more motion/change (0.6–0.75). Start with 0.55 and adjust.
                     </p>
                     <span className="generator-label">Generation settings</span>
                     <div className="generator-row">
@@ -2048,6 +2048,9 @@ const TestPage: React.FC = () => {
                         />
                       </div>
                     </div>
+                    <p className="generator-help">
+                      AnimateDiff: 16 frames optimal, max 32 (4s @ 8fps). LTX2: max 16 frames (2s @ 8fps). Use <strong>auto-extend chunks</strong> below for longer videos.
+                    </p>
                     <div className="generator-row">
                       <div>
                         <label className="generator-label" htmlFor="extend-chunks">
