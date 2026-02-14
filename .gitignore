@@ -5,4 +5,4 @@ node_modules/
 
 # Build output
 tsconfig.tsbuildinfo
-.next/cache/config.json
+.next/

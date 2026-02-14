@@ -1463,6 +1463,320 @@ main,
   }
 }
 
+/* ─── LoRA Browser + Stack ─── */
+
+.lora-section {
+  margin-top: 0.8rem;
+}
+
+.lora-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.lora-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(0, 234, 255, 0.35), rgba(70, 255, 188, 0.25));
+  color: var(--accent-strong);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+}
+
+.lora-browse-toggle {
+  border: 1px solid rgba(0, 234, 255, 0.25);
+  background: rgba(0, 234, 255, 0.06);
+  color: var(--accent-strong);
+  font-size: 0.7rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.04em;
+}
+
+.lora-browse-toggle:hover {
+  background: rgba(0, 234, 255, 0.12);
+  border-color: rgba(0, 234, 255, 0.5);
+}
+
+.lora-browse-toggle.is-open {
+  background: rgba(0, 234, 255, 0.15);
+  border-color: var(--accent-strong);
+}
+
+.lora-browse-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Browser panel */
+.lora-browser {
+  margin-top: 0.6rem;
+  padding: 0.7rem;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 234, 255, 0.15);
+  background: rgba(3, 7, 14, 0.92);
+}
+
+.lora-search {
+  width: 100%;
+  padding: 0.45rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 14, 26, 0.95);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.lora-search:focus {
+  border-color: rgba(0, 234, 255, 0.4);
+}
+
+.lora-search::placeholder {
+  color: var(--text-muted);
+}
+
+.lora-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 0.3rem;
+}
+
+.lora-chip-grid::-webkit-scrollbar {
+  width: 4px;
+}
+
+.lora-chip-grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lora-chip-grid::-webkit-scrollbar-thumb {
+  background: rgba(0, 234, 255, 0.2);
+  border-radius: 999px;
+}
+
+.lora-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 18, 30, 0.9);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.lora-chip:hover {
+  border-color: rgba(0, 234, 255, 0.4);
+  color: var(--text);
+  background: rgba(0, 234, 255, 0.06);
+}
+
+.lora-chip.is-added {
+  border-color: rgba(0, 234, 255, 0.5);
+  background: rgba(0, 234, 255, 0.1);
+  color: var(--accent-strong);
+}
+
+.lora-chip.is-added:hover {
+  border-color: rgba(255, 120, 120, 0.5);
+  background: rgba(255, 120, 120, 0.08);
+  color: #ffb5b5;
+}
+
+.lora-chip-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lora-chip-icon {
+  font-size: 0.65rem;
+  opacity: 0.7;
+}
+
+.lora-empty {
+  margin: 0;
+  padding: 0.6rem 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Stack cards */
+.lora-stack {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.lora-card {
+  padding: 0.5rem 0.65rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(6, 11, 20, 0.92);
+  transition: border-color 0.2s ease;
+}
+
+.lora-card:hover {
+  border-color: rgba(0, 234, 255, 0.2);
+}
+
+.lora-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.lora-card-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(0, 234, 255, 0.2), rgba(70, 255, 188, 0.12));
+  color: var(--accent-strong);
+  font-size: 0.65rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.lora-card-name {
+  flex: 1;
+  font-size: 0.8rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lora-card-actions {
+  display: flex;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+
+.lora-card-btn {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.6rem;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.lora-card-btn:hover {
+  background: rgba(0, 234, 255, 0.1);
+  color: var(--accent-strong);
+}
+
+.lora-card-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.lora-card-btn:disabled:hover {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.lora-card-remove:hover {
+  background: rgba(255, 120, 120, 0.12);
+  color: #ffb5b5;
+}
+
+.lora-card-weight {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.lora-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+
+.lora-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  border: 2px solid rgba(5, 10, 18, 0.95);
+  box-shadow: 0 0 6px rgba(0, 234, 255, 0.35);
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.lora-slider::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 10px rgba(0, 234, 255, 0.55);
+}
+
+.lora-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  border: 2px solid rgba(5, 10, 18, 0.95);
+  box-shadow: 0 0 6px rgba(0, 234, 255, 0.35);
+  cursor: pointer;
+}
+
+.lora-weight-value {
+  min-width: 2.4rem;
+  text-align: right;
+  font-size: 0.72rem;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  color: var(--accent-strong);
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 700px) {
+  .lora-chip-grid {
+    max-height: 140px;
+  }
+  .lora-chip-name {
+    max-width: 120px;
+  }
+}
+
 .generator-status {
   margin-top: 0.8rem;
   font-size: 0.8rem;

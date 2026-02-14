@@ -82,6 +82,8 @@ const TestPage: React.FC = () => {
   const [autoStitch, setAutoStitch] = useState(false);
   const [availableLoras, setAvailableLoras] = useState<string[]>([]);
   const [loraLoadError, setLoraLoadError] = useState<string | undefined>();
+  const [loraSearch, setLoraSearch] = useState("");
+  const [loraBrowserOpen, setLoraBrowserOpen] = useState(false);
   const [faceswapModel, setFaceswapModel] = useState("epicrealismXL_vxviiCrystalclear");
   const [baseImageUrl, setBaseImageUrl] = useState("");
   const [baseImageData, setBaseImageData] = useState<string | undefined>();
@@ -379,6 +381,40 @@ const TestPage: React.FC = () => {
   const removeLora = (index: number) => {
     setLoras((prev) => prev.filter((_, idx) => idx !== index));
   };
+
+  const moveLoraUp = (index: number) => {
+    if (index <= 0) return;
+    setLoras((prev) => {
+      const next = [...prev];
+      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+      return next;
+    });
+  };
+
+  const moveLoraDown = (index: number) => {
+    setLoras((prev) => {
+      if (index >= prev.length - 1) return prev;
+      const next = [...prev];
+      [next[index], next[index + 1]] = [next[index + 1], next[index]];
+      return next;
+    });
+  };
+
+  const cleanLoraDisplayName = (name: string): string => {
+    return name
+      .replace(/[_-]/g, " ")
+      .replace(/\.(safetensors|ckpt|pt|bin)$/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+  const selectedLoraNames = new Set(loras.map((l) => l.name.trim()).filter(Boolean));
+  const filteredLoras = availableLoras.filter((name) => {
+    if (loraSearch.trim()) {
+      return name.toLowerCase().includes(loraSearch.toLowerCase());
+    }
+    return true;
+  });
 
   const parseOptionalInt = (value: string): number | undefined => {
     if (!value.trim()) return undefined;
@@ -1203,83 +1239,111 @@ const TestPage: React.FC = () => {
                         </option>
                       ))}
                     </select>
-                    <>
-                      <label className="generator-label" htmlFor="faceswap-lora-library">
-                        LoRA library
-                      </label>
-                      <select
-                        id="faceswap-lora-library"
-                        className="generator-select"
-                        defaultValue=""
-                        disabled={!availableLoras.length}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (!value) return;
-                          addLoraByName(value);
-                          e.currentTarget.value = "";
-                        }}
-                      >
-                        <option value="">
-                          {availableLoras.length ? "Add LoRA from library…" : "No LoRAs available"}
-                        </option>
-                        {availableLoras.map((name) => (
-                          <option key={`faceswap-lora-${name}`} value={name}>
-                            {name}
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                    {loraLoadError && (
-                      <p className="generator-help">LoRA library unavailable: {loraLoadError}</p>
-                    )}
-                    <span className="generator-label">Optional LoRAs</span>
-                    {loras.map((entry, index) => {
-                      const options = entry.name && !availableLoras.includes(entry.name)
-                        ? [entry.name, ...availableLoras]
-                        : availableLoras;
-                      return (
-                        <div className="generator-lora-row" key={`faceswap-lora-${index}`}>
-                          <select
-                            className="generator-select"
-                            value={entry.name}
-                            disabled={!availableLoras.length && !entry.name}
-                            onChange={(e) => updateLora(index, "name", e.target.value)}
-                          >
-                            <option value="">Select LoRA…</option>
-                            {options.map((name) => (
-                              <option key={`faceswap-lora-option-${index}-${name}`} value={name}>
-                                {name}
-                              </option>
-                            ))}
-                          </select>
+                    {/* LoRA Browser + Stack (Face Swap) */}
+                    <div className="lora-section">
+                      <div className="lora-section-header">
+                        <span className="generator-label" style={{ margin: 0 }}>
+                          Optional LoRAs {loras.length > 0 && <span className="lora-count">{loras.length}</span>}
+                        </span>
+                        <button
+                          type="button"
+                          className={`lora-browse-toggle ${loraBrowserOpen ? "is-open" : ""}`}
+                          onClick={() => setLoraBrowserOpen(!loraBrowserOpen)}
+                          disabled={!availableLoras.length}
+                        >
+                          {loraBrowserOpen ? "Close browser" : `Browse ${availableLoras.length} LoRAs`}
+                        </button>
+                      </div>
+                      {loraLoadError && (
+                        <p className="generator-help" style={{ color: "#ffb5b5" }}>
+                          LoRA library unavailable: {loraLoadError}
+                        </p>
+                      )}
+
+                      {loraBrowserOpen && availableLoras.length > 0 && (
+                        <div className="lora-browser">
                           <input
-                            type="number"
-                            min={0}
-                            max={2}
-                            step={0.05}
-                            className="generator-input"
-                            placeholder="Weight"
-                            value={entry.weight}
-                            onChange={(e) => updateLora(index, "weight", e.target.value)}
+                            type="text"
+                            className="lora-search"
+                            placeholder="Search LoRAs..."
+                            value={loraSearch}
+                            onChange={(e) => setLoraSearch(e.target.value)}
                           />
-                          <button
-                            type="button"
-                            className="generator-mini-button"
-                            onClick={() => removeLora(index)}
-                          >
-                            Remove
-                          </button>
+                          <div className="lora-chip-grid">
+                            {filteredLoras.length === 0 && (
+                              <p className="lora-empty">No LoRAs match &ldquo;{loraSearch}&rdquo;</p>
+                            )}
+                            {filteredLoras.map((name) => {
+                              const isSelected = selectedLoraNames.has(name);
+                              return (
+                                <button
+                                  key={`fs-chip-${name}`}
+                                  type="button"
+                                  className={`lora-chip ${isSelected ? "is-added" : ""}`}
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      const idx = loras.findIndex((l) => l.name.trim() === name);
+                                      if (idx >= 0) removeLora(idx);
+                                    } else {
+                                      addLoraByName(name);
+                                    }
+                                  }}
+                                  title={isSelected ? "Click to remove" : "Click to add"}
+                                >
+                                  <span className="lora-chip-name">{cleanLoraDisplayName(name)}</span>
+                                  <span className="lora-chip-icon">{isSelected ? "\u2715" : "+"}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      className="generator-mini-button"
-                      onClick={addLora}
-                      disabled={!availableLoras.length}
-                    >
-                      Add LoRA
-                    </button>
+                      )}
+
+                      {loras.length > 0 && (
+                        <div className="lora-stack">
+                          {loras.map((entry, index) => {
+                            const weightNum = entry.weight ? parseFloat(entry.weight) : 1;
+                            const weightPct = Math.min(Math.max(weightNum / 2, 0), 1);
+                            return (
+                              <div className="lora-card" key={`fs-stack-${index}`}>
+                                <div className="lora-card-header">
+                                  <span className="lora-card-order">{index + 1}</span>
+                                  <span className="lora-card-name">
+                                    {entry.name ? cleanLoraDisplayName(entry.name) : "Empty slot"}
+                                  </span>
+                                  <div className="lora-card-actions">
+                                    <button type="button" className="lora-card-btn" onClick={() => moveLoraUp(index)} disabled={index === 0} title="Move up">&#9650;</button>
+                                    <button type="button" className="lora-card-btn" onClick={() => moveLoraDown(index)} disabled={index === loras.length - 1} title="Move down">&#9660;</button>
+                                    <button type="button" className="lora-card-btn lora-card-remove" onClick={() => removeLora(index)} title="Remove">&#10005;</button>
+                                  </div>
+                                </div>
+                                <div className="lora-card-weight">
+                                  <input
+                                    type="range"
+                                    min={0}
+                                    max={2}
+                                    step={0.05}
+                                    className="lora-slider"
+                                    value={entry.weight || "1"}
+                                    onChange={(e) => updateLora(index, "weight", e.target.value)}
+                                    style={{
+                                      background: `linear-gradient(90deg, rgba(0,234,255,0.5) ${weightPct * 100}%, rgba(255,255,255,0.06) ${weightPct * 100}%)`,
+                                    }}
+                                  />
+                                  <span className="lora-weight-value">{(entry.weight || "1.00")}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {loras.length === 0 && !loraBrowserOpen && (
+                        <p className="generator-help" style={{ marginTop: "0.3rem" }}>
+                          No LoRAs selected. Click browse to explore.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -1449,86 +1513,137 @@ const TestPage: React.FC = () => {
                         />
                       </div>
                     </div>
-                    <span className="generator-label">LoRA stack (order matters)</span>
-                    <p className="generator-help">
-                      Leave blank to use server defaults. Weights are optional.
-                    </p>
-                    <>
-                      <label className="generator-label" htmlFor="lora-library">
-                        LoRA library
-                      </label>
-                      <select
-                        id="lora-library"
-                        className="generator-select"
-                        defaultValue=""
-                        disabled={!availableLoras.length}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (!value) return;
-                          addLoraByName(value);
-                          e.currentTarget.value = "";
-                        }}
-                      >
-                        <option value="">
-                          {availableLoras.length ? "Add LoRA from library…" : "No LoRAs available"}
-                        </option>
-                        {availableLoras.map((name) => (
-                          <option key={`lora-${name}`} value={name}>
-                            {name}
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                    {loraLoadError && (
-                      <p className="generator-help">LoRA library unavailable: {loraLoadError}</p>
-                    )}
-                    {loras.map((entry, index) => {
-                      const options = entry.name && !availableLoras.includes(entry.name)
-                        ? [entry.name, ...availableLoras]
-                        : availableLoras;
-                      return (
-                        <div className="generator-lora-row" key={`lora-${index}`}>
-                          <select
-                            className="generator-select"
-                            value={entry.name}
-                            disabled={!availableLoras.length && !entry.name}
-                            onChange={(e) => updateLora(index, "name", e.target.value)}
-                          >
-                            <option value="">Select LoRA…</option>
-                            {options.map((name) => (
-                              <option key={`lora-option-${index}-${name}`} value={name}>
-                                {name}
-                              </option>
-                            ))}
-                          </select>
+                    {/* LoRA Browser + Stack */}
+                    <div className="lora-section">
+                      <div className="lora-section-header">
+                        <span className="generator-label" style={{ margin: 0 }}>
+                          LoRA stack {loras.length > 0 && <span className="lora-count">{loras.length}</span>}
+                        </span>
+                        <button
+                          type="button"
+                          className={`lora-browse-toggle ${loraBrowserOpen ? "is-open" : ""}`}
+                          onClick={() => setLoraBrowserOpen(!loraBrowserOpen)}
+                          disabled={!availableLoras.length}
+                        >
+                          {loraBrowserOpen ? "Close browser" : `Browse ${availableLoras.length} LoRAs`}
+                        </button>
+                      </div>
+                      {loraLoadError && (
+                        <p className="generator-help" style={{ color: "#ffb5b5" }}>
+                          LoRA library unavailable: {loraLoadError}
+                        </p>
+                      )}
+
+                      {/* LoRA Browser Panel */}
+                      {loraBrowserOpen && availableLoras.length > 0 && (
+                        <div className="lora-browser">
                           <input
-                            type="number"
-                            min={0}
-                            max={2}
-                            step={0.05}
-                            className="generator-input"
-                            placeholder="Weight"
-                            value={entry.weight}
-                            onChange={(e) => updateLora(index, "weight", e.target.value)}
+                            type="text"
+                            className="lora-search"
+                            placeholder="Search LoRAs..."
+                            value={loraSearch}
+                            onChange={(e) => setLoraSearch(e.target.value)}
+                            autoFocus
                           />
-                          <button
-                            type="button"
-                            className="generator-mini-button"
-                            onClick={() => removeLora(index)}
-                          >
-                            Remove
-                          </button>
+                          <div className="lora-chip-grid">
+                            {filteredLoras.length === 0 && (
+                              <p className="lora-empty">No LoRAs match &ldquo;{loraSearch}&rdquo;</p>
+                            )}
+                            {filteredLoras.map((name) => {
+                              const isSelected = selectedLoraNames.has(name);
+                              return (
+                                <button
+                                  key={`chip-${name}`}
+                                  type="button"
+                                  className={`lora-chip ${isSelected ? "is-added" : ""}`}
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      const idx = loras.findIndex((l) => l.name.trim() === name);
+                                      if (idx >= 0) removeLora(idx);
+                                    } else {
+                                      addLoraByName(name);
+                                    }
+                                  }}
+                                  title={isSelected ? "Click to remove from stack" : "Click to add to stack"}
+                                >
+                                  <span className="lora-chip-name">{cleanLoraDisplayName(name)}</span>
+                                  <span className="lora-chip-icon">{isSelected ? "\u2715" : "+"}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      className="generator-mini-button"
-                      onClick={addLora}
-                      disabled={!availableLoras.length}
-                    >
-                      Add LoRA
-                    </button>
+                      )}
+
+                      {/* LoRA Stack Cards */}
+                      {loras.length > 0 && (
+                        <div className="lora-stack">
+                          {loras.map((entry, index) => {
+                            const weightNum = entry.weight ? parseFloat(entry.weight) : 1;
+                            const weightPct = Math.min(Math.max(weightNum / 2, 0), 1);
+                            return (
+                              <div className="lora-card" key={`stack-${index}`}>
+                                <div className="lora-card-header">
+                                  <span className="lora-card-order">{index + 1}</span>
+                                  <span className="lora-card-name">
+                                    {entry.name ? cleanLoraDisplayName(entry.name) : "Empty slot"}
+                                  </span>
+                                  <div className="lora-card-actions">
+                                    <button
+                                      type="button"
+                                      className="lora-card-btn"
+                                      onClick={() => moveLoraUp(index)}
+                                      disabled={index === 0}
+                                      title="Move up"
+                                    >
+                                      &#9650;
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="lora-card-btn"
+                                      onClick={() => moveLoraDown(index)}
+                                      disabled={index === loras.length - 1}
+                                      title="Move down"
+                                    >
+                                      &#9660;
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="lora-card-btn lora-card-remove"
+                                      onClick={() => removeLora(index)}
+                                      title="Remove"
+                                    >
+                                      &#10005;
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="lora-card-weight">
+                                  <input
+                                    type="range"
+                                    min={0}
+                                    max={2}
+                                    step={0.05}
+                                    className="lora-slider"
+                                    value={entry.weight || "1"}
+                                    onChange={(e) => updateLora(index, "weight", e.target.value)}
+                                    style={{
+                                      background: `linear-gradient(90deg, rgba(0,234,255,0.5) ${weightPct * 100}%, rgba(255,255,255,0.06) ${weightPct * 100}%)`,
+                                    }}
+                                  />
+                                  <span className="lora-weight-value">{(entry.weight || "1.00")}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {loras.length === 0 && !loraBrowserOpen && (
+                        <p className="generator-help" style={{ marginTop: "0.3rem" }}>
+                          No LoRAs selected. Click browse to explore your library.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
 
