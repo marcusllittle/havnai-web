@@ -155,12 +155,12 @@ const HomePage: NextPage = () => {
         <title>HavnAI Network — Own Your Intelligence</title>
         <meta
           name="description"
-          content="HavnAI is a decentralized GPU network where creators earn $HAI running AI models."
+          content="HavnAI is a decentralized GPU network for AI image and video generation. Node operators earn $HAI running 20 tiered models."
         />
         <meta property="og:title" content="HavnAI Network — Own Your Intelligence" />
         <meta
           property="og:description"
-          content="A decentralized GPU network with weighted model routing and dynamic $HAI rewards."
+          content="A decentralized GPU network for AI image and video generation. 20 tiered models, weighted routing, and dynamic $HAI rewards."
         />
         <meta property="og:type" content="website" />
       </Head>
@@ -191,7 +191,7 @@ const HomePage: NextPage = () => {
           >
             <a href="#home">Home</a>
             <a href="#how">How It Works</a>
-            <a href="#smart-routing">Smart Routing</a>
+            <a href="#smart-routing">Models</a>
             <a href="#rewards">Rewards</a>
             <a href="/test">Generator</a>
             <a href="/library">My Library</a>
@@ -220,8 +220,9 @@ const HomePage: NextPage = () => {
               <p className="hero-kicker">Decentralized GPU Intelligence</p>
               <h1 className="hero-title">OWN YOUR INTELLIGENCE</h1>
               <p className="hero-subtitle">
-                A decentralized GPU network where creators earn <strong>$HAI</strong> running AI models.
-                Weighted routing, benchmark-driven model tiers, and live rewards.
+                A decentralized GPU network for AI image and video generation. Node operators earn{" "}
+                <strong>$HAI</strong> running 20 models across realism, anime, cartoon, and video
+                — all weighted and rewarded by quality tier.
               </p>
               <div className="hero-install-note">
                 <h3>Join the HavnAI GPU Grid</h3>
@@ -284,39 +285,39 @@ const HomePage: NextPage = () => {
         <section id="how" className="section">
           <div className="section-header">
             <h2>How It Works</h2>
-            <p>From GPU to $HAI rewards in four concrete steps.</p>
+            <p>From GPU to $HAI rewards in four steps.</p>
           </div>
           <div className="steps-grid">
             <article className="step-card">
               <div className="step-icon">1</div>
-              <h3>Connect Your GPU Node</h3>
+              <h3>Connect Your GPU</h3>
               <p>
-                Point the HavnAI node client at the coordinator, set your wallet, and enable{" "}
-                <code>CREATOR_MODE</code> to accept image/video jobs.
+                Run the one-line installer on your GPU machine. It registers your node with the
+                coordinator and starts accepting image and video generation jobs.
               </p>
             </article>
             <article className="step-card">
               <div className="step-icon">2</div>
-              <h3>Receive AI Jobs</h3>
+              <h3>Jobs Get Routed</h3>
               <p>
-                The coordinator queues jobs submitted to <code>/submit-job</code> and assigns them only to
-                compatible, healthy nodes.
+                Users submit prompts through the Generator. The coordinator picks the best available
+                model and sends the job to a healthy node.
               </p>
             </article>
             <article className="step-card">
               <div className="step-icon">3</div>
-              <h3>Run Models with Weighted Routing</h3>
+              <h3>Your GPU Generates</h3>
               <p>
-                Models are chosen with weighted random routing, favoring higher-tier, benchmarked
-                checkpoints.
+                Your node runs the model — 18 image models (SD 1.5 and SDXL) plus LTX2 video and
+                AnimateDiff — and returns the result.
               </p>
             </article>
             <article className="step-card">
               <div className="step-icon">4</div>
-              <h3>Earn $HAI Automatically</h3>
+              <h3>Earn $HAI</h3>
               <p>
-                Each completed job records runtime, model weight, and quality tier to scale your $HAI
-                rewards.
+                Every completed job earns $HAI rewards. Payouts scale with model tier, pipeline cost,
+                and runtime.
               </p>
             </article>
           </div>
@@ -327,36 +328,37 @@ const HomePage: NextPage = () => {
           <div className="section-header">
             <h2>Smart Routing · Weighted Models</h2>
             <p>
-              Identical prompts, benchmark scores, and a registry-backed weight for every creator model.
+              20 models across image and video generation, each assigned a weight from our benchmark
+              registry. Higher-weight models get picked more often and earn bigger rewards.
             </p>
           </div>
           <div className="routing-layout">
             <div className="routing-copy">
               <p>
-                When a user hits <code>/submit-job</code> with <code>"model": "auto"</code>, the coordinator
-                selects a model using weighted random routing. Weights are derived from a benchmark →
-                scoring → registry workflow:
+                When you generate with <strong>auto mode</strong>, the coordinator picks a model using
+                weighted random selection. Weights come from our benchmark and scoring pipeline:
               </p>
               <ul>
-                <li>Standardized prompts per domain (realism, anime, motion, text).</li>
-                <li>Rubric scoring → tier assignment (Tier 5 → Tier 1).</li>
-                <li>Tier ↔ target weight ↔ reward multiplier.</li>
+                <li>Each model is scored on realism, detail, and consistency.</li>
+                <li>Scores map to tiers (S, A, B, C, D) with assigned weights.</li>
+                <li>Higher-tier models are selected more often and earn more $HAI per job.</li>
               </ul>
               <p>
-                The result: more reliable, higher-quality models are chosen more often and rewarded more
-                aggressively in $HAI.
+                The result: the best models get used the most and node operators running them earn the
+                highest rewards.
               </p>
             </div>
             <div className="json-card">
-              <div className="json-card-label">Example routing weights</div>
+              <div className="json-card-label">Live routing weights (from registry)</div>
               <pre>
                 <code>
                   {`{
-  "juggernautxl_ragnarokby": 77,
-  "majicmixRealistic_v7": 70,
-  "lazymixRealAmateur_v40": 55,
-  "perfectdeliberate_v5SD15": 50,
-  "epicrealismxl_vxviicrystalclear": 45
+  "juggernautXL_ragnarokBy":       20,  // Tier S
+  "epicrealismXL_vxviiCrystalclear": 20,  // Tier S
+  "perfectdeliberate_v5SD15":      10,  // Tier A
+  "cyberrealisticPony_v160":        8,  // Tier B
+  "disneyPixarCartoon_v10":         5,  // Tier C
+  "ltx2 (video)":                  20   // Video
 }`}
                 </code>
               </pre>
@@ -368,52 +370,59 @@ const HomePage: NextPage = () => {
         <section id="rewards" className="section">
           <div className="section-header">
             <h2>Dynamic $HAI Rewards</h2>
-            <p>Weight tiers drive multipliers. Better models, bigger payouts.</p>
+            <p>
+              Rewards scale with model tier, pipeline cost, and runtime. Better models earn more per
+              job.
+            </p>
           </div>
           <div className="table-wrapper">
             <table className="rewards-table">
               <thead>
                 <tr>
                   <th>Tier</th>
-                  <th>Routing Weight</th>
-                  <th>Reward Multiplier</th>
-                  <th>Example Model</th>
+                  <th>Weight</th>
+                  <th>Multiplier</th>
+                  <th>Example Models</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td>5</td>
-                  <td>77</td>
+                  <td>S</td>
+                  <td>20</td>
                   <td>2.0×</td>
-                  <td>juggernautXL</td>
+                  <td>JuggernautXL, EpicRealismXL</td>
                 </tr>
                 <tr>
-                  <td>4</td>
-                  <td>70</td>
-                  <td>1.7×</td>
-                  <td>majicmix</td>
-                </tr>
-                <tr>
-                  <td>3</td>
-                  <td>55</td>
-                  <td>1.3×</td>
-                  <td>lazymix</td>
-                </tr>
-                <tr>
-                  <td>2</td>
-                  <td>50</td>
-                  <td>1.1×</td>
-                  <td>deliberate</td>
-                </tr>
-                <tr>
-                  <td>1</td>
-                  <td>45</td>
+                  <td>A</td>
+                  <td>10</td>
                   <td>1.0×</td>
-                  <td>epicrealism</td>
+                  <td>Deliberate v5</td>
+                </tr>
+                <tr>
+                  <td>B</td>
+                  <td>8</td>
+                  <td>0.8×</td>
+                  <td>CyberRealistic, Lyriel, RealisticVision</td>
+                </tr>
+                <tr>
+                  <td>C</td>
+                  <td>5</td>
+                  <td>0.5×</td>
+                  <td>Disney Pixar Cartoon, Kizuki Anime</td>
+                </tr>
+                <tr>
+                  <td>D</td>
+                  <td>3</td>
+                  <td>0.3×</td>
+                  <td>ZavyChroma, DivineElegance (experimental)</td>
                 </tr>
               </tbody>
             </table>
           </div>
+          <p style={{ marginTop: "0.75rem", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+            SDXL pipelines earn an additional 1.5× compute bonus. Video (LTX2) earns 2.0×. Longer
+            runtimes also scale rewards proportionally.
+          </p>
         </section>
 
         {/* LIVE JOBS SNAPSHOT */}
@@ -441,7 +450,7 @@ const HomePage: NextPage = () => {
                 <tbody id="jobsTableBody">
                   {liveJobsLoading ? (
                     <tr>
-                      <td colSpan={5}>Waiting for recent jobs from /jobs/recent…</td>
+                      <td colSpan={5}>Loading recent jobs…</td>
                     </tr>
                   ) : liveJobs.length ? (
                     liveJobs.slice(0, 10).map((job) => {
@@ -544,9 +553,8 @@ const HomePage: NextPage = () => {
             <div className="join-copy">
               <h2>Join Stage 6 → 7 Alpha</h2>
               <p>
-                We are validating weighted routing, benchmark-driven tiers, and the reward engine across a
-                small set of GPUs before opening the grid. If you are comfortable running bleeding-edge AI
-                infra, we want you in the loop.
+                We're running 20 image and video models across a growing set of GPU nodes. If you have a
+                capable NVIDIA GPU and want to earn $HAI by powering AI generation, join the alpha.
               </p>
               <ul>
                 <li>12&nbsp;GB+ NVIDIA GPU (3060 / 3080 / 4090 class).</li>
