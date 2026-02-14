@@ -30,10 +30,10 @@ const HISTORY_KEY = "havnai_test_history_v1";
 // Fallback models for offline development
 const FALLBACK_IMAGE_MODELS: { id: string; label: string }[] = [
   { id: "auto", label: "Auto (let grid choose best)" },
-  { id: "juggernautXL_ragnarokBy", label: "juggernautXL_ragnarokBy · Tier S · SDXL" },
-  { id: "epicrealismXL_vxviiCrystalclear", label: "epicrealismXL_vxviiCrystalclear · Tier S · SDXL" },
-  { id: "perfectdeliberate_v5SD15", label: "perfectdeliberate_v5SD15 · Tier A · SD1.5" },
-  { id: "cyberrealisticPony_v160", label: "cyberrealisticPony_v160 · Tier B · SDXL" },
+  { id: "juggernautXL_ragnarokBy", label: "Juggernaut XL · Tier S · SDXL" },
+  { id: "epicrealismXL_vxviiCrystalclear", label: "Epic Realism XL · Tier S · SDXL" },
+  { id: "perfectdeliberate_v5SD15", label: "Perfect Deliberate · Tier A · SD1.5" },
+  { id: "cyberrealisticPony_v160", label: "Cyberrealistic Pony · Tier B · SDXL" },
 ];
 
 type LoraDraft = {
@@ -66,8 +66,8 @@ const TestPage: React.FC = () => {
     { id: "animatediff", label: "AnimateDiff · Tier A · Animation" },
   ]);
   const [faceSwapModels, setFaceSwapModels] = useState<{ id: string; label: string }[]>([
-    { id: "epicrealismXL_vxviiCrystalclear", label: "EpicRealismXL · Tier S · SDXL" },
-    { id: "juggernautXL_ragnarokBy", label: "JuggernautXL · Tier S · SDXL" },
+    { id: "epicrealismXL_vxviiCrystalclear", label: "Epic Realism XL · Tier S · SDXL" },
+    { id: "juggernautXL_ragnarokBy", label: "Juggernaut XL · Tier S · SDXL" },
   ]);
   const [steps, setSteps] = useState("");
   const [guidance, setGuidance] = useState("");
@@ -177,6 +177,43 @@ const TestPage: React.FC = () => {
   // Load models from backend
   useEffect(() => {
     let active = true;
+
+    // Clean up technical model names for better UX
+    const cleanModelName = (name: string): string => {
+      // Remove version suffixes like _v5SD15, _vxviiCrystalclear, _v23Final, _beta, etc.
+      let cleaned = name
+        .replace(/_v\d+SD15/i, "")
+        .replace(/_v[xvi]+[a-z]*/i, "") // Removes _vxviiCrystalclear, _v23Final, etc.
+        .replace(/_v\d+/i, "")
+        .replace(/By$/i, "")
+        .replace(/_beta$/i, " (Beta)")
+        .replace(/_final$/i, "")
+        .replace(/Merge$/i, "")
+        .replace(/Porn/gi, "")
+        .replace(/_/g, " ");
+
+      // Special case replacements for readability
+      cleaned = cleaned
+        .replace(/XL /g, "XL ")
+        .replace(/SD15/g, "")
+        .replace(/amix/i, "aMix")
+        .replace(/pony/i, "Pony");
+
+      // Capitalize first letter of each word
+      cleaned = cleaned
+        .split(" ")
+        .map((word) => {
+          if (!word) return "";
+          // Keep acronyms and versions uppercase
+          if (word === "XL" || word === "v5" || word === "v60" || word === "V10") return word;
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
+        .join(" ")
+        .trim();
+
+      return cleaned;
+    };
+
     const loadModels = async () => {
       if (typeof window === "undefined") return;
       try {
@@ -204,12 +241,12 @@ const TestPage: React.FC = () => {
           return pipeline.includes("sdxl") && tier === "S";
         });
 
-        // Transform to dropdown format with tier badges
+        // Transform to dropdown format with tier badges and clean names
         const imageOptions = [
           { id: "auto", label: "Auto (let grid choose best)" },
           ...imageModelsData.map((m: any) => ({
             id: m.name,
-            label: `${m.name} · Tier ${m.tier} · ${m.pipeline.toUpperCase()}`,
+            label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${m.pipeline.toUpperCase()}`,
           })),
         ];
 
@@ -217,13 +254,13 @@ const TestPage: React.FC = () => {
           const typeLabel = m.task_type === "ANIMATEDIFF" ? "Animation" : "Video";
           return {
             id: m.name,
-            label: `${m.name} · Tier ${m.tier} · ${typeLabel}`,
+            label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${typeLabel}`,
           };
         });
 
         const faceSwapOptions = faceSwapModelsData.map((m: any) => ({
           id: m.name,
-          label: `${m.name} · Tier ${m.tier} · ${m.pipeline.toUpperCase()}`,
+          label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${m.pipeline.toUpperCase()}`,
         }));
 
         setImageModels(imageOptions);
