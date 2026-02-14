@@ -475,3 +475,79 @@ export async function fetchCreditCost(model: string, taskType?: string): Promise
   }
   return (await res.json()) as CreditCost;
 }
+
+// ---------------------------------------------------------------------------
+// Stripe payments
+// ---------------------------------------------------------------------------
+
+export interface CreditPackage {
+  id: string;
+  name: string;
+  credits: number;
+  price_cents: number;
+  description: string;
+}
+
+export interface PackagesResponse {
+  packages: CreditPackage[];
+  stripe_enabled: boolean;
+}
+
+export interface CheckoutResponse {
+  session_id: string;
+  checkout_url: string;
+}
+
+export interface PaymentRecord {
+  session_id: string;
+  package_id: string;
+  credits: number;
+  price_cents: number;
+  status: string;
+  created_at: number;
+  completed_at: number | null;
+}
+
+export async function fetchPackages(): Promise<PackagesResponse> {
+  const res = await fetch(apiUrl("/payments/packages"), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return (await res.json()) as PackagesResponse;
+}
+
+export async function createCheckout(packageId: string): Promise<CheckoutResponse> {
+  const successUrl = `${window.location.origin}/pricing?payment=success`;
+  const cancelUrl = `${window.location.origin}/pricing?payment=cancelled`;
+
+  const res = await fetch(apiUrl("/payments/checkout"), {
+    method: "POST",
+    headers: buildHeaders(false),
+    body: JSON.stringify({
+      wallet: WALLET,
+      package_id: packageId,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    }),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return (await res.json()) as CheckoutResponse;
+}
+
+export async function fetchPaymentHistory(): Promise<PaymentRecord[]> {
+  const res = await fetch(
+    apiUrl(`/payments/history?wallet=${encodeURIComponent(WALLET)}`),
+    { headers: buildHeaders(false) }
+  );
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  const data = await res.json();
+  return data.payments as PaymentRecord[];
+}
+
+export { WALLET };

@@ -253,6 +253,7 @@ const HomePage: NextPage = () => {
             <a href="#models">Models</a>
             <a href="/test">Generator</a>
             <a href="/library">My Library</a>
+            <a href="/pricing">Buy Credits</a>
             <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" rel="noreferrer">
               Dashboard
             </a>

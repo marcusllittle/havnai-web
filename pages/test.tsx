@@ -832,6 +832,7 @@ const TestPage: React.FC = () => {
             <a href="https://joinhavn.io#rewards">Rewards</a>
             <a href="https://joinhavn.io#models">Models</a>
             <a href="/library">My Library</a>
+            <a href="/pricing">Buy Credits</a>
             <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" rel="noreferrer">
               Dashboard
             </a>
