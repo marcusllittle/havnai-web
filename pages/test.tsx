@@ -2049,7 +2049,7 @@ const TestPage: React.FC = () => {
                       </div>
                     </div>
                     <p className="generator-help">
-                      16 frames @ 8fps = 2 seconds. For image-to-video, use 48-64 frames @ 8fps (6-8s) or 32-48 frames @ 16fps (2-3s) for smooth motion. Short clips flicker.
+                      AnimateDiff: 16 frames optimal, max 32 (4s @ 8fps). LTX2: max 16 frames (2s @ 8fps). Use <strong>auto-extend chunks</strong> below for longer videos.
                     </p>
                     <div className="generator-row">
                       <div>
