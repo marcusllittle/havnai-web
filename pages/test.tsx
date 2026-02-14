@@ -1135,9 +1135,9 @@ const TestPage: React.FC = () => {
             <a href="/test" className="nav-active">Generator</a>
             <a href="/library">My Library</a>
             <a href="/pricing">Buy Credits</a>
-            <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" rel="noreferrer">
-              Dashboard
-            </a>
+            <a href="/analytics">Analytics</a>
+            <a href="/nodes">Nodes</a>
+            <a href="/marketplace">Marketplace</a>
           </nav>
         </div>
       </header>

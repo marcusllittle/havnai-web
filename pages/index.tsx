@@ -196,18 +196,10 @@ const HomePage: NextPage = () => {
             <a href="/test">Generator</a>
             <a href="/library">My Library</a>
             <a href="/pricing">Buy Credits</a>
-            <a href="http://api.joinhavn.io:5001/dashboard" target="_blank" rel="noreferrer">
-              Dashboard
-            </a>
+            <a href="/analytics">Analytics</a>
+            <a href="/nodes">Nodes</a>
+            <a href="/marketplace">Marketplace</a>
             <a href="#join">Join Alpha</a>
-            <a
-              href="https://www.patreon.com/cw/u38989793"
-              target="_blank"
-              rel="noreferrer"
-              className="nav-patreon"
-            >
-              Patreon
-            </a>
           </nav>
         </div>
       </header>
