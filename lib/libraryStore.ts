@@ -58,6 +58,12 @@ export function removeFromLibrary(jobId: string): LibraryEntry[] {
   return next;
 }
 
+export function bulkRemoveFromLibrary(jobIds: Set<string>): LibraryEntry[] {
+  const next = loadLibrary().filter((entry) => !jobIds.has(entry.job_id));
+  saveLibrary(next);
+  return next;
+}
+
 export function isInLibrary(jobId: string): boolean {
   return loadLibrary().some((entry) => entry.job_id === jobId);
 }

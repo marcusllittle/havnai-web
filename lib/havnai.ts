@@ -550,4 +550,242 @@ export async function fetchPaymentHistory(): Promise<PaymentRecord[]> {
   return data.payments as PaymentRecord[];
 }
 
+// ---------------------------------------------------------------------------
+// Analytics
+// ---------------------------------------------------------------------------
+
+export interface AnalyticsOverview {
+  total_jobs: number;
+  jobs_today: number;
+  success_rate: number;
+  total_rewards: number;
+  active_nodes: number;
+  total_credits_spent: number;
+}
+
+export interface AnalyticsJobsResponse {
+  days: { date: string; count: number; success: number; failed: number }[];
+  by_model: { model: string; count: number }[];
+  by_type: { task_type: string; count: number }[];
+}
+
+export interface AnalyticsCostsResponse {
+  by_model: { model: string; total_cost: number; job_count: number }[];
+  by_day: { date: string; cost: number }[];
+  total_spent: number;
+}
+
+export interface AnalyticsNodesResponse {
+  nodes: {
+    node_id: string;
+    node_name: string;
+    uptime_pct: number;
+    avg_latency: number;
+    jobs_completed: number;
+    total_rewards: number;
+  }[];
+}
+
+export interface AnalyticsRewardsResponse {
+  by_node: { node_id: string; node_name: string; total: number; count: number }[];
+  by_model: { model: string; total: number; count: number }[];
+  total: number;
+}
+
+export async function fetchAnalyticsOverview(): Promise<AnalyticsOverview> {
+  const res = await fetch(apiUrl("/api/analytics/overview"), { headers: buildHeaders(true) });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as AnalyticsOverview;
+}
+
+export async function fetchAnalyticsJobs(days = 30): Promise<AnalyticsJobsResponse> {
+  const res = await fetch(apiUrl(`/api/analytics/jobs?days=${days}`), { headers: buildHeaders(true) });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as AnalyticsJobsResponse;
+}
+
+export async function fetchAnalyticsCosts(days = 30): Promise<AnalyticsCostsResponse> {
+  const res = await fetch(
+    apiUrl(`/api/analytics/costs?days=${days}&wallet=${encodeURIComponent(WALLET)}`),
+    { headers: buildHeaders(true) }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as AnalyticsCostsResponse;
+}
+
+export async function fetchAnalyticsNodes(): Promise<AnalyticsNodesResponse> {
+  const res = await fetch(apiUrl("/api/analytics/nodes"), { headers: buildHeaders(true) });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as AnalyticsNodesResponse;
+}
+
+export async function fetchAnalyticsRewards(): Promise<AnalyticsRewardsResponse> {
+  const res = await fetch(apiUrl("/api/analytics/rewards"), { headers: buildHeaders(true) });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as AnalyticsRewardsResponse;
+}
+
+// ---------------------------------------------------------------------------
+// Nodes
+// ---------------------------------------------------------------------------
+
+export interface NodeInfo {
+  node_id: string;
+  node_name?: string;
+  role: string;
+  os: string;
+  gpu: {
+    gpu_name?: string;
+    memory_total_mb?: number;
+    memory_used_mb?: number;
+    utilization?: number;
+  };
+  models: string[];
+  pipelines: string[];
+  rewards: number;
+  tasks_completed: number;
+  utilization: number;
+  avg_utilization: number;
+  last_seen: string;
+  wallet?: string;
+  online: boolean;
+}
+
+export interface NodeDetail extends NodeInfo {
+  reward_history: { reward: number; timestamp: string }[];
+  uptime?: number;
+}
+
+export interface LeaderboardEntry {
+  wallet: string;
+  total_rewards: number;
+  jobs: number;
+  last_24h: number;
+  nodes: { node_id: string; node_name: string; role: string }[];
+}
+
+export async function fetchNodes(): Promise<NodeInfo[]> {
+  const res = await fetch(apiUrl("/nodes"), { headers: buildHeaders(false) });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return (data.nodes || []) as NodeInfo[];
+}
+
+export async function fetchNodeDetail(nodeId: string): Promise<NodeDetail> {
+  const res = await fetch(apiUrl(`/nodes/${encodeURIComponent(nodeId)}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as NodeDetail;
+}
+
+export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
+  const res = await fetch(apiUrl("/network/leaderboard"), { headers: buildHeaders(false) });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return (data.leaderboard || []) as LeaderboardEntry[];
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace / Workflows
+// ---------------------------------------------------------------------------
+
+export interface Workflow {
+  id: string;
+  name: string;
+  description: string;
+  creator_wallet: string;
+  category?: string;
+  config: Record<string, any>;
+  published: boolean;
+  usage_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowListResponse {
+  workflows: Workflow[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export async function fetchMarketplace(
+  opts: { search?: string; category?: string; offset?: number; limit?: number } = {}
+): Promise<WorkflowListResponse> {
+  const params = new URLSearchParams();
+  if (opts.search) params.set("search", opts.search);
+  if (opts.category) params.set("category", opts.category);
+  if (opts.offset) params.set("offset", String(opts.offset));
+  if (opts.limit) params.set("limit", String(opts.limit));
+  const qs = params.toString();
+  const res = await fetch(apiUrl(`/api/marketplace/browse${qs ? `?${qs}` : ""}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as WorkflowListResponse;
+}
+
+export async function fetchWorkflow(id: string): Promise<Workflow> {
+  const res = await fetch(apiUrl(`/api/workflows/${encodeURIComponent(id)}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as Workflow;
+}
+
+export async function createWorkflow(data: {
+  name: string;
+  description: string;
+  category?: string;
+  config: Record<string, any>;
+}): Promise<Workflow> {
+  const res = await fetch(apiUrl("/api/workflows"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ ...data, wallet: WALLET }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as Workflow;
+}
+
+export async function publishWorkflow(id: string): Promise<Workflow> {
+  const res = await fetch(apiUrl(`/api/workflows/${encodeURIComponent(id)}/publish`), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ wallet: WALLET }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as Workflow;
+}
+
+// ---------------------------------------------------------------------------
+// Wallet / Rewards
+// ---------------------------------------------------------------------------
+
+export interface WalletRewards {
+  wallet: string;
+  total_rewards: number;
+  claimable: number;
+  claimed: number;
+}
+
+export async function fetchWalletRewards(): Promise<WalletRewards> {
+  const res = await fetch(apiUrl(`/api/rewards/claimable?wallet=${encodeURIComponent(WALLET)}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as WalletRewards;
+}
+
+export async function claimRewards(): Promise<{ claimed: number; tx_hash?: string }> {
+  const res = await fetch(apiUrl("/api/rewards/claim"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ wallet: WALLET }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return await res.json();
+}
+
 export { WALLET };
