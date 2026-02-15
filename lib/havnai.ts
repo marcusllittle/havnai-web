@@ -594,20 +594,20 @@ export interface AnalyticsRewardsResponse {
 }
 
 export async function fetchAnalyticsOverview(): Promise<AnalyticsOverview> {
-  const res = await fetch(apiUrl("/api/analytics/overview"), { headers: buildHeaders(true) });
+  const res = await fetch(apiUrl("/analytics/overview"), { headers: buildHeaders(true) });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as AnalyticsOverview;
 }
 
 export async function fetchAnalyticsJobs(days = 30): Promise<AnalyticsJobsResponse> {
-  const res = await fetch(apiUrl(`/api/analytics/jobs?days=${days}`), { headers: buildHeaders(true) });
+  const res = await fetch(apiUrl(`/analytics/jobs?days=${days}`), { headers: buildHeaders(true) });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as AnalyticsJobsResponse;
 }
 
 export async function fetchAnalyticsCosts(days = 30): Promise<AnalyticsCostsResponse> {
   const res = await fetch(
-    apiUrl(`/api/analytics/costs?days=${days}&wallet=${encodeURIComponent(WALLET)}`),
+    apiUrl(`/analytics/costs?days=${days}&wallet=${encodeURIComponent(WALLET)}`),
     { headers: buildHeaders(true) }
   );
   if (!res.ok) throw await parseErrorResponse(res);
@@ -615,13 +615,13 @@ export async function fetchAnalyticsCosts(days = 30): Promise<AnalyticsCostsResp
 }
 
 export async function fetchAnalyticsNodes(): Promise<AnalyticsNodesResponse> {
-  const res = await fetch(apiUrl("/api/analytics/nodes"), { headers: buildHeaders(true) });
+  const res = await fetch(apiUrl("/analytics/nodes"), { headers: buildHeaders(true) });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as AnalyticsNodesResponse;
 }
 
 export async function fetchAnalyticsRewards(): Promise<AnalyticsRewardsResponse> {
-  const res = await fetch(apiUrl("/api/analytics/rewards"), { headers: buildHeaders(true) });
+  const res = await fetch(apiUrl("/analytics/rewards"), { headers: buildHeaders(true) });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as AnalyticsRewardsResponse;
 }
@@ -720,7 +720,7 @@ export async function fetchMarketplace(
   if (opts.offset) params.set("offset", String(opts.offset));
   if (opts.limit) params.set("limit", String(opts.limit));
   const qs = params.toString();
-  const res = await fetch(apiUrl(`/api/marketplace/browse${qs ? `?${qs}` : ""}`), {
+  const res = await fetch(apiUrl(`/marketplace/browse${qs ? `?${qs}` : ""}`), {
     headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
@@ -728,7 +728,7 @@ export async function fetchMarketplace(
 }
 
 export async function fetchWorkflow(id: string): Promise<Workflow> {
-  const res = await fetch(apiUrl(`/api/workflows/${encodeURIComponent(id)}`), {
+  const res = await fetch(apiUrl(`/workflows/${encodeURIComponent(id)}`), {
     headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
@@ -741,7 +741,7 @@ export async function createWorkflow(data: {
   category?: string;
   config: Record<string, any>;
 }): Promise<Workflow> {
-  const res = await fetch(apiUrl("/api/workflows"), {
+  const res = await fetch(apiUrl("/workflows"), {
     method: "POST",
     headers: buildHeaders(true),
     body: JSON.stringify({ ...data, wallet: WALLET }),
@@ -751,7 +751,7 @@ export async function createWorkflow(data: {
 }
 
 export async function publishWorkflow(id: string): Promise<Workflow> {
-  const res = await fetch(apiUrl(`/api/workflows/${encodeURIComponent(id)}/publish`), {
+  const res = await fetch(apiUrl(`/workflows/${encodeURIComponent(id)}/publish`), {
     method: "POST",
     headers: buildHeaders(true),
     body: JSON.stringify({ wallet: WALLET }),
@@ -772,7 +772,7 @@ export interface WalletRewards {
 }
 
 export async function fetchWalletRewards(): Promise<WalletRewards> {
-  const res = await fetch(apiUrl(`/api/rewards/claimable?wallet=${encodeURIComponent(WALLET)}`), {
+  const res = await fetch(apiUrl(`/rewards/claimable?wallet=${encodeURIComponent(WALLET)}`), {
     headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
@@ -780,7 +780,7 @@ export async function fetchWalletRewards(): Promise<WalletRewards> {
 }
 
 export async function claimRewards(): Promise<{ claimed: number; tx_hash?: string }> {
-  const res = await fetch(apiUrl("/api/rewards/claim"), {
+  const res = await fetch(apiUrl("/rewards/claim"), {
     method: "POST",
     headers: buildHeaders(true),
     body: JSON.stringify({ wallet: WALLET }),

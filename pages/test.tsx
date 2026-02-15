@@ -611,7 +611,10 @@ const TestPage: React.FC = () => {
     const initImageValue = (initOverride ?? (videoInitData || videoInitUrl).trim()).trim();
     if (initImageValue) {
       request.initImage = initImageValue;
-      request.model = "animatediff";
+      // Only default to animatediff if no model is explicitly selected
+      if (!selectedModel || selectedModel === "ltx2") {
+        request.model = "animatediff";
+      }
     }
     const strengthValue = parseOptionalFloat(videoInitStrength);
     if (strengthValue !== undefined) {
