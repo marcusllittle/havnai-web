@@ -409,17 +409,30 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
             </details>
           </section>
 
-          {normalized.isFailed && (
-            <section className="job-section job-failure">
-              <h4>Something went wrong</h4>
-              <p>{jobData.error_message || jobData.error || "Unknown error"}</p>
-              <ul>
-                <li>Retry the job or pick a smaller frame count.</li>
-                <li>Lower resolution or switch to a faster model.</li>
-                <li>Copy debug info to share with support.</li>
-              </ul>
-            </section>
-          )}
+          {normalized.isFailed && (() => {
+            const errText = jobData.error_message || jobData.error || "Unknown error";
+            const isOOM = /out of memory/i.test(errText);
+            return (
+              <section className="job-section job-failure">
+                <h4>Something went wrong</h4>
+                <p>{errText}</p>
+                {isOOM ? (
+                  <ul>
+                    <li>Your GPU ran out of memory during generation.</li>
+                    <li>Try reducing resolution (e.g. 384x384) or frame count.</li>
+                    <li>Switch to LTX2 which uses less VRAM than AnimateDiff.</li>
+                    <li>Close other GPU-heavy apps before retrying.</li>
+                  </ul>
+                ) : (
+                  <ul>
+                    <li>Retry the job or pick a smaller frame count.</li>
+                    <li>Lower resolution or switch to a faster model.</li>
+                    <li>Copy debug info to share with support.</li>
+                  </ul>
+                )}
+              </section>
+            );
+          })()}
         </div>
       </aside>
     </div>
