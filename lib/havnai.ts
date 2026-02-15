@@ -560,6 +560,7 @@ export interface AnalyticsOverview {
   success_rate: number;
   total_rewards: number;
   active_nodes: number;
+  online_nodes?: number;
   total_credits_spent: number;
 }
 
