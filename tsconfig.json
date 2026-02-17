@@ -8,6 +8,10 @@
     ],
     "allowJs": true,
     "skipLibCheck": true,
+    "types": [
+      "node",
+      "react"
+    ],
     "strict": false,
     "noEmit": true,
     "incremental": true,
