@@ -123,22 +123,6 @@ const TestPage: React.FC = () => {
   const [credits, setCredits] = useState<CreditBalance | null>(null);
   const inviteSaved = Boolean(savedInviteCode);
 
-  const getApiBase = () => {
-    const envBase =
-      process.env.NEXT_PUBLIC_API_BASE_URL ||
-      process.env.NEXT_PUBLIC_HAVNAI_API_BASE ||
-      "/api";
-
-    if (typeof window !== "undefined") {
-      const runtimeBase =
-        (window as any).NEXT_PUBLIC_API_BASE_URL ||
-        (window as any).NEXT_PUBLIC_HAVNAI_API_BASE;
-      const base = runtimeBase && String(runtimeBase).length > 0 ? String(runtimeBase) : envBase;
-      return base.replace(/\/$/, "");
-    }
-    return String(envBase).replace(/\/$/, "");
-  };
-
   const apiBase = getApiBase();
 
   // Load history from localStorage on mount
