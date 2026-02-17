@@ -25,6 +25,7 @@ import {
 import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
 import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 import { getJobSSE, SSEEvent } from "../lib/sse";
+import { getApiBase } from "../lib/apiBase";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 

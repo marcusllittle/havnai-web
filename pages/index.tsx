@@ -2,7 +2,8 @@ import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
-import { fetchJobWithResult, JobDetailResponse, ResultResponse } from "../lib/havnai";
+import { fetchJobWithResult, JobDetailResponse, ResultResponse, resolveAssetUrl } from "../lib/havnai";
+import { getApiBase } from "../lib/apiBase";
 
 const HomePage: NextPage = () => {
   const [navOpen, setNavOpen] = useState(false);
