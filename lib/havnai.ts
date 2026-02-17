@@ -140,10 +140,9 @@ export interface SubmitJobOptions {
 }
 
 function getApiBase(): string {
-  const envBase =
-    process.env.NEXT_PUBLIC_HAVNAI_API_BASE && process.env.NEXT_PUBLIC_HAVNAI_API_BASE.length > 0
-      ? process.env.NEXT_PUBLIC_HAVNAI_API_BASE
-      : undefined;
+  const configuredBase =
+    process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_HAVNAI_API_BASE;
+  const envBase = configuredBase && configuredBase.length > 0 ? configuredBase : undefined;
 
   if (typeof window !== "undefined") {
     const origin = window.location.origin || "";

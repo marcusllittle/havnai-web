@@ -16,13 +16,28 @@ const HomePage: NextPage = () => {
   const [drawerError, setDrawerError] = useState<string | undefined>();
 
   const getApiBase = (): string => {
+    const envBase =
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      process.env.NEXT_PUBLIC_HAVNAI_API_BASE ||
+      "/api";
+
     if (typeof window !== "undefined") {
-      const runtimeBase = (window as any).NEXT_PUBLIC_API_BASE_URL;
-      if (runtimeBase && String(runtimeBase).length > 0) {
-        return runtimeBase;
-      }
+      const runtimeBase =
+        (window as any).NEXT_PUBLIC_API_BASE_URL ||
+        (window as any).NEXT_PUBLIC_HAVNAI_API_BASE;
+      const base = runtimeBase && String(runtimeBase).length > 0 ? String(runtimeBase) : envBase;
+      return base.replace(/\/$/, "");
     }
-    return "/api";
+
+    return String(envBase).replace(/\/$/, "");
+  };
+
+  const getInstallBase = (): string => {
+    const configuredBase = getApiBase();
+    if (/^https?:\/\//i.test(configuredBase)) {
+      return configuredBase;
+    }
+    return `https://joinhavn.io${configuredBase.startsWith("/") ? "" : "/"}${configuredBase}`;
   };
 
   const resolveAssetUrl = (path: string | undefined | null): string | undefined => {
@@ -30,6 +45,8 @@ const HomePage: NextPage = () => {
     if (/^https?:\/\//i.test(path)) return path;
     return `${getApiBase()}${path}`;
   };
+  const apiBase = getApiBase();
+  const installBase = getInstallBase();
 
   // Client-side behavior for stats, models, jobs, and previews.
   useEffect(() => {
@@ -195,6 +212,9 @@ const HomePage: NextPage = () => {
             <a href="#rewards">Rewards</a>
             <a href="/test">Generator</a>
             <a href="/library">My Library</a>
+            <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">
+              Dashboard
+            </a>
             <a href="/pricing">Buy Credits</a>
             <a href="/analytics">Analytics</a>
             <a href="/nodes">Nodes</a>
@@ -220,17 +240,14 @@ const HomePage: NextPage = () => {
                 <h3>Join the HavnAI GPU Grid</h3>
                 <p>Run this on your GPU machine to install the node:</p>
                 <pre>
-                  <code>
-                    curl -fsSL http://api.joinhavn.io:5001/installers/install-node.sh \
-                    {`\n  | bash -s -- --server http://api.joinhavn.io:5001`}
-                  </code>
+                  <code>{`curl -fsSL ${installBase}/installers/install-node.sh \n  | bash -s -- --server ${installBase}`}</code>
                 </pre>
                 <p>
                   Full prerequisites, WAN I2V setup, systemd steps, and troubleshooting live on the
                   coordinator’s install guide.
                 </p>
                 <a
-                  href="http://api.joinhavn.io:5001/join"
+                  href={`${apiBase}/join`}
                   target="_blank"
                   rel="noreferrer"
                   className="btn tertiary wide"
@@ -558,7 +575,7 @@ const HomePage: NextPage = () => {
               <a href="https://joinhavn.io/alpha" className="btn primary wide">
                 Join Alpha (Typeform)
               </a>
-              <a href="http://api.joinhavn.io:5001/dashboard" className="btn tertiary wide">
+              <a href={`${apiBase}/dashboard`} className="btn tertiary wide">
                 View Live Dashboard
               </a>
               <p className="join-note">

@@ -356,6 +356,9 @@ const LibraryPage: NextPage = () => {
             <a href="/library" className="nav-active">
               My Library
             </a>
+            <a href="/api/dashboard" target="_blank" rel="noreferrer">
+              Dashboard
+            </a>
             <a href="/pricing">Buy Credits</a>
             <a href="/analytics">Analytics</a>
             <a href="/nodes">Nodes</a>
