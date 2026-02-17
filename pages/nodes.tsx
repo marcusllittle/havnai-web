@@ -34,14 +34,23 @@ const NodesPage: NextPage = () => {
     const sse = getNodeSSE();
     sse.connect();
     const unsub = sse.subscribe((event: SSEEvent) => {
-      if (event.event === "node_update") {
+      if (
+        event.event === "node_update" ||
+        event.event === "node_heartbeat" ||
+        event.event === "node_disconnected"
+      ) {
         setNodes((prev) => {
           const idx = prev.findIndex((n) => n.node_id === event.node_id);
+          const isOnline =
+            typeof event.status === "string"
+              ? event.status === "online"
+              : event.event !== "node_disconnected";
           if (idx >= 0) {
             const updated = [...prev];
             updated[idx] = {
               ...updated[idx],
-              online: event.status === "online",
+              online: isOnline,
+              status: isOnline ? "online" : "offline",
               gpu: event.gpu || updated[idx].gpu,
               last_seen: new Date().toISOString(),
             };

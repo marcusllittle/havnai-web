@@ -649,6 +649,7 @@ export interface NodeInfo {
   last_seen: string;
   wallet?: string;
   online: boolean;
+  status?: string;
 }
 
 export interface NodeDetail extends NodeInfo {
@@ -664,11 +665,56 @@ export interface LeaderboardEntry {
   nodes: { node_id: string; node_name: string; role: string }[];
 }
 
+function toNumber(value: any, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeNodeInfo(raw: any): NodeInfo {
+  const status = String(raw?.status || "").toLowerCase();
+  const online =
+    typeof raw?.online === "boolean" ? raw.online : status.length > 0 ? status === "online" : false;
+  const rawGpu = raw?.gpu && typeof raw.gpu === "object" ? raw.gpu : {};
+  const utilization =
+    typeof raw?.utilization === "number"
+      ? raw.utilization
+      : typeof raw?.gpu_utilization === "number"
+      ? raw.gpu_utilization
+      : typeof rawGpu?.utilization === "number"
+      ? rawGpu.utilization
+      : 0;
+  const gpu = {
+    gpu_name: rawGpu?.gpu_name || rawGpu?.name || raw?.gpu_name || undefined,
+    memory_total_mb: toNumber(rawGpu?.memory_total_mb ?? rawGpu?.memory_total, 0) || undefined,
+    memory_used_mb: toNumber(rawGpu?.memory_used_mb ?? rawGpu?.memory_used, 0) || undefined,
+    utilization: toNumber(rawGpu?.utilization ?? utilization, 0),
+  };
+
+  return {
+    node_id: String(raw?.node_id || ""),
+    node_name: raw?.node_name || raw?.node_id || "",
+    role: String(raw?.role || "worker"),
+    os: String(raw?.os || "unknown"),
+    gpu,
+    models: Array.isArray(raw?.models) ? raw.models : [],
+    pipelines: Array.isArray(raw?.pipelines) ? raw.pipelines : [],
+    rewards: toNumber(raw?.rewards, 0),
+    tasks_completed: toNumber(raw?.tasks_completed ?? raw?.jobs_completed, 0),
+    utilization: toNumber(utilization, 0),
+    avg_utilization: toNumber(raw?.avg_utilization ?? utilization, 0),
+    last_seen: raw?.last_seen || new Date(0).toISOString(),
+    wallet: raw?.wallet,
+    online,
+    status: status || (online ? "online" : "offline"),
+  };
+}
+
 export async function fetchNodes(): Promise<NodeInfo[]> {
   const res = await fetch(apiUrl("/nodes"), { headers: buildHeaders(false) });
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();
-  return (data.nodes || []) as NodeInfo[];
+  const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
+  return nodes.map(normalizeNodeInfo);
 }
 
 export async function fetchNodeDetail(nodeId: string): Promise<NodeDetail> {
@@ -676,7 +722,13 @@ export async function fetchNodeDetail(nodeId: string): Promise<NodeDetail> {
     headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
-  return (await res.json()) as NodeDetail;
+  const raw = await res.json();
+  const normalized = normalizeNodeInfo(raw);
+  return {
+    ...normalized,
+    reward_history: Array.isArray(raw?.reward_history) ? raw.reward_history : [],
+    uptime: typeof raw?.uptime === "number" ? raw.uptime : undefined,
+  };
 }
 
 export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {

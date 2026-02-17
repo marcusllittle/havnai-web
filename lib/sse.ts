@@ -13,9 +13,9 @@ export interface SSEJobEvent {
 }
 
 export interface SSENodeEvent {
-  event: "node_update";
+  event: "node_update" | "node_heartbeat" | "node_disconnected";
   node_id: string;
-  status: "online" | "offline";
+  status?: "online" | "offline";
   gpu?: { gpu_name?: string; utilization?: number; memory_used_mb?: number; memory_total_mb?: number };
 }
 
@@ -58,6 +58,22 @@ export class HavnSSE {
         try {
           const data = JSON.parse((e as MessageEvent).data);
           this.notify({ event: "node_update", ...data });
+        } catch {
+          // ignore
+        }
+      });
+      this.source.addEventListener("node_heartbeat", (e) => {
+        try {
+          const data = JSON.parse((e as MessageEvent).data);
+          this.notify({ event: "node_heartbeat", ...data, status: "online" });
+        } catch {
+          // ignore
+        }
+      });
+      this.source.addEventListener("node_disconnected", (e) => {
+        try {
+          const data = JSON.parse((e as MessageEvent).data);
+          this.notify({ event: "node_disconnected", ...data, status: "offline" });
         } catch {
           // ignore
         }
