@@ -123,6 +123,24 @@ const TestPage: React.FC = () => {
   const [credits, setCredits] = useState<CreditBalance | null>(null);
   const inviteSaved = Boolean(savedInviteCode);
 
+  const getApiBase = () => {
+    const envBase =
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      process.env.NEXT_PUBLIC_HAVNAI_API_BASE ||
+      "/api";
+
+    if (typeof window !== "undefined") {
+      const runtimeBase =
+        (window as any).NEXT_PUBLIC_API_BASE_URL ||
+        (window as any).NEXT_PUBLIC_HAVNAI_API_BASE;
+      const base = runtimeBase && String(runtimeBase).length > 0 ? String(runtimeBase) : envBase;
+      return base.replace(/\/$/, "");
+    }
+    return String(envBase).replace(/\/$/, "");
+  };
+
+  const apiBase = getApiBase();
+
   // Load history from localStorage on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1128,6 +1146,9 @@ const TestPage: React.FC = () => {
             <a href="/#models">Models</a>
             <a href="/test" className="nav-active">Generator</a>
             <a href="/library">My Library</a>
+            <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">
+              Dashboard
+            </a>
             <a href="/pricing">Buy Credits</a>
             <a href="/analytics">Analytics</a>
             <a href="/nodes">Nodes</a>
