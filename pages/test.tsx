@@ -25,6 +25,7 @@ import {
 import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
 import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 import { getJobSSE, SSEEvent } from "../lib/sse";
+import { getApiBase } from "../lib/apiBase";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
@@ -121,16 +122,6 @@ const TestPage: React.FC = () => {
   const [quotaError, setQuotaError] = useState<string | undefined>();
   const [credits, setCredits] = useState<CreditBalance | null>(null);
   const inviteSaved = Boolean(savedInviteCode);
-
-  const getApiBase = () => {
-    if (typeof window !== "undefined") {
-      const runtimeBase = (window as any).NEXT_PUBLIC_API_BASE_URL;
-      if (runtimeBase && String(runtimeBase).length > 0) {
-        return String(runtimeBase);
-      }
-    }
-    return "/api";
-  };
 
   // Load history from localStorage on mount
   useEffect(() => {

@@ -2,7 +2,8 @@ import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
-import { fetchJobWithResult, JobDetailResponse, ResultResponse } from "../lib/havnai";
+import { fetchJobWithResult, JobDetailResponse, ResultResponse, resolveAssetUrl } from "../lib/havnai";
+import { getApiBase } from "../lib/apiBase";
 
 const HomePage: NextPage = () => {
   const [navOpen, setNavOpen] = useState(false);
@@ -14,22 +15,6 @@ const HomePage: NextPage = () => {
   const [drawerSummary, setDrawerSummary] = useState<JobSummary | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerError, setDrawerError] = useState<string | undefined>();
-
-  const getApiBase = (): string => {
-    if (typeof window !== "undefined") {
-      const runtimeBase = (window as any).NEXT_PUBLIC_API_BASE_URL;
-      if (runtimeBase && String(runtimeBase).length > 0) {
-        return runtimeBase;
-      }
-    }
-    return "/api";
-  };
-
-  const resolveAssetUrl = (path: string | undefined | null): string | undefined => {
-    if (!path) return undefined;
-    if (/^https?:\/\//i.test(path)) return path;
-    return `${getApiBase()}${path}`;
-  };
 
   // Client-side behavior for stats, models, jobs, and previews.
   useEffect(() => {
