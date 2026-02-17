@@ -41,16 +41,16 @@ const NodesPage: NextPage = () => {
       ) {
         setNodes((prev) => {
           const idx = prev.findIndex((n) => n.node_id === event.node_id);
-          const isOnline =
-            typeof event.status === "string"
-              ? event.status === "online"
-              : event.event !== "node_disconnected";
+          const status =
+            event.status ??
+            (event.event === "node_disconnected" ? "offline" : "online");
+          const isOnline = status === "online";
           if (idx >= 0) {
             const updated = [...prev];
             updated[idx] = {
               ...updated[idx],
               online: isOnline,
-              status: isOnline ? "online" : "offline",
+              status,
               gpu: event.gpu || updated[idx].gpu,
               last_seen: new Date().toISOString(),
             };
