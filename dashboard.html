@@ -866,7 +866,7 @@
 
         async function fetchNodes() {
           try {
-            const res = await fetch(ROOT_BASE + "/nodes", { credentials: "same-origin" });
+            const res = await fetch(API_BASE + "/nodes", { credentials: "same-origin" });
             if (!res.ok) throw new Error("nodes HTTP " + res.status);
             const data = await res.json();
             renderNodes(data.nodes || []);
