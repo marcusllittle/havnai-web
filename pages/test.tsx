@@ -71,14 +71,8 @@ const TestPage: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<string>("auto");
   const [useStandardNegative, setUseStandardNegative] = useState(true);
   const [imageModels, setImageModels] = useState<{ id: string; label: string }[]>(FALLBACK_IMAGE_MODELS);
-  const [videoModels, setVideoModels] = useState<{ id: string; label: string }[]>([
-    { id: "ltx2", label: "LTX2 · Tier S · Video" },
-    { id: "animatediff", label: "AnimateDiff · Tier A · Animation" },
-  ]);
-  const [faceSwapModels, setFaceSwapModels] = useState<{ id: string; label: string }[]>([
-    { id: "epicrealismXL_vxviiCrystalclear", label: "Epic Realism XL · Tier S · SDXL" },
-    { id: "juggernautXL_ragnarokBy", label: "Juggernaut XL · Tier S · SDXL" },
-  ]);
+  const [videoModels, setVideoModels] = useState<{ id: string; label: string }[]>([]);
+  const [faceSwapModels, setFaceSwapModels] = useState<{ id: string; label: string }[]>([]);
   const [steps, setSteps] = useState("");
   const [guidance, setGuidance] = useState("");
   const [width, setWidth] = useState("");
@@ -265,14 +259,13 @@ const TestPage: React.FC = () => {
         });
         const videoModelsData = models.filter((m: any) => {
           const taskType = String(m.task_type || "").toUpperCase();
-          return taskType === "VIDEO_GEN" || taskType === "ANIMATEDIFF";
+          return (taskType === "VIDEO_GEN" || taskType === "ANIMATEDIFF") && m.available === true;
         });
 
-        // Face swap models: only SDXL tier S models for now
+        // Face swap models: only currently available SDXL entries.
         const faceSwapModelsData = imageModelsData.filter((m: any) => {
           const pipeline = String(m.pipeline || "").toLowerCase();
-          const tier = String(m.tier || "");
-          return pipeline.includes("sdxl") && tier === "S";
+          return pipeline.includes("sdxl") && m.face_swap_available === true;
         });
 
         // Transform to dropdown format with tier badges and clean names
@@ -298,8 +291,8 @@ const TestPage: React.FC = () => {
         }));
 
         setImageModels(imageOptions);
-        if (videoOptions.length > 0) setVideoModels(videoOptions);
-        if (faceSwapOptions.length > 0) setFaceSwapModels(faceSwapOptions);
+        setVideoModels(videoOptions);
+        setFaceSwapModels(faceSwapOptions);
 
         // Build model→pipeline lookup for LoRA filtering
         const pipelines: Record<string, string> = {};
@@ -343,8 +336,8 @@ const TestPage: React.FC = () => {
       setFaceSourceUrl("");
       setFaceSourceData(undefined);
       setFaceSourceName(undefined);
-      // Set default video model (ltx2 or first available)
-      setSelectedModel(videoModels.length > 0 ? videoModels[0].id : "ltx2");
+      // Select first available video model, otherwise clear selection.
+      setSelectedModel(videoModels.length > 0 ? videoModels[0].id : "");
     } else if (mode === "face_swap") {
       // Reset video-specific options
       setFrames("");
@@ -353,8 +346,9 @@ const TestPage: React.FC = () => {
       setVideoInitUrl("");
       setVideoInitData(undefined);
       setVideoInitName(undefined);
-      // Set default face swap model
-      setSelectedModel(faceSwapModels.length > 0 ? faceSwapModels[0].id : "epicrealismXL_vxviiCrystalclear");
+      // Select first available face swap model, otherwise clear selection.
+      setSelectedModel(faceSwapModels.length > 0 ? faceSwapModels[0].id : "");
+      setFaceswapModel(faceSwapModels.length > 0 ? faceSwapModels[0].id : "");
     }
   }, [mode, videoModels, faceSwapModels]);
 
@@ -604,10 +598,6 @@ const TestPage: React.FC = () => {
     const initImageValue = (initOverride ?? (videoInitData || videoInitUrl).trim()).trim();
     if (initImageValue) {
       request.initImage = initImageValue;
-      // Only default to animatediff if no model is explicitly selected
-      if (!selectedModel || selectedModel === "ltx2") {
-        request.model = "animatediff";
-      }
     }
     const strengthValue = parseOptionalFloat(videoInitStrength);
     if (strengthValue !== undefined) {
@@ -615,9 +605,8 @@ const TestPage: React.FC = () => {
     }
     if (forceAnimatediff) {
       request.model = "animatediff";
-    } else if (!request.model) {
-      // Use selected video model (ltx2, animatediff, etc.)
-      request.model = selectedModel || "ltx2";
+    } else if (selectedModel) {
+      request.model = selectedModel;
     }
     return request;
   };
@@ -730,6 +719,22 @@ const TestPage: React.FC = () => {
       setStatusMessage("Prompt is required.");
       return;
     }
+    if (mode === "video" && videoModels.length === 0) {
+      setStatusMessage("No online video capacity right now. Try again when a video node is online.");
+      return;
+    }
+    if (mode === "video" && !selectedModel) {
+      setStatusMessage("No video model is currently selectable.");
+      return;
+    }
+    if (mode === "face_swap" && faceSwapModels.length === 0) {
+      setStatusMessage("No online face swap capacity right now. Try again when an SDXL face-swap node is online.");
+      return;
+    }
+    if (mode === "face_swap" && !faceswapModel) {
+      setStatusMessage("No face swap model is currently selectable.");
+      return;
+    }
     setLoading(true);
     setStatusMessage("Job submitted…");
     setImageUrl(undefined);
@@ -807,6 +812,11 @@ const TestPage: React.FC = () => {
               ? `Invite quota exceeded. Resets at ${resetLabel}.`
               : "Invite quota exceeded. Please try again later."
           );
+        } else if (code === "no_capacity") {
+          const message =
+            err?.data?.message ||
+            "No compatible online node capacity is available right now. Please try again shortly.";
+          setStatusMessage(message);
         } else {
           setStatusMessage(err.message || "Failed to submit job.");
         }
