@@ -24,11 +24,6 @@ const HomePage: NextPage = () => {
     return `https://joinhavn.io${configuredBase.startsWith("/") ? "" : "/"}${configuredBase}`;
   };
 
-  const resolveAssetUrl = (path: string | undefined | null): string | undefined => {
-    if (!path) return undefined;
-    if (/^https?:\/\//i.test(path)) return path;
-    return `${getApiBase()}${path}`;
-  };
   const apiBase = getApiBase();
   const installBase = getInstallBase();
 
