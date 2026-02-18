@@ -731,11 +731,21 @@ export async function fetchNodeDetail(nodeId: string): Promise<NodeDetail> {
   };
 }
 
+function normalizeLeaderboardEntry(raw: any): LeaderboardEntry {
+  return {
+    wallet: raw.wallet ?? "",
+    total_rewards: toNumber(raw.total_rewards ?? raw.all_time),
+    jobs: toNumber(raw.jobs),
+    last_24h: toNumber(raw.last_24h ?? raw.rewards_24h),
+    nodes: Array.isArray(raw.nodes) ? raw.nodes : [],
+  };
+}
+
 export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
-  const res = await fetch(apiUrl("/network/leaderboard"), { headers: buildHeaders(false) });
+  const res = await fetch(apiUrl("/network/leaderboard?format=json"), { headers: buildHeaders(false) });
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();
-  return (data.leaderboard || []) as LeaderboardEntry[];
+  return (data.leaderboard || []).map(normalizeLeaderboardEntry);
 }
 
 // ---------------------------------------------------------------------------
