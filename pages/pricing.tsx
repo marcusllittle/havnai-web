@@ -63,6 +63,7 @@ const PricingPage: NextPage = () => {
     setError(null);
     try {
       const result = await createCheckout(pkg.id);
+      if (!result.checkout_url) throw new Error("No checkout URL returned");
       window.location.href = result.checkout_url;
     } catch (err: any) {
       const message =
@@ -257,7 +258,7 @@ const PricingPage: NextPage = () => {
 
       <footer className="site-footer">
         <div className="footer-inner">
-          <p className="footer-copy">© 2025 HavnAI Network</p>
+          <p className="footer-copy">© 2026 HavnAI Network</p>
         </div>
       </footer>
     </>
