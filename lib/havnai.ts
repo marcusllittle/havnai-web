@@ -458,6 +458,8 @@ export async function fetchCredits(): Promise<CreditBalance> {
     headers: buildHeaders(false),
   });
   if (!res.ok) {
+
+    
     throw await parseErrorResponse(res);
   }
   return (await res.json()) as CreditBalance;
@@ -474,6 +476,29 @@ export async function fetchCreditCost(model: string, taskType?: string): Promise
   }
   return (await res.json()) as CreditCost;
 }
+export interface CreditConversion {
+  wallet: string;
+  converted: number;
+  remaining: number;
+  message: string;
+  credits_enabled: boolean;
+}
+
+export async function convertCredits(amount: number): Promise<CreditConversion> {
+  const res = await fetch(apiUrl("/credits/convert"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet: WALLET,
+      amount,
+    }),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return (await res.json()) as CreditConversion;
+}
+
 
 // ---------------------------------------------------------------------------
 // Stripe payments
