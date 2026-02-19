@@ -11,6 +11,7 @@ import {
   PaymentRecord,
   HavnaiApiError,
   WALLET,
+    convertCredits,
 } from "../lib/havnai";
 
 const PricingPage: NextPage = () => {
@@ -22,6 +23,36 @@ const PricingPage: NextPage = () => {
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [convertAmount, setConvertAmount] = useState<number>(0);
+  const [convertMessage, setConvertMessage] = useState<string | null>(null);
+  const [convertError, setConvertError] = useState<string | null>(null);
+  const [converting, setConverting] = useState(false);
+
+  const handleConvert = async () => {
+    if (!convertAmount || convertAmount <= 0) {
+      setConvertError("Please enter a valid amount of credits to convert.");
+      return;
+    }
+    setConverting(true);
+    try {
+      const res = await convertCredits(WALLET, convertAmount);
+      setConvertMessage(res.message || `Converted ${res.converted} credits to HAI.`);
+      setConvertError(null);
+      // refresh credit balance
+      const updated = await fetchCredits();
+      setBalance(updated);
+    } catch (error: any) {
+      setConvertMessage(null);
+      if (error && typeof error.message === "string") {
+        setConvertError(error.message);
+      } else {
+        setConvertError("Conversion failed.");
+      }
+    } finally {
+      setConverting(false);
+    }
+  };
+
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -242,6 +273,29 @@ const PricingPage: NextPage = () => {
               </div>
             </div>
           )}
+
+                  {/* Convert credits to $HAI */}
+        <div className="pricing-convert">
+          <h3>Convert credits to $HAI</h3>
+          <p>Convert your unused credits into $HAI tokens.</p>
+          <div className="convert-controls">
+            <input
+              type="number"
+              min="0"
+              value={convertAmount}
+              onChange={(e) => setConvertAmount(parseFloat(e.target.value))}
+            />
+            <button
+              type="button"
+              onClick={handleConvert}
+              disabled={converting}
+            >
+              {converting ? "Converting..." : "Convert"}
+            </button>
+          </div>
+          {convertMessage && <p className="convert-message">{convertMessage}</p>}
+          {convertError && <p className="convert-error">{convertError}</p>}
+        </div>
 
           {/* Wallet info */}
           <div className="pricing-wallet-info">
