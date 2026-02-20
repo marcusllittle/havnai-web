@@ -6,12 +6,14 @@ import {
   fetchCredits,
   fetchPaymentHistory,
   createCheckout,
+  connectWallet,
+  getConnectedWallet,
+  convertCreditsWithMetaMask,
   CreditPackage,
   CreditBalance,
   PaymentRecord,
   HavnaiApiError,
   WALLET,
-    convertCredits,
 } from "../lib/havnai";
 
 const PricingPage: NextPage = () => {
@@ -23,30 +25,79 @@ const PricingPage: NextPage = () => {
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-    const [convertAmount, setConvertAmount] = useState<number>(0);
+  const [convertAmount, setConvertAmount] = useState<number>(0);
   const [convertMessage, setConvertMessage] = useState<string | null>(null);
   const [convertError, setConvertError] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
+  const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
+  const [connectingWallet, setConnectingWallet] = useState(false);
+
+  const activeWallet = connectedWallet || WALLET;
+
+  const handleConnectWallet = async () => {
+    setConnectingWallet(true);
+    setConvertError(null);
+    try {
+      const wallet = await connectWallet();
+      setConnectedWallet(wallet);
+      const [updatedBalance, updatedPayments] = await Promise.allSettled([
+        fetchCredits(wallet),
+        fetchPaymentHistory(wallet),
+      ]);
+      if (updatedBalance.status === "fulfilled") {
+        setBalance(updatedBalance.value);
+      }
+      if (updatedPayments.status === "fulfilled") {
+        setPayments(updatedPayments.value);
+      }
+    } catch (error: any) {
+      const message =
+        error instanceof HavnaiApiError
+          ? error.message
+          : typeof error?.message === "string"
+          ? error.message
+          : "Wallet connection failed.";
+      setConvertError(message);
+    } finally {
+      setConnectingWallet(false);
+    }
+  };
 
   const handleConvert = async () => {
     if (!convertAmount || convertAmount <= 0) {
       setConvertError("Please enter a valid amount of credits to convert.");
       return;
     }
+    if (!connectedWallet) {
+      setConvertError("Connect your MetaMask wallet before converting credits.");
+      return;
+    }
     setConverting(true);
     try {
-      const res = await convertCredits(WALLET, convertAmount);
+      const res = await convertCreditsWithMetaMask(convertAmount, connectedWallet);
       setConvertMessage(res.message || `Converted ${res.converted} credits to HAI.`);
       setConvertError(null);
       // refresh credit balance
-      const updated = await fetchCredits();
+      const updated = await fetchCredits(connectedWallet);
       setBalance(updated);
     } catch (error: any) {
       setConvertMessage(null);
-      if (error && typeof error.message === "string") {
-        setConvertError(error.message);
+      if (error?.code === 4001 || /user rejected/i.test(String(error?.message || ""))) {
+        setConvertError("Signature request was rejected in MetaMask.");
+      } else if (error instanceof HavnaiApiError) {
+        if (error.code === "nonce_expired") {
+          setConvertError("Signature expired. Please try again.");
+        } else if (error.code === "nonce_used") {
+          setConvertError("This signature has already been used. Please try again.");
+        } else if (error.code === "invalid_signature") {
+          setConvertError("Wallet signature verification failed.");
+        } else if (error.code === "insufficient_credits") {
+          setConvertError("Insufficient credits for this conversion amount.");
+        } else {
+          setConvertError(error.message);
+        }
       } else {
-        setConvertError("Conversion failed.");
+        setConvertError(typeof error?.message === "string" ? error.message : "Conversion failed.");
       }
     } finally {
       setConverting(false);
@@ -67,10 +118,15 @@ const PricingPage: NextPage = () => {
     async function load() {
       setLoading(true);
       try {
+        const detectedWallet = await getConnectedWallet();
+        if (detectedWallet) {
+          setConnectedWallet(detectedWallet);
+        }
+        const walletForQueries = detectedWallet || WALLET;
         const [pkgRes, balRes, histRes] = await Promise.allSettled([
           fetchPackages(),
-          fetchCredits(),
-          fetchPaymentHistory(),
+          fetchCredits(walletForQueries),
+          fetchPaymentHistory(walletForQueries),
         ]);
         if (pkgRes.status === "fulfilled") {
           setPackages(pkgRes.value.packages);
@@ -274,25 +330,36 @@ const PricingPage: NextPage = () => {
             </div>
           )}
 
-                  {/* Convert credits to $HAI */}
+          {/* Convert credits to $HAI */}
         <div className="pricing-convert">
           <h3>Convert credits to $HAI</h3>
           <p>Convert your unused credits into $HAI tokens.</p>
+          <div className="convert-wallet-row">
+            <button type="button" onClick={handleConnectWallet} disabled={connectingWallet || converting}>
+              {connectedWallet
+                ? `Connected: ${connectedWallet.slice(0, 6)}...${connectedWallet.slice(-4)}`
+                : connectingWallet
+                ? "Connecting..."
+                : "Connect Wallet"}
+            </button>
+          </div>
           <div className="convert-controls">
             <input
               type="number"
               min="0"
               value={convertAmount}
               onChange={(e) => setConvertAmount(parseFloat(e.target.value))}
+              disabled={!connectedWallet || converting}
             />
             <button
               type="button"
               onClick={handleConvert}
-              disabled={converting}
+              disabled={converting || !connectedWallet}
             >
               {converting ? "Converting..." : "Convert"}
             </button>
           </div>
+          {!connectedWallet && <p className="convert-note">Connect MetaMask to sign conversion requests.</p>}
           {convertMessage && <p className="convert-message">{convertMessage}</p>}
           {convertError && <p className="convert-error">{convertError}</p>}
         </div>
@@ -300,11 +367,10 @@ const PricingPage: NextPage = () => {
           {/* Wallet info */}
           <div className="pricing-wallet-info">
             <p>
-              Wallet: <code>{WALLET}</code>
+              Wallet: <code>{activeWallet}</code>
             </p>
             <p className="pricing-wallet-note">
-              Credits are tied to your wallet address. Set <code>NEXT_PUBLIC_HAVNAI_WALLET</code> in
-              your environment to use a different wallet.
+              Convert uses MetaMask signatures. Generator submissions still use <code>NEXT_PUBLIC_HAVNAI_WALLET</code>.
             </p>
           </div>
         </section>
