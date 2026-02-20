@@ -414,6 +414,17 @@ const TestPage: React.FC = () => {
     );
   };
 
+  const updateLoraWeight = (index: number, value: string) => {
+    if (!value.trim()) {
+      updateLora(index, "weight", "");
+      return;
+    }
+    const parsed = Number.parseFloat(value);
+    if (!Number.isFinite(parsed)) return;
+    const clamped = Math.min(2, Math.max(0, parsed));
+    updateLora(index, "weight", clamped.toFixed(2));
+  };
+
   const removeLora = (index: number) => {
     setLoras((prev) => prev.filter((_, idx) => idx !== index));
   };
@@ -747,6 +758,15 @@ const TestPage: React.FC = () => {
     try {
       if (mode === "image") {
         const options = buildOptions();
+        const requestedLoraSummary =
+          options?.loras && options.loras.length > 0
+            ? options.loras
+                .map((entry) => `${entry.name}:${(entry.weight ?? 1.0).toFixed(2)}`)
+                .join(", ")
+            : "";
+        if (requestedLoraSummary) {
+          setStatusMessage(`Job submitted… Requested LoRAs: ${requestedLoraSummary}`);
+        }
         const customNegative = useStandardNegative ? "" : negativePrompt.trim();
         const id = await submitAutoJob(
           trimmed,
@@ -765,6 +785,12 @@ const TestPage: React.FC = () => {
           return;
         }
         const loraPayload = buildLoraPayload();
+        if (loraPayload.length > 0) {
+          const requestedLoraSummary = loraPayload
+            .map((entry) => `${entry.name}:${(entry.weight ?? 1.0).toFixed(2)}`)
+            .join(", ");
+          setStatusMessage(`Job submitted… Requested LoRAs: ${requestedLoraSummary}`);
+        }
         const seedValue = parseOptionalInt(seed);
         const strengthValue = parseOptionalFloat(faceswapStrength) ?? 0.8;
         const stepsValue = parseOptionalInt(faceswapSteps) ?? 20;
@@ -1510,10 +1536,20 @@ const TestPage: React.FC = () => {
                                     step={0.05}
                                     className="lora-slider"
                                     value={entry.weight || "1"}
-                                    onChange={(e) => updateLora(index, "weight", e.target.value)}
+                                    onChange={(e) => updateLoraWeight(index, e.target.value)}
                                     style={{
                                       background: `linear-gradient(90deg, rgba(0,234,255,0.5) ${weightPct * 100}%, rgba(255,255,255,0.06) ${weightPct * 100}%)`,
                                     }}
+                                  />
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={2}
+                                    step={0.01}
+                                    className="generator-input"
+                                    value={entry.weight || ""}
+                                    onChange={(e) => updateLoraWeight(index, e.target.value)}
+                                    placeholder="1.00"
                                   />
                                   <span className="lora-weight-value">{(entry.weight || "1.00")}</span>
                                 </div>
@@ -1849,10 +1885,20 @@ const TestPage: React.FC = () => {
                                     step={0.05}
                                     className="lora-slider"
                                     value={entry.weight || "1"}
-                                    onChange={(e) => updateLora(index, "weight", e.target.value)}
+                                    onChange={(e) => updateLoraWeight(index, e.target.value)}
                                     style={{
                                       background: `linear-gradient(90deg, rgba(0,234,255,0.5) ${weightPct * 100}%, rgba(255,255,255,0.06) ${weightPct * 100}%)`,
                                     }}
+                                  />
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={2}
+                                    step={0.01}
+                                    className="generator-input"
+                                    value={entry.weight || ""}
+                                    onChange={(e) => updateLoraWeight(index, e.target.value)}
+                                    placeholder="1.00"
                                   />
                                   <span className="lora-weight-value">{(entry.weight || "1.00")}</span>
                                 </div>
