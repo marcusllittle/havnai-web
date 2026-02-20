@@ -327,8 +327,14 @@ export async function submitWanVideoJob(request: WanVideoRequest): Promise<strin
 }
 
 export async function submitVideoJob(request: VideoJobRequest): Promise<string> {
-  const model =
-    request.model && request.model.trim().length > 0 ? request.model.trim() : "ltx2";
+  const model = request.model?.trim();
+  if (!model) {
+    throw new HavnaiApiError(
+      "No online video capacity right now. Select an available video model and try again.",
+      "no_capacity",
+      { error: "no_capacity", task_type: "VIDEO_GEN", model: "auto" }
+    );
+  }
 
   const body: Record<string, any> = {
     wallet: WALLET,
