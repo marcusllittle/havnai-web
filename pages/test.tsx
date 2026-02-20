@@ -531,10 +531,7 @@ const TestPage: React.FC = () => {
         const name = entry.name.trim();
         if (!name) return null;
         const weightValue = parseOptionalFloat(entry.weight);
-        const payload: { name: string; weight?: number } = { name };
-        if (weightValue !== undefined) {
-          payload.weight = weightValue;
-        }
+        const payload: { name: string; weight?: number } = { name, weight: weightValue ?? 1.0 };
         return payload;
       })
       .filter((entry): entry is { name: string; weight?: number } => Boolean(entry));
@@ -713,6 +710,8 @@ const TestPage: React.FC = () => {
 
   const handleSubmit = async () => {
     const trimmed = prompt.trim();
+    const selectedVideoModelAvailable =
+      mode === "video" && videoModels.some((candidate) => candidate.id === selectedModel);
     if (mode !== "face_swap" && !trimmed) {
       setStatusMessage("Prompt is required.");
       return;
@@ -721,8 +720,8 @@ const TestPage: React.FC = () => {
       setStatusMessage("No online video capacity right now. Try again when a video node is online.");
       return;
     }
-    if (mode === "video" && !selectedModel) {
-      setStatusMessage("No video model is currently selectable.");
+    if (mode === "video" && !selectedVideoModelAvailable) {
+      setStatusMessage("No online video capacity right now. Select an available video model and try again.");
       return;
     }
     if (mode === "face_swap" && faceSwapModels.length === 0) {
