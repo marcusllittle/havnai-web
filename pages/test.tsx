@@ -278,7 +278,8 @@ const TestPage: React.FC = () => {
         ];
 
         const videoOptions = videoModelsData.map((m: any) => {
-          const typeLabel = m.task_type === "ANIMATEDIFF" ? "Animation" : "Video";
+          const isAnimateDiff = String(m.task_type || "").toUpperCase() === "ANIMATEDIFF";
+          const typeLabel = isAnimateDiff ? "AnimateDiff · SD1.5 motion" : "LTX2 · native video";
           return {
             id: m.name,
             label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${typeLabel}`,
@@ -574,8 +575,7 @@ const TestPage: React.FC = () => {
 
   const buildVideoRequest = (
     promptText: string,
-    initOverride?: string | null,
-    forceAnimatediff = false
+    initOverride?: string | null
   ) => {
     const request: Record<string, any> = { prompt: promptText };
     const trimmedNegative = negativePrompt.trim();
@@ -603,9 +603,7 @@ const TestPage: React.FC = () => {
     if (strengthValue !== undefined) {
       request.strength = strengthValue;
     }
-    if (forceAnimatediff) {
-      request.model = "animatediff";
-    } else if (selectedModel) {
+    if (selectedModel) {
       request.model = selectedModel;
     }
     return request;
@@ -617,7 +615,7 @@ const TestPage: React.FC = () => {
     setChainSummary(null);
     let initImage = (videoInitData || videoInitUrl).trim();
     for (let index = 0; index < total; index += 1) {
-      const request = buildVideoRequest(promptText, initImage || undefined, true);
+      const request = buildVideoRequest(promptText, initImage || undefined);
       const id = await submitVideoJob(request);
       setJobId(id);
       setStatusMessage(`Waiting for GPU node… (${index + 1}/${total})`);

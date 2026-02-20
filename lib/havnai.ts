@@ -1,5 +1,6 @@
 import type { NextPage } from "next";
 import { getInviteCode } from "./invite";
+import { BrowserProvider, getAddress } from "ethers";
 
 // Simple API helper for talking to the HavnAI coordinator.
 // Uses relative URLs so it works behind whatever proxy is fronting the core.
@@ -136,7 +137,6 @@ export interface SubmitJobOptions {
   sampler?: string;
   seed?: number;
   loras?: LoraConfig[];
-  autoAnatomy?: boolean;
 }
 
 function getApiBase(): string {
@@ -240,9 +240,6 @@ export async function submitAutoJob(
     }
     if (options.loras && options.loras.length > 0) {
       body.loras = options.loras;
-    }
-    if (options.autoAnatomy != null) {
-      body.auto_anatomy = options.autoAnatomy;
     }
   }
 
@@ -453,11 +450,13 @@ export async function fetchQuota(): Promise<QuotaStatus> {
   return (await res.json()) as QuotaStatus;
 }
 
-export async function fetchCredits(): Promise<CreditBalance> {
-  const res = await fetch(apiUrl(`/credits/balance?wallet=${encodeURIComponent(WALLET)}`), {
+export async function fetchCredits(wallet: string = WALLET): Promise<CreditBalance> {
+  const res = await fetch(apiUrl(`/credits/balance?wallet=${encodeURIComponent(wallet)}`), {
     headers: buildHeaders(false),
   });
   if (!res.ok) {
+
+    
     throw await parseErrorResponse(res);
   }
   return (await res.json()) as CreditBalance;
@@ -474,6 +473,114 @@ export async function fetchCreditCost(model: string, taskType?: string): Promise
   }
   return (await res.json()) as CreditCost;
 }
+export interface CreditConversion {
+  wallet: string;
+  converted: number;
+  balance: number;
+  remaining?: number;
+  message: string;
+  credits_enabled: boolean;
+}
+
+export interface WalletNonceChallenge {
+  nonce: string;
+  message: string;
+  issued_at: string;
+  expires_at: string;
+}
+
+export interface ConvertCreditsPayload {
+  wallet: string;
+  amount: number;
+  nonce: string;
+  signature: string;
+}
+
+function requireEthereumProvider(): any {
+  if (typeof window === "undefined") {
+    throw new HavnaiApiError("Wallet connection is only available in the browser.", "wallet_unavailable");
+  }
+  const ethereum = (window as any).ethereum;
+  if (!ethereum) {
+    throw new HavnaiApiError("MetaMask not found. Install MetaMask and try again.", "wallet_unavailable");
+  }
+  return ethereum;
+}
+
+export async function getConnectedWallet(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  const ethereum = (window as any).ethereum;
+  if (!ethereum) return null;
+  const provider = new BrowserProvider(ethereum);
+  const accounts = (await provider.send("eth_accounts", [])) as string[];
+  if (!accounts || accounts.length === 0) return null;
+  return getAddress(accounts[0]);
+}
+
+export async function connectWallet(): Promise<string> {
+  const provider = new BrowserProvider(requireEthereumProvider());
+  const accounts = (await provider.send("eth_requestAccounts", [])) as string[];
+  if (!accounts || accounts.length === 0) {
+    throw new HavnaiApiError("No wallet account returned by MetaMask.", "wallet_unavailable");
+  }
+  return getAddress(accounts[0]);
+}
+
+export async function requestConversionNonce(wallet: string, amount: number): Promise<WalletNonceChallenge> {
+  const res = await fetch(apiUrl("/wallet/nonce"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet,
+      amount,
+      purpose: "convert_credits_to_hai",
+    }),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return (await res.json()) as WalletNonceChallenge;
+}
+
+export async function convertCredits(payload: ConvertCreditsPayload): Promise<CreditConversion> {
+  const res = await fetch(apiUrl("/credits/convert"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  const json = (await res.json()) as Partial<CreditConversion>;
+  const balance = Number(json.balance ?? json.remaining ?? 0);
+  return {
+    wallet: String(json.wallet || payload.wallet),
+    converted: Number(json.converted ?? payload.amount),
+    balance,
+    remaining:
+      json.remaining != null
+        ? Number(json.remaining)
+        : balance,
+    message: String(json.message || "Credits converted to HAI"),
+    credits_enabled: Boolean(json.credits_enabled),
+  };
+}
+
+export async function convertCreditsWithMetaMask(amount: number, wallet?: string): Promise<CreditConversion> {
+  const ethereum = requireEthereumProvider();
+  const provider = new BrowserProvider(ethereum);
+  const signer = await provider.getSigner();
+  const signerWallet = getAddress(wallet || (await signer.getAddress()));
+  const challenge = await requestConversionNonce(signerWallet, amount);
+  const signature = await signer.signMessage(challenge.message);
+  return convertCredits({
+    wallet: signerWallet,
+    amount,
+    nonce: challenge.nonce,
+    signature,
+  });
+}
+
 
 // ---------------------------------------------------------------------------
 // Stripe payments
@@ -537,9 +644,9 @@ export async function createCheckout(packageId: string): Promise<CheckoutRespons
   return (await res.json()) as CheckoutResponse;
 }
 
-export async function fetchPaymentHistory(): Promise<PaymentRecord[]> {
+export async function fetchPaymentHistory(wallet: string = WALLET): Promise<PaymentRecord[]> {
   const res = await fetch(
-    apiUrl(`/payments/history?wallet=${encodeURIComponent(WALLET)}`),
+    apiUrl(`/payments/history?wallet=${encodeURIComponent(wallet)}`),
     { headers: buildHeaders(false) }
   );
   if (!res.ok) {
