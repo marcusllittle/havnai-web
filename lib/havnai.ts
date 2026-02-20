@@ -60,6 +60,7 @@ export interface FaceSwapRequest {
   model?: string;
   strength?: number;
   numSteps?: number;
+  guidance?: number;
   loras?: LoraConfig[];
   seed?: number;
 }
@@ -150,6 +151,7 @@ export interface SubmitJobOptions {
   sampler?: string;
   seed?: number;
   loras?: LoraConfig[];
+  hardcoreMode?: boolean;
 }
 
 function getApiBase(): string {
@@ -254,6 +256,9 @@ export async function submitAutoJob(
     if (options.loras && options.loras.length > 0) {
       body.loras = options.loras;
     }
+    if (options.hardcoreMode === true) {
+      body.hardcore_mode = true;
+    }
   }
 
   const res = await fetch(apiUrl("/submit-job"), {
@@ -286,6 +291,7 @@ export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<strin
   };
   if (request.strength != null) body.strength = request.strength;
   if (request.numSteps != null) body.num_steps = request.numSteps;
+  if (request.guidance != null) body.guidance = request.guidance;
   if (request.seed != null) body.seed = request.seed;
   if (request.loras && request.loras.length > 0) {
     body.loras = request.loras;

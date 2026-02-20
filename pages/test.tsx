@@ -18,6 +18,7 @@ import {
   HavnaiApiError,
   JobDetailResponse,
   ResultResponse,
+  FaceSwapRequest,
   SubmitJobOptions,
   QuotaStatus,
   CreditBalance,
@@ -50,6 +51,42 @@ type LoraInfo = {
   label?: string;
 };
 
+type RuntimeDefaults = {
+  steps?: number;
+  guidance?: number;
+  width?: number;
+  height?: number;
+  frames?: number;
+  fps?: number;
+  sampler?: string;
+  num_steps?: number;
+  strength?: number;
+};
+
+type RuntimeDefaultsSource = Record<string, string>;
+
+type ModelListEntry = {
+  name: string;
+  tier: string;
+  task_type?: string;
+  pipeline?: string;
+  available?: boolean;
+  face_swap_available?: boolean;
+  image_defaults?: RuntimeDefaults | null;
+  video_defaults?: RuntimeDefaults | null;
+  face_swap_defaults?: RuntimeDefaults | null;
+  defaults_source?: {
+    image?: RuntimeDefaultsSource;
+    video?: RuntimeDefaultsSource;
+    face_swap?: RuntimeDefaultsSource;
+  } | null;
+  defaults_confidence?: {
+    image?: string;
+    video?: string;
+    face_swap?: string;
+  } | null;
+};
+
 type GeneratorMode = "image" | "face_swap" | "video";
 
 const TestPage: React.FC = () => {
@@ -69,10 +106,12 @@ const TestPage: React.FC = () => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>("auto");
+  const [hardcoreMode, setHardcoreMode] = useState(false);
   const [useStandardNegative, setUseStandardNegative] = useState(true);
   const [imageModels, setImageModels] = useState<{ id: string; label: string }[]>(FALLBACK_IMAGE_MODELS);
   const [videoModels, setVideoModels] = useState<{ id: string; label: string }[]>([]);
   const [faceSwapModels, setFaceSwapModels] = useState<{ id: string; label: string }[]>([]);
+  const [modelRuntimeDefaults, setModelRuntimeDefaults] = useState<Record<string, ModelListEntry>>({});
   const [steps, setSteps] = useState("");
   const [guidance, setGuidance] = useState("");
   const [width, setWidth] = useState("");
@@ -101,8 +140,9 @@ const TestPage: React.FC = () => {
   const [faceSourceUrl, setFaceSourceUrl] = useState("");
   const [faceSourceData, setFaceSourceData] = useState<string | undefined>();
   const [faceSourceName, setFaceSourceName] = useState<string | undefined>();
-  const [faceswapStrength, setFaceswapStrength] = useState("0.8");
-  const [faceswapSteps, setFaceswapSteps] = useState("20");
+  const [faceswapStrength, setFaceswapStrength] = useState("");
+  const [faceswapSteps, setFaceswapSteps] = useState("");
+  const [faceswapGuidance, setFaceswapGuidance] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerJob, setDrawerJob] = useState<JobDetailResponse | null>(null);
   const [drawerResult, setDrawerResult] = useState<ResultResponse | null>(null);
@@ -146,6 +186,25 @@ const TestPage: React.FC = () => {
   const currentPipeline = selectedModel && selectedModel !== "auto"
     ? modelPipelines[selectedModel.toLowerCase()] || ""
     : "";
+  const selectedImageModelMeta =
+    selectedModel && selectedModel !== "auto" ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
+  const selectedVideoModelMeta =
+    mode === "video" && selectedModel ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
+  const selectedFaceSwapModelMeta = faceswapModel
+    ? modelRuntimeDefaults[faceswapModel.toLowerCase()]
+    : undefined;
+
+  const summarizeDefaultsSource = (sources?: RuntimeDefaultsSource): string => {
+    if (!sources) return "profile";
+    const values = Object.values(sources).map((v) => String(v || "").toLowerCase());
+    if (values.includes("model")) return "model";
+    if (values.includes("profile")) return "profile";
+    if (values.includes("env")) return "env";
+    return "profile";
+  };
+  const imageDefaultsBadge = summarizeDefaultsSource(selectedImageModelMeta?.defaults_source?.image);
+  const videoDefaultsBadge = summarizeDefaultsSource(selectedVideoModelMeta?.defaults_source?.video);
+  const faceSwapDefaultsBadge = summarizeDefaultsSource(selectedFaceSwapModelMeta?.defaults_source?.face_swap);
 
   useEffect(() => {
     let active = true;
@@ -248,22 +307,22 @@ const TestPage: React.FC = () => {
         const res = await fetch(`${getApiBase()}/models/list`, { credentials: "same-origin" });
         if (!res.ok) throw new Error(`models HTTP ${res.status}`);
         const data = await res.json();
-        const models = Array.isArray(data?.models) ? data.models : [];
+        const models: ModelListEntry[] = Array.isArray(data?.models) ? data.models : [];
 
         if (!active) return;
 
         // Separate models by task type
-        const imageModelsData = models.filter((m: any) => {
+        const imageModelsData = models.filter((m) => {
           const taskType = String(m.task_type || "").toUpperCase();
           return taskType === "IMAGE_GEN" || !taskType;
         });
-        const videoModelsData = models.filter((m: any) => {
+        const videoModelsData = models.filter((m) => {
           const taskType = String(m.task_type || "").toUpperCase();
           return (taskType === "VIDEO_GEN" || taskType === "ANIMATEDIFF") && m.available === true;
         });
 
         // Face swap models: only currently available SDXL entries.
-        const faceSwapModelsData = imageModelsData.filter((m: any) => {
+        const faceSwapModelsData = imageModelsData.filter((m) => {
           const pipeline = String(m.pipeline || "").toLowerCase();
           return pipeline.includes("sdxl") && m.face_swap_available === true;
         });
@@ -271,13 +330,13 @@ const TestPage: React.FC = () => {
         // Transform to dropdown format with tier badges and clean names
         const imageOptions = [
           { id: "auto", label: "Auto (let grid choose best)" },
-          ...imageModelsData.map((m: any) => ({
+          ...imageModelsData.map((m) => ({
             id: m.name,
-            label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${m.pipeline.toUpperCase()}`,
+            label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${String(m.pipeline || "").toUpperCase()}`,
           })),
         ];
 
-        const videoOptions = videoModelsData.map((m: any) => {
+        const videoOptions = videoModelsData.map((m) => {
           const isAnimateDiff = String(m.task_type || "").toUpperCase() === "ANIMATEDIFF";
           const typeLabel = isAnimateDiff ? "AnimateDiff · SD1.5 motion" : "LTX2 · native video";
           return {
@@ -286,9 +345,9 @@ const TestPage: React.FC = () => {
           };
         });
 
-        const faceSwapOptions = faceSwapModelsData.map((m: any) => ({
+        const faceSwapOptions = faceSwapModelsData.map((m) => ({
           id: m.name,
-          label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${m.pipeline.toUpperCase()}`,
+          label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${String(m.pipeline || "").toUpperCase()}`,
         }));
 
         setImageModels(imageOptions);
@@ -297,12 +356,19 @@ const TestPage: React.FC = () => {
 
         // Build model→pipeline lookup for LoRA filtering
         const pipelines: Record<string, string> = {};
+        const defaultsMap: Record<string, ModelListEntry> = {};
         for (const m of models) {
           if (m.name && m.pipeline) {
             pipelines[m.name.toLowerCase()] = String(m.pipeline).toLowerCase();
           }
+          if (m.name) {
+            defaultsMap[m.name.toLowerCase()] = m;
+          }
         }
-        if (active) setModelPipelines(pipelines);
+        if (active) {
+          setModelPipelines(pipelines);
+          setModelRuntimeDefaults(defaultsMap);
+        }
       } catch (err: any) {
         console.error("Failed to load models from /api/models/list:", err);
         // Keep fallback models on error
@@ -328,6 +394,7 @@ const TestPage: React.FC = () => {
       setFaceSourceUrl("");
       setFaceSourceData(undefined);
       setFaceSourceName(undefined);
+      setFaceswapGuidance("");
       // Set default model to auto for image mode
       setSelectedModel("auto");
     } else if (mode === "video") {
@@ -337,6 +404,7 @@ const TestPage: React.FC = () => {
       setFaceSourceUrl("");
       setFaceSourceData(undefined);
       setFaceSourceName(undefined);
+      setFaceswapGuidance("");
       // Select first available video model, otherwise clear selection.
       setSelectedModel(videoModels.length > 0 ? videoModels[0].id : "");
     } else if (mode === "face_swap") {
@@ -352,6 +420,57 @@ const TestPage: React.FC = () => {
       setFaceswapModel(faceSwapModels.length > 0 ? faceSwapModels[0].id : "");
     }
   }, [mode, videoModels, faceSwapModels]);
+
+  useEffect(() => {
+    if (mode !== "image" || !selectedImageModelMeta || selectedModel === "auto") return;
+    const defaults = selectedImageModelMeta.image_defaults || undefined;
+    if (!defaults) return;
+    if (!steps && defaults.steps != null) setSteps(String(defaults.steps));
+    if (!guidance && defaults.guidance != null) setGuidance(String(defaults.guidance));
+    if (!width && defaults.width != null) setWidth(String(defaults.width));
+    if (!height && defaults.height != null) setHeight(String(defaults.height));
+    if (!sampler && defaults.sampler) setSampler(String(defaults.sampler));
+  }, [
+    mode,
+    selectedModel,
+    selectedImageModelMeta,
+    steps,
+    guidance,
+    width,
+    height,
+    sampler,
+  ]);
+
+  useEffect(() => {
+    if (mode !== "video" || !selectedVideoModelMeta) return;
+    const defaults = selectedVideoModelMeta.video_defaults || undefined;
+    if (!defaults) return;
+    if (!steps && defaults.steps != null) setSteps(String(defaults.steps));
+    if (!guidance && defaults.guidance != null) setGuidance(String(defaults.guidance));
+    if (!width && defaults.width != null) setWidth(String(defaults.width));
+    if (!height && defaults.height != null) setHeight(String(defaults.height));
+    if (!frames && defaults.frames != null) setFrames(String(defaults.frames));
+    if (!fps && defaults.fps != null) setFps(String(defaults.fps));
+  }, [
+    mode,
+    selectedModel,
+    selectedVideoModelMeta,
+    steps,
+    guidance,
+    width,
+    height,
+    frames,
+    fps,
+  ]);
+
+  useEffect(() => {
+    if (mode !== "face_swap" || !selectedFaceSwapModelMeta) return;
+    const defaults = selectedFaceSwapModelMeta.face_swap_defaults || undefined;
+    if (!defaults) return;
+    if (!faceswapStrength && defaults.strength != null) setFaceswapStrength(String(defaults.strength));
+    if (!faceswapSteps && defaults.num_steps != null) setFaceswapSteps(String(defaults.num_steps));
+    if (!faceswapGuidance && defaults.guidance != null) setFaceswapGuidance(String(defaults.guidance));
+  }, [mode, faceswapModel, selectedFaceSwapModelMeta, faceswapStrength, faceswapSteps, faceswapGuidance]);
 
   useEffect(() => {
     let cancelled = false;
@@ -563,6 +682,7 @@ const TestPage: React.FC = () => {
     if (heightValue !== undefined) options.height = heightValue;
     if (samplerValue) options.sampler = samplerValue;
     if (seedValue !== undefined) options.seed = seedValue;
+    if (hardcoreMode) options.hardcoreMode = true;
 
     const loraPayload = buildLoraPayload();
     if (loraPayload.length > 0) {
@@ -792,18 +912,21 @@ const TestPage: React.FC = () => {
           setStatusMessage(`Job submitted… Requested LoRAs: ${requestedLoraSummary}`);
         }
         const seedValue = parseOptionalInt(seed);
-        const strengthValue = parseOptionalFloat(faceswapStrength) ?? 0.8;
-        const stepsValue = parseOptionalInt(faceswapSteps) ?? 20;
-        const id = await submitFaceSwapJob({
+        const strengthValue = parseOptionalFloat(faceswapStrength);
+        const stepsValue = parseOptionalInt(faceswapSteps);
+        const guidanceValue = parseOptionalFloat(faceswapGuidance);
+        const request: FaceSwapRequest = {
           prompt: trimmed,
           model: faceswapModel,
           baseImageUrl: baseUrl,
           faceSourceUrl: faceUrl,
-          strength: strengthValue,
-          numSteps: stepsValue,
           loras: loraPayload.length > 0 ? loraPayload : undefined,
           seed: seedValue,
-        });
+        };
+        if (strengthValue !== undefined) request.strength = strengthValue;
+        if (stepsValue !== undefined) request.numSteps = stepsValue;
+        if (guidanceValue !== undefined) request.guidance = guidanceValue;
+        const id = await submitFaceSwapJob(request);
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
         await pollJob(id, trimmed || "Face swap", 1800);
@@ -1403,6 +1526,7 @@ const TestPage: React.FC = () => {
                           max={1}
                           step={0.05}
                           className="generator-input"
+                          placeholder="Recommended"
                           value={faceswapStrength}
                           onChange={(e) => setFaceswapStrength(e.target.value)}
                         />
@@ -1418,8 +1542,25 @@ const TestPage: React.FC = () => {
                           max={60}
                           step={1}
                           className="generator-input"
+                          placeholder="Recommended"
                           value={faceswapSteps}
                           onChange={(e) => setFaceswapSteps(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="generator-label" htmlFor="faceswap-guidance">
+                          Guidance
+                        </label>
+                        <input
+                          id="faceswap-guidance"
+                          type="number"
+                          min={0}
+                          max={12}
+                          step={0.1}
+                          className="generator-input"
+                          placeholder="Recommended"
+                          value={faceswapGuidance}
+                          onChange={(e) => setFaceswapGuidance(e.target.value)}
                         />
                       </div>
                     </div>
@@ -1438,6 +1579,11 @@ const TestPage: React.FC = () => {
                         </option>
                       ))}
                     </select>
+                    {selectedFaceSwapModelMeta?.face_swap_defaults && (
+                      <p className="generator-help">
+                        Using recommended defaults for this model (source: {faceSwapDefaultsBadge}). Leave fields blank to apply them automatically.
+                      </p>
+                    )}
                     {/* LoRA Browser + Stack (Face Swap) */}
                     <div className="lora-section">
                       <div className="lora-section-header">
@@ -1624,6 +1770,11 @@ const TestPage: React.FC = () => {
                       <p className="generator-help">
                         Auto routes to the best model by weight and pipeline. Choosing a specific model overrides auto routing for this job.
                       </p>
+                      {selectedModel !== "auto" && selectedImageModelMeta?.image_defaults && (
+                        <p className="generator-help">
+                          Using recommended defaults for this model (source: {imageDefaultsBadge}). Leave fields blank to apply them automatically.
+                        </p>
+                      )}
                     </div>
                     <div className="adv-group">
                       <span className="adv-group-title">Negative prompt</span>
@@ -1655,6 +1806,17 @@ const TestPage: React.FC = () => {
                           Uncheck &ldquo;Use standard negative prompt&rdquo; above to enter custom negatives.
                         </p>
                       )}
+                      <label className="generator-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={hardcoreMode}
+                          onChange={(e) => setHardcoreMode(e.target.checked)}
+                        />
+                        <span>Hardcore mode (explicit)</span>
+                      </label>
+                      <p className="generator-help">
+                        Enables hardcore prompt enhancement only when explicitly turned on. No keyword auto-trigger.
+                      </p>
                     </div>
                     <div className="adv-group">
                       <span className="adv-group-title">Generation settings</span>
@@ -1938,6 +2100,11 @@ const TestPage: React.FC = () => {
                         </option>
                       ))}
                     </select>
+                    {selectedVideoModelMeta?.video_defaults && (
+                      <p className="generator-help">
+                        Using recommended defaults for this model (source: {videoDefaultsBadge}). Leave fields blank to apply them automatically.
+                      </p>
+                    )}
                     <label className="generator-label" htmlFor="negative-prompt-video">
                       Negative prompt (optional)
                     </label>
@@ -2010,7 +2177,7 @@ const TestPage: React.FC = () => {
                           max={50}
                           step={1}
                           className="generator-input"
-                          placeholder="Default 25"
+                          placeholder="Recommended"
                           value={steps}
                           onChange={(e) => setSteps(e.target.value)}
                         />
@@ -2026,7 +2193,7 @@ const TestPage: React.FC = () => {
                           max={12}
                           step={0.1}
                           className="generator-input"
-                          placeholder="Default 6"
+                          placeholder="Recommended"
                           value={guidance}
                           onChange={(e) => setGuidance(e.target.value)}
                         />
@@ -2044,7 +2211,7 @@ const TestPage: React.FC = () => {
                           max={768}
                           step={64}
                           className="generator-input"
-                          placeholder="Default 512"
+                          placeholder="Recommended"
                           value={width}
                           onChange={(e) => setWidth(e.target.value)}
                         />
@@ -2060,7 +2227,7 @@ const TestPage: React.FC = () => {
                           max={768}
                           step={64}
                           className="generator-input"
-                          placeholder="Default 512"
+                          placeholder="Recommended"
                           value={height}
                           onChange={(e) => setHeight(e.target.value)}
                         />
@@ -2078,7 +2245,7 @@ const TestPage: React.FC = () => {
                           max={64}
                           step={1}
                           className="generator-input"
-                          placeholder="Default 16"
+                          placeholder="Recommended"
                           value={frames}
                           onChange={(e) => setFrames(e.target.value)}
                         />
@@ -2094,7 +2261,7 @@ const TestPage: React.FC = () => {
                           max={24}
                           step={1}
                           className="generator-input"
-                          placeholder="Default 8"
+                          placeholder="Recommended"
                           value={fps}
                           onChange={(e) => setFps(e.target.value)}
                         />
