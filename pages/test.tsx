@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { HavnAIPrompt } from "../components/HavnAIPrompt";
 import { HavnAIButton } from "../components/HavnAIButton";
 import { StatusBox } from "../components/StatusBox";
@@ -156,6 +156,9 @@ const TestPage: React.FC = () => {
   const [quotaError, setQuotaError] = useState<string | undefined>();
   const [credits, setCredits] = useState<CreditBalance | null>(null);
   const inviteSaved = Boolean(savedInviteCode);
+  const imagePrefillKeyRef = useRef<string>("");
+  const videoPrefillKeyRef = useRef<string>("");
+  const faceSwapPrefillKeyRef = useRef<string>("");
 
   const apiBase = getApiBase();
 
@@ -422,55 +425,54 @@ const TestPage: React.FC = () => {
   }, [mode, videoModels, faceSwapModels]);
 
   useEffect(() => {
-    if (mode !== "image" || !selectedImageModelMeta || selectedModel === "auto") return;
+    if (mode !== "image" || !selectedImageModelMeta || selectedModel === "auto") {
+      if (mode !== "image") imagePrefillKeyRef.current = "";
+      return;
+    }
     const defaults = selectedImageModelMeta.image_defaults || undefined;
     if (!defaults) return;
-    if (!steps && defaults.steps != null) setSteps(String(defaults.steps));
-    if (!guidance && defaults.guidance != null) setGuidance(String(defaults.guidance));
-    if (!width && defaults.width != null) setWidth(String(defaults.width));
-    if (!height && defaults.height != null) setHeight(String(defaults.height));
-    if (!sampler && defaults.sampler) setSampler(String(defaults.sampler));
-  }, [
-    mode,
-    selectedModel,
-    selectedImageModelMeta,
-    steps,
-    guidance,
-    width,
-    height,
-    sampler,
-  ]);
+    const prefillKey = `${selectedModel.toLowerCase()}:${JSON.stringify(defaults)}`;
+    if (imagePrefillKeyRef.current === prefillKey) return;
+    setSteps((prev) => (prev || defaults.steps == null ? prev : String(defaults.steps)));
+    setGuidance((prev) => (prev || defaults.guidance == null ? prev : String(defaults.guidance)));
+    setWidth((prev) => (prev || defaults.width == null ? prev : String(defaults.width)));
+    setHeight((prev) => (prev || defaults.height == null ? prev : String(defaults.height)));
+    setSampler((prev) => (prev || !defaults.sampler ? prev : String(defaults.sampler)));
+    imagePrefillKeyRef.current = prefillKey;
+  }, [mode, selectedModel, selectedImageModelMeta]);
 
   useEffect(() => {
-    if (mode !== "video" || !selectedVideoModelMeta) return;
+    if (mode !== "video" || !selectedVideoModelMeta) {
+      if (mode !== "video") videoPrefillKeyRef.current = "";
+      return;
+    }
     const defaults = selectedVideoModelMeta.video_defaults || undefined;
     if (!defaults) return;
-    if (!steps && defaults.steps != null) setSteps(String(defaults.steps));
-    if (!guidance && defaults.guidance != null) setGuidance(String(defaults.guidance));
-    if (!width && defaults.width != null) setWidth(String(defaults.width));
-    if (!height && defaults.height != null) setHeight(String(defaults.height));
-    if (!frames && defaults.frames != null) setFrames(String(defaults.frames));
-    if (!fps && defaults.fps != null) setFps(String(defaults.fps));
-  }, [
-    mode,
-    selectedModel,
-    selectedVideoModelMeta,
-    steps,
-    guidance,
-    width,
-    height,
-    frames,
-    fps,
-  ]);
+    const prefillKey = `${selectedModel.toLowerCase()}:${JSON.stringify(defaults)}`;
+    if (videoPrefillKeyRef.current === prefillKey) return;
+    setSteps((prev) => (prev || defaults.steps == null ? prev : String(defaults.steps)));
+    setGuidance((prev) => (prev || defaults.guidance == null ? prev : String(defaults.guidance)));
+    setWidth((prev) => (prev || defaults.width == null ? prev : String(defaults.width)));
+    setHeight((prev) => (prev || defaults.height == null ? prev : String(defaults.height)));
+    setFrames((prev) => (prev || defaults.frames == null ? prev : String(defaults.frames)));
+    setFps((prev) => (prev || defaults.fps == null ? prev : String(defaults.fps)));
+    videoPrefillKeyRef.current = prefillKey;
+  }, [mode, selectedModel, selectedVideoModelMeta]);
 
   useEffect(() => {
-    if (mode !== "face_swap" || !selectedFaceSwapModelMeta) return;
+    if (mode !== "face_swap" || !selectedFaceSwapModelMeta) {
+      if (mode !== "face_swap") faceSwapPrefillKeyRef.current = "";
+      return;
+    }
     const defaults = selectedFaceSwapModelMeta.face_swap_defaults || undefined;
     if (!defaults) return;
-    if (!faceswapStrength && defaults.strength != null) setFaceswapStrength(String(defaults.strength));
-    if (!faceswapSteps && defaults.num_steps != null) setFaceswapSteps(String(defaults.num_steps));
-    if (!faceswapGuidance && defaults.guidance != null) setFaceswapGuidance(String(defaults.guidance));
-  }, [mode, faceswapModel, selectedFaceSwapModelMeta, faceswapStrength, faceswapSteps, faceswapGuidance]);
+    const prefillKey = `${faceswapModel.toLowerCase()}:${JSON.stringify(defaults)}`;
+    if (faceSwapPrefillKeyRef.current === prefillKey) return;
+    setFaceswapStrength((prev) => (prev || defaults.strength == null ? prev : String(defaults.strength)));
+    setFaceswapSteps((prev) => (prev || defaults.num_steps == null ? prev : String(defaults.num_steps)));
+    setFaceswapGuidance((prev) => (prev || defaults.guidance == null ? prev : String(defaults.guidance)));
+    faceSwapPrefillKeyRef.current = prefillKey;
+  }, [mode, faceswapModel, selectedFaceSwapModelMeta]);
 
   useEffect(() => {
     let cancelled = false;
