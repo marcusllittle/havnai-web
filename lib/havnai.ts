@@ -23,6 +23,10 @@ export interface JobDetail {
   completed_at?: number | null;
   reward?: number;
   reward_factors?: Record<string, unknown>;
+  requested_loras?: JobLoraEntry[];
+  applied_loras?: JobLoraEntry[];
+  status_reason?: string;
+  lora_summary?: string | null;
   data?: any;
 }
 
@@ -38,6 +42,15 @@ export interface ResultResponse {
 export interface LoraConfig {
   name: string;
   weight?: number;
+}
+
+export interface JobLoraEntry {
+  name: string;
+  weight?: number;
+  requested_weight?: number;
+  applied_weight?: number;
+  path?: string;
+  filename?: string;
 }
 
 export interface FaceSwapRequest {

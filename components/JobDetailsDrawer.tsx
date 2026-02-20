@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { JobDetailResponse, ResultResponse, resolveAssetUrl } from "../lib/havnai";
+import { JobDetailResponse, JobLoraEntry, ResultResponse, resolveAssetUrl } from "../lib/havnai";
 import { downloadAsset } from "../lib/download";
 import { getTimelineSteps, normalizeJobStatus, shortJobId } from "../lib/jobStatus";
 import { addToLibrary, isInLibrary, removeFromLibrary, LibraryItemType } from "../lib/libraryStore";
@@ -42,6 +42,53 @@ function parseJobData(raw: any): Record<string, any> {
     return raw as Record<string, any>;
   }
   return {};
+}
+
+function normalizeLoraEntries(raw: any): JobLoraEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const normalized: JobLoraEntry[] = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      const trimmed = item.trim();
+      if (!trimmed) continue;
+      const parsed: JobLoraEntry = { name: trimmed };
+      if (trimmed.includes(":")) {
+        const pieces = trimmed.split(":");
+        const maybeWeight = pieces[pieces.length - 1];
+        const maybeName = pieces.slice(0, pieces.length - 1).join(":").trim();
+        const numeric = Number.parseFloat(maybeWeight);
+        if (Number.isFinite(numeric)) parsed.applied_weight = numeric;
+        if (maybeName) parsed.name = maybeName;
+      }
+      normalized.push(parsed);
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const name = String((item as any).name || (item as any).adapter || (item as any).filename || "").trim();
+    if (!name) continue;
+    const entry: JobLoraEntry = { name };
+    const weight = Number.parseFloat((item as any).weight);
+    const requested = Number.parseFloat((item as any).requested_weight);
+    const applied = Number.parseFloat((item as any).applied_weight);
+    if (Number.isFinite(weight)) entry.weight = weight;
+    if (Number.isFinite(requested)) entry.requested_weight = requested;
+    if (Number.isFinite(applied)) entry.applied_weight = applied;
+    if ((item as any).path) entry.path = String((item as any).path);
+    if ((item as any).filename) entry.filename = String((item as any).filename);
+    normalized.push(entry);
+  }
+  return normalized;
+}
+
+function formatLoraWeight(entry: JobLoraEntry): string {
+  const requested = entry.requested_weight ?? entry.weight;
+  const applied = entry.applied_weight;
+  if (requested != null && applied != null) {
+    return `${requested.toFixed(2)} → ${applied.toFixed(2)}`;
+  }
+  if (requested != null) return requested.toFixed(2);
+  if (applied != null) return applied.toFixed(2);
+  return "--";
 }
 
 function truncateText(value: string | undefined, limit = 500): string | undefined {
@@ -120,6 +167,19 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
 
   const promptText = truncateText(jobData.prompt, 500);
   const negativePrompt = truncateText(jobData.negative_prompt, 500);
+  const requestedLoras = useMemo(
+    () => normalizeLoraEntries(job?.requested_loras || jobData.requested_loras || jobData.loras),
+    [job?.requested_loras, jobData.requested_loras, jobData.loras]
+  );
+  const appliedLoras = useMemo(
+    () => normalizeLoraEntries(job?.applied_loras || jobData.applied_loras),
+    [job?.applied_loras, jobData.applied_loras]
+  );
+  const statusReason =
+    (typeof job?.status_reason === "string" && job.status_reason.trim()) ||
+    (typeof jobData.status_reason === "string" && jobData.status_reason.trim()) ||
+    (typeof jobData.error === "string" && jobData.error.trim()) ||
+    undefined;
 
   const params = {
     seed: jobData.seed ?? jobData.overrides?.seed,
@@ -152,6 +212,9 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
         video_url: previewVideo,
       },
       preview_url: previewImage || previewVideo,
+      status_reason: statusReason,
+      requested_loras: requestedLoras,
+      applied_loras: appliedLoras,
       error_message:
         jobData.error_message || jobData.error || jobData.failure_reason || undefined,
     };
@@ -168,6 +231,9 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     negativePrompt,
     previewImage,
     previewVideo,
+    statusReason,
+    requestedLoras,
+    appliedLoras,
   ]);
 
   const handleCopy = async (text: string) => {
@@ -387,6 +453,46 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   <span className="job-label">model</span>
                   <span>{job?.model || summary?.model || "--"}</span>
                 </div>
+                <div>
+                  <span className="job-label">status_reason</span>
+                  <span>{statusReason || "--"}</span>
+                </div>
+              </div>
+            </details>
+          </section>
+
+          <section className="job-section">
+            <details>
+              <summary>LoRA trace</summary>
+              <div className="job-details-stack">
+                <div>
+                  <span className="job-label">requested_loras</span>
+                  {requestedLoras.length > 0 ? (
+                    <ul>
+                      {requestedLoras.map((entry, index) => (
+                        <li key={`requested-lora-${index}`}>
+                          <code>{entry.name}</code> · {formatLoraWeight(entry)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>--</p>
+                  )}
+                </div>
+                <div>
+                  <span className="job-label">applied_loras</span>
+                  {appliedLoras.length > 0 ? (
+                    <ul>
+                      {appliedLoras.map((entry, index) => (
+                        <li key={`applied-lora-${index}`}>
+                          <code>{entry.name}</code> · {formatLoraWeight(entry)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>--</p>
+                  )}
+                </div>
               </div>
             </details>
           </section>
@@ -410,7 +516,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
           </section>
 
           {normalized.isFailed && (() => {
-            const errText = jobData.error_message || jobData.error || "Unknown error";
+            const errText = statusReason || jobData.error_message || jobData.error || "Unknown error";
             const isOOM = /out of memory/i.test(errText);
             return (
               <section className="job-section job-failure">
