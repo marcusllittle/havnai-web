@@ -21,6 +21,7 @@ export interface JobDetail {
   node_id?: string;
   timestamp?: number;
   completed_at?: number | null;
+  retry_count?: number;
   reward?: number;
   reward_factors?: Record<string, unknown>;
   requested_loras?: JobLoraEntry[];
@@ -447,6 +448,35 @@ export async function fetchJobWithResult(
     }
     return { job };
   }
+}
+
+export async function cancelJob(jobId: string): Promise<{ status: string; job_id: string }> {
+  const res = await fetch(apiUrl(`/jobs/${encodeURIComponent(jobId)}/cancel`), {
+    method: "POST",
+    headers: buildHeaders(true),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return await res.json();
+}
+
+/**
+ * Returns a human-readable warning if the job appears stuck, or null if it
+ * looks normal.  Thresholds: queued > 2 min, running > 5 min.
+ */
+export function getJobStuckWarning(job: JobDetail): string | null {
+  if (!job.timestamp) return null;
+  const status = (job.status || "").toLowerCase();
+  if (status !== "queued" && status !== "running") return null;
+  const elapsedSec = (Date.now() / 1000) - job.timestamp;
+  if (status === "queued" && elapsedSec > 120) {
+    return "This job has been waiting in the queue for over 2 minutes. The system will automatically retry if needed.";
+  }
+  if (status === "running" && elapsedSec > 300) {
+    return "This job has been processing for over 5 minutes. If the worker is unresponsive, it will be automatically requeued.";
+  }
+  return null;
 }
 
 export async function fetchWanVideoJob(jobId: string): Promise<WanVideoStatus> {
