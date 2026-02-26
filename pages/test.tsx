@@ -115,6 +115,7 @@ const TestPage: React.FC = () => {
   const [extendChunks, setExtendChunks] = useState("0");
   const [sampler, setSampler] = useState("");
   const [seed, setSeed] = useState("");
+  const [sfwMode, setSfwMode] = useState(false);
   const [loras, setLoras] = useState<LoraDraft[]>([]);
   const [autoStitch, setAutoStitch] = useState(false);
   const [availableLoras, setAvailableLoras] = useState<string[]>([]);
@@ -670,6 +671,7 @@ const TestPage: React.FC = () => {
 
     if (stepsValue !== undefined) options.steps = stepsValue;
     if (seedValue !== undefined) options.seed = seedValue;
+    if (sfwMode) options.sfwMode = true;
 
     return Object.keys(options).length > 0 ? options : undefined;
   };
@@ -715,6 +717,9 @@ const TestPage: React.FC = () => {
     }
     if (selectedModel) {
       request.model = selectedModel;
+    }
+    if (sfwMode) {
+      request.sfwMode = true;
     }
     return request;
   };
@@ -886,6 +891,7 @@ const TestPage: React.FC = () => {
           baseImageUrl: baseUrl,
           faceSourceUrl: faceUrl,
           seed: seedValue,
+          sfwMode,
         };
         if (strengthValue !== undefined) request.strength = strengthValue;
         if (stepsValue !== undefined) request.numSteps = stepsValue;
@@ -1577,6 +1583,14 @@ const TestPage: React.FC = () => {
                     disabled={mode !== "face_swap" && !prompt.trim()}
                     onClick={handleSubmit}
                   />
+                  <label className="generator-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={sfwMode}
+                      onChange={(e) => setSfwMode(e.target.checked)}
+                    />
+                    <span>SFW mode (adds stricter safety negatives)</span>
+                  </label>
                   {mode !== "face_swap" && (
                     <button
                       type="button"
