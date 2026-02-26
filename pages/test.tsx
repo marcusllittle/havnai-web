@@ -1063,7 +1063,7 @@ const TestPage: React.FC = () => {
           clearTimeout(timeout);
           unsub();
           resolve("completed");
-        } else if (status === "FAILED") {
+        } else if (status === "FAILED" || status === "CANCELLED") {
           sseResolved = true;
           clearTimeout(timeout);
           unsub();
@@ -1085,13 +1085,23 @@ const TestPage: React.FC = () => {
           const status = (job.status || "").toUpperCase();
 
           if (status === "QUEUED") {
-            setStatusMessage("Job queued...");
+            const elapsed = (Date.now() - start) / 1000;
+            if (elapsed > 120) {
+              setStatusMessage("Still waiting in queue... The system will auto-retry if needed.");
+            } else {
+              setStatusMessage("Job queued...");
+            }
           } else if (status === "RUNNING") {
-            setStatusMessage("Rendering on HavnAI node...");
+            const elapsed = (Date.now() - start) / 1000;
+            if (elapsed > 300) {
+              setStatusMessage("Still rendering... If the worker is unresponsive, it will be automatically requeued.");
+            } else {
+              setStatusMessage("Rendering on HavnAI node...");
+            }
           } else if (status === "SUCCESS" || status === "COMPLETED") {
             setStatusMessage("Finalizing output...");
             return "completed";
-          } else if (status === "FAILED") {
+          } else if (status === "FAILED" || status === "CANCELLED") {
             return "failed";
           } else {
             setStatusMessage(`Status: ${status || "Unknown"}`);

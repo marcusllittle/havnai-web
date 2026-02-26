@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { JobDetailResponse, JobLoraEntry, ResultResponse, resolveAssetUrl } from "../lib/havnai";
+import { JobDetailResponse, JobLoraEntry, ResultResponse, resolveAssetUrl, cancelJob, getJobStuckWarning } from "../lib/havnai";
 import { downloadAsset } from "../lib/download";
 import { getTimelineSteps, normalizeJobStatus, shortJobId } from "../lib/jobStatus";
 import { addToLibrary, isInLibrary, removeFromLibrary, LibraryItemType } from "../lib/libraryStore";
@@ -332,6 +332,46 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                 );
               })}
             </div>
+            {job && (() => {
+              const warning = getJobStuckWarning(job);
+              if (!warning) return null;
+              return (
+                <div className="job-stuck-warning" style={{
+                  marginTop: "0.75rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "8px",
+                  background: "rgba(255, 180, 50, 0.12)",
+                  border: "1px solid rgba(255, 180, 50, 0.3)",
+                  fontSize: "0.85rem",
+                  color: "#ffb432",
+                }}>
+                  <p style={{ margin: "0 0 0.5rem 0" }}>{warning}</p>
+                  <button
+                    type="button"
+                    style={{
+                      background: "rgba(255, 80, 80, 0.15)",
+                      border: "1px solid rgba(255, 80, 80, 0.4)",
+                      color: "#ff6b6b",
+                      padding: "0.35rem 0.75rem",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "0.8rem",
+                    }}
+                    onClick={async () => {
+                      if (!resolvedId) return;
+                      try {
+                        await cancelJob(resolvedId);
+                        onClose();
+                      } catch {
+                        // ignore — job may already be completed
+                      }
+                    }}
+                  >
+                    Cancel job
+                  </button>
+                </div>
+              );
+            })()}
           </section>
 
           <section className="job-section">
