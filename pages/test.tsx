@@ -860,7 +860,12 @@ const TestPage: React.FC = () => {
     try {
       if (mode === "image") {
         const options = buildOptions();
-        const id = await submitAutoJob(trimmed, undefined, "", options);
+        const id = await submitAutoJob(
+          trimmed,
+          selectedModel === "auto" ? undefined : selectedModel,
+          "",
+          options
+        );
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
         await pollJob(id, trimmed, 1800);
@@ -1600,6 +1605,24 @@ const TestPage: React.FC = () => {
                 {advancedOpen && mode === "image" && (
                   <div className="generator-advanced">
                     <div className="adv-group">
+                      <label className="generator-label" htmlFor="image-model">
+                        Model
+                      </label>
+                      <select
+                        id="image-model"
+                        value={selectedModel}
+                        onChange={(e) => setSelectedModel(e.target.value)}
+                        className="generator-select"
+                      >
+                        {imageModels.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="generator-help">
+                        Pick a specific model or keep Auto for weighted routing.
+                      </p>
                       <span className="adv-group-title">Generation settings</span>
                       <label className="generator-label" htmlFor="image-steps">
                         Steps
