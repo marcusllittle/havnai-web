@@ -151,12 +151,12 @@ const HomePage: NextPage = () => {
         <title>HavnAI Network — Own Your Intelligence</title>
         <meta
           name="description"
-          content="HavnAI is a decentralized GPU network for AI image and video generation. Node operators earn $HAI running 20 tiered models."
+          content="HavnAI is a decentralized GPU network for AI image generation, face swap, and video jobs when video-capable nodes are online."
         />
         <meta property="og:title" content="HavnAI Network — Own Your Intelligence" />
         <meta
           property="og:description"
-          content="A decentralized GPU network for AI image and video generation. 20 tiered models, weighted routing, and dynamic $HAI rewards."
+          content="A decentralized GPU network for AI image generation, face swap, and video jobs when video-capable nodes are online."
         />
         <meta property="og:type" content="website" />
       </Head>
@@ -211,9 +211,9 @@ const HomePage: NextPage = () => {
               <p className="hero-kicker">Decentralized GPU Intelligence</p>
               <h1 className="hero-title">OWN YOUR INTELLIGENCE</h1>
               <p className="hero-subtitle">
-                A decentralized GPU network for AI image and video generation. Node operators earn{" "}
-                <strong>$HAI</strong> running 20 models across realism, anime, cartoon, and video
-                — all weighted and rewarded by quality tier.
+                A decentralized GPU network for AI creation. Node operators earn{" "}
+                <strong>$HAI</strong> by serving SDXL image jobs, SDXL face-swap jobs, and video jobs
+                whenever video-capable nodes are online.
               </p>
               <div className="hero-install-note">
                 <h3>Join the HavnAI GPU Grid</h3>
@@ -296,8 +296,9 @@ const HomePage: NextPage = () => {
               <div className="step-icon">3</div>
               <h3>Your GPU Generates</h3>
               <p>
-                Your node runs the model — 18 image models (SD 1.5 and SDXL) plus LTX2 video and
-                AnimateDiff — and returns the result.
+                Your node runs available models from the live registry and returns outputs. The
+                current MVP focuses on SDXL image + face swap, with video jobs routed when LTX2
+                capacity is online.
               </p>
             </article>
             <article className="step-card">
@@ -316,8 +317,8 @@ const HomePage: NextPage = () => {
           <div className="section-header">
             <h2>Smart Routing · Weighted Models</h2>
             <p>
-              20 models across image and video generation, each assigned a weight from our benchmark
-              registry. Higher-weight models get picked more often and earn bigger rewards.
+              Models in the live registry are assigned routing weights. Higher-weight models get
+              picked more often and earn bigger rewards.
             </p>
           </div>
           <div className="routing-layout">
@@ -341,12 +342,9 @@ const HomePage: NextPage = () => {
               <pre>
                 <code>
                   {`{
-  "juggernautXL_ragnarokBy":       20,  // Tier S
-  "epicrealismXL_vxviiCrystalclear": 20,  // Tier S
-  "perfectdeliberate_v5SD15":      10,  // Tier A
-  "cyberrealisticPony_v160":        8,  // Tier B
-  "disneyPixarCartoon_v10":         5,  // Tier C
-  "ltx2 (video)":                  20   // Video
+  "top_tier_sdxl_model": 20,
+  "mid_tier_sdxl_model": 8,
+  "ltx2 (video)": 20
 }`}
                 </code>
               </pre>
@@ -378,31 +376,31 @@ const HomePage: NextPage = () => {
                   <td>S</td>
                   <td>20</td>
                   <td>2.0×</td>
-                  <td>JuggernautXL, EpicRealismXL</td>
+                  <td>Top SDXL production models</td>
                 </tr>
                 <tr>
                   <td>A</td>
                   <td>10</td>
                   <td>1.0×</td>
-                  <td>Deliberate v5</td>
+                  <td>Strong general-purpose models</td>
                 </tr>
                 <tr>
                   <td>B</td>
                   <td>8</td>
                   <td>0.8×</td>
-                  <td>CyberRealistic, Lyriel, RealisticVision</td>
+                  <td>Balanced speed/quality models</td>
                 </tr>
                 <tr>
                   <td>C</td>
                   <td>5</td>
                   <td>0.5×</td>
-                  <td>Disney Pixar Cartoon, Kizuki Anime</td>
+                  <td>Specialized or stylized models</td>
                 </tr>
                 <tr>
                   <td>D</td>
                   <td>3</td>
                   <td>0.3×</td>
-                  <td>ZavyChroma, DivineElegance (experimental)</td>
+                  <td>Experimental/low-priority models</td>
                 </tr>
               </tbody>
             </table>
@@ -541,8 +539,8 @@ const HomePage: NextPage = () => {
             <div className="join-copy">
               <h2>Join Stage 6 → 7 Alpha</h2>
               <p>
-                We're running 20 image and video models across a growing set of GPU nodes. If you have a
-                capable NVIDIA GPU and want to earn $HAI by powering AI generation, join the alpha.
+                We are running SDXL image + face-swap workloads and video when compatible nodes are online.
+                If you have a capable NVIDIA GPU and want to earn $HAI by powering generation, join the alpha.
               </p>
               <ul>
                 <li>12&nbsp;GB+ NVIDIA GPU (3060 / 3080 / 4090 class).</li>
