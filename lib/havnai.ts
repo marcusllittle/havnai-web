@@ -253,9 +253,7 @@ export async function submitAutoJob(
     if (options.sampler && options.sampler.trim().length > 0) {
       body.sampler = options.sampler;
     }
-    if (options.loras && options.loras.length > 0) {
-      body.loras = options.loras;
-    }
+    // LoRA support removed for MVP – do not attach loras field
     if (options.hardcoreMode === true) {
       body.hardcore_mode = true;
     }
@@ -293,9 +291,7 @@ export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<strin
   if (request.numSteps != null) body.num_steps = request.numSteps;
   if (request.guidance != null) body.guidance = request.guidance;
   if (request.seed != null) body.seed = request.seed;
-  if (request.loras && request.loras.length > 0) {
-    body.loras = request.loras;
-  }
+  // LoRA support removed for MVP – do not attach loras field
 
   const res = await fetch(apiUrl("/submit-faceswap-job"), {
     method: "POST",
@@ -321,7 +317,7 @@ export async function submitWanVideoJob(request: WanVideoRequest): Promise<strin
   };
   if (request.negativePrompt) body.negative_prompt = request.negativePrompt;
   if (request.motionType) body.motion_type = request.motionType;
-  if (request.loraList && request.loraList.length > 0) body.lora_list = request.loraList;
+  // LoRA support removed for MVP – do not attach lora_list field
   if (request.initImageB64) body.init_image = request.initImageB64;
   if (request.duration != null) body.duration = request.duration;
   if (request.fps != null) body.fps = request.fps;

@@ -30,12 +30,14 @@ import { getApiBase } from "../lib/apiBase";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
-// Fallback models for offline development
+// LoRA support disabled for MVP – set to true to re-enable
+const ENABLE_LORA = false;
+
+// Fallback models for offline development – SDXL only
 const FALLBACK_IMAGE_MODELS: { id: string; label: string }[] = [
   { id: "auto", label: "Auto (let grid choose best)" },
   { id: "juggernautXL_ragnarokBy", label: "Juggernaut XL · Tier S · SDXL" },
   { id: "epicrealismXL_vxviiCrystalclear", label: "Epic Realism XL · Tier S · SDXL" },
-  { id: "perfectdeliberate_v5SD15", label: "Perfect Deliberate · Tier A · SD1.5" },
   { id: "cyberrealisticPony_v160", label: "Cyberrealistic Pony · Tier B · SDXL" },
 ];
 
@@ -212,6 +214,8 @@ const TestPage: React.FC = () => {
   useEffect(() => {
     let active = true;
     const loadLoras = async () => {
+      // LoRA support disabled for MVP
+      if (!ENABLE_LORA) return;
       if (typeof window === "undefined") return;
       try {
         // Build URL with optional pipeline filter
@@ -314,10 +318,11 @@ const TestPage: React.FC = () => {
 
         if (!active) return;
 
-        // Separate models by task type
+        // Separate models by task type – MVP: only show SDXL image models
         const imageModelsData = models.filter((m) => {
           const taskType = String(m.task_type || "").toUpperCase();
-          return taskType === "IMAGE_GEN" || !taskType;
+          const pipeline = String(m.pipeline || "").toLowerCase();
+          return (taskType === "IMAGE_GEN" || !taskType) && pipeline === "sdxl";
         });
         const videoModelsData = models.filter((m) => {
           const taskType = String(m.task_type || "").toUpperCase();
@@ -658,6 +663,8 @@ const TestPage: React.FC = () => {
   };
 
   const buildLoraPayload = (): { name: string; weight?: number }[] => {
+    // LoRA support disabled for MVP
+    if (!ENABLE_LORA) return [];
     return loras
       .map((entry) => {
         const name = entry.name.trim();
@@ -685,11 +692,6 @@ const TestPage: React.FC = () => {
     if (samplerValue) options.sampler = samplerValue;
     if (seedValue !== undefined) options.seed = seedValue;
     if (hardcoreMode) options.hardcoreMode = true;
-
-    const loraPayload = buildLoraPayload();
-    if (loraPayload.length > 0) {
-      options.loras = loraPayload;
-    }
 
     return Object.keys(options).length > 0 ? options : undefined;
   };
@@ -880,15 +882,6 @@ const TestPage: React.FC = () => {
     try {
       if (mode === "image") {
         const options = buildOptions();
-        const requestedLoraSummary =
-          options?.loras && options.loras.length > 0
-            ? options.loras
-                .map((entry) => `${entry.name}:${(entry.weight ?? 1.0).toFixed(2)}`)
-                .join(", ")
-            : "";
-        if (requestedLoraSummary) {
-          setStatusMessage(`Job submitted… Requested LoRAs: ${requestedLoraSummary}`);
-        }
         const customNegative = useStandardNegative ? "" : negativePrompt.trim();
         const id = await submitAutoJob(
           trimmed,
@@ -906,13 +899,6 @@ const TestPage: React.FC = () => {
           setStatusMessage("Base image and face source are required.");
           return;
         }
-        const loraPayload = buildLoraPayload();
-        if (loraPayload.length > 0) {
-          const requestedLoraSummary = loraPayload
-            .map((entry) => `${entry.name}:${(entry.weight ?? 1.0).toFixed(2)}`)
-            .join(", ");
-          setStatusMessage(`Job submitted… Requested LoRAs: ${requestedLoraSummary}`);
-        }
         const seedValue = parseOptionalInt(seed);
         const strengthValue = parseOptionalFloat(faceswapStrength);
         const stepsValue = parseOptionalInt(faceswapSteps);
@@ -922,7 +908,6 @@ const TestPage: React.FC = () => {
           model: faceswapModel,
           baseImageUrl: baseUrl,
           faceSourceUrl: faceUrl,
-          loras: loraPayload.length > 0 ? loraPayload : undefined,
           seed: seedValue,
         };
         if (strengthValue !== undefined) request.strength = strengthValue;
@@ -1586,7 +1571,8 @@ const TestPage: React.FC = () => {
                         Using recommended defaults for this model (source: {faceSwapDefaultsBadge}). Leave fields blank to apply them automatically.
                       </p>
                     )}
-                    {/* LoRA Browser + Stack (Face Swap) */}
+                    {/* LoRA Browser + Stack (Face Swap) – hidden when ENABLE_LORA is false */}
+                    {ENABLE_LORA && (
                     <div className="lora-section">
                       <div className="lora-section-header">
                         <span className="generator-label" style={{ margin: 0 }}>
@@ -1601,118 +1587,8 @@ const TestPage: React.FC = () => {
                           {loraBrowserOpen ? "Close browser" : `Browse ${availableLoras.length} LoRAs`}
                         </button>
                       </div>
-                      {loraLoadError && (
-                        <p className="generator-help" style={{ color: "#ffb5b5" }}>
-                          LoRA library unavailable: {loraLoadError}
-                        </p>
-                      )}
-
-                      {loraBrowserOpen && availableLoras.length > 0 && (
-                        <div className="lora-browser">
-                          <input
-                            type="text"
-                            className="lora-search"
-                            placeholder="Search LoRAs..."
-                            value={loraSearch}
-                            onChange={(e) => setLoraSearch(e.target.value)}
-                          />
-                          {currentPipeline && (
-                            <p className="lora-compat-hint">
-                              Showing LoRAs compatible with <strong>{currentPipeline.toUpperCase()}</strong>
-                            </p>
-                          )}
-                          <div className="lora-chip-grid">
-                            {filteredLoras.length === 0 && (
-                              <p className="lora-empty">
-                                {loraSearch.trim()
-                                  ? <>No LoRAs match &ldquo;{loraSearch}&rdquo;</>
-                                  : <>No compatible LoRAs found</>}
-                              </p>
-                            )}
-                            {filteredLoras.map((name) => {
-                              const isSelected = selectedLoraNames.has(name);
-                              const info = loraInfoMap.get(name);
-                              const pipelineTag = info?.pipeline?.toUpperCase();
-                              return (
-                                <button
-                                  key={`fs-chip-${name}`}
-                                  type="button"
-                                  className={`lora-chip ${isSelected ? "is-added" : ""}`}
-                                  onClick={() => {
-                                    if (isSelected) {
-                                      const idx = loras.findIndex((l) => l.name.trim() === name);
-                                      if (idx >= 0) removeLora(idx);
-                                    } else {
-                                      addLoraByName(name);
-                                    }
-                                  }}
-                                  title={isSelected ? "Click to remove" : "Click to add"}
-                                >
-                                  <span className="lora-chip-name">{cleanLoraDisplayName(name)}</span>
-                                  {pipelineTag && <span className="lora-chip-pipeline">{pipelineTag}</span>}
-                                  <span className="lora-chip-icon">{isSelected ? "\u2715" : "+"}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {loras.length > 0 && (
-                        <div className="lora-stack">
-                          {loras.map((entry, index) => {
-                            const weightNum = entry.weight ? parseFloat(entry.weight) : 1;
-                            const weightPct = Math.min(Math.max(weightNum / 2, 0), 1);
-                            return (
-                              <div className="lora-card" key={`fs-stack-${index}`}>
-                                <div className="lora-card-header">
-                                  <span className="lora-card-order">{index + 1}</span>
-                                  <span className="lora-card-name">
-                                    {entry.name ? cleanLoraDisplayName(entry.name) : "Empty slot"}
-                                  </span>
-                                  <div className="lora-card-actions">
-                                    <button type="button" className="lora-card-btn" onClick={() => moveLoraUp(index)} disabled={index === 0} title="Move up">&#9650;</button>
-                                    <button type="button" className="lora-card-btn" onClick={() => moveLoraDown(index)} disabled={index === loras.length - 1} title="Move down">&#9660;</button>
-                                    <button type="button" className="lora-card-btn lora-card-remove" onClick={() => removeLora(index)} title="Remove">&#10005;</button>
-                                  </div>
-                                </div>
-                                <div className="lora-card-weight">
-                                  <input
-                                    type="range"
-                                    min={0}
-                                    max={2}
-                                    step={0.05}
-                                    className="lora-slider"
-                                    value={entry.weight || "1"}
-                                    onChange={(e) => updateLoraWeight(index, e.target.value)}
-                                    style={{
-                                      background: `linear-gradient(90deg, rgba(0,234,255,0.5) ${weightPct * 100}%, rgba(255,255,255,0.06) ${weightPct * 100}%)`,
-                                    }}
-                                  />
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={2}
-                                    step={0.01}
-                                    className="generator-input"
-                                    value={entry.weight || ""}
-                                    onChange={(e) => updateLoraWeight(index, e.target.value)}
-                                    placeholder="1.00"
-                                  />
-                                  <span className="lora-weight-value">{(entry.weight || "1.00")}</span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {loras.length === 0 && !loraBrowserOpen && (
-                        <p className="generator-help" style={{ marginTop: "0.3rem" }}>
-                          No LoRAs selected. Click browse to explore.
-                        </p>
-                      )}
                     </div>
+                    )}
                   </div>
                 )}
 
@@ -1830,11 +1706,11 @@ const TestPage: React.FC = () => {
                         <input
                           id="steps"
                           type="number"
-                          min={5}
-                          max={50}
-                          step={1}
+                          min={25}
+                          max={35}
+                          step={5}
                           className="generator-input"
-                          placeholder="Auto (registry)"
+                          placeholder="30"
                           value={steps}
                           onChange={(e) => setSteps(e.target.value)}
                         />
@@ -1921,7 +1797,8 @@ const TestPage: React.FC = () => {
                       </div>
                     </div>
                     </div>
-                    {/* LoRA Browser + Stack */}
+                    {/* LoRA Browser + Stack – hidden when ENABLE_LORA is false */}
+                    {ENABLE_LORA && (
                     <div className="lora-section">
                       <div className="lora-section-header">
                         <span className="generator-label" style={{ margin: 0 }}>
@@ -1938,146 +1815,8 @@ const TestPage: React.FC = () => {
                             : `Browse ${availableLoras.length} LoRA${availableLoras.length !== 1 ? "s" : ""}${currentPipeline ? ` (${currentPipeline.toUpperCase()})` : ""}`}
                         </button>
                       </div>
-                      {loraLoadError && (
-                        <p className="generator-help" style={{ color: "#ffb5b5" }}>
-                          LoRA library unavailable: {loraLoadError}
-                        </p>
-                      )}
-
-                      {/* LoRA Browser Panel */}
-                      {loraBrowserOpen && availableLoras.length > 0 && (
-                        <div className="lora-browser">
-                          <input
-                            type="text"
-                            className="lora-search"
-                            placeholder="Search LoRAs..."
-                            value={loraSearch}
-                            onChange={(e) => setLoraSearch(e.target.value)}
-                            autoFocus
-                          />
-                          {currentPipeline && (
-                            <p className="lora-compat-hint">
-                              Showing LoRAs compatible with <strong>{currentPipeline.toUpperCase()}</strong> models
-                            </p>
-                          )}
-                          <div className="lora-chip-grid">
-                            {filteredLoras.length === 0 && (
-                              <p className="lora-empty">
-                                {loraSearch.trim()
-                                  ? <>No LoRAs match &ldquo;{loraSearch}&rdquo;</>
-                                  : currentPipeline
-                                    ? <>No compatible LoRAs found for {currentPipeline.toUpperCase()}</>
-                                    : <>No LoRAs available</>}
-                              </p>
-                            )}
-                            {filteredLoras.map((name) => {
-                              const isSelected = selectedLoraNames.has(name);
-                              const info = loraInfoMap.get(name);
-                              const pipelineTag = info?.pipeline?.toUpperCase();
-                              return (
-                                <button
-                                  key={`chip-${name}`}
-                                  type="button"
-                                  className={`lora-chip ${isSelected ? "is-added" : ""}`}
-                                  onClick={() => {
-                                    if (isSelected) {
-                                      const idx = loras.findIndex((l) => l.name.trim() === name);
-                                      if (idx >= 0) removeLora(idx);
-                                    } else {
-                                      addLoraByName(name);
-                                    }
-                                  }}
-                                  title={isSelected ? "Click to remove from stack" : "Click to add to stack"}
-                                >
-                                  <span className="lora-chip-name">{cleanLoraDisplayName(name)}</span>
-                                  {pipelineTag && <span className="lora-chip-pipeline">{pipelineTag}</span>}
-                                  <span className="lora-chip-icon">{isSelected ? "\u2715" : "+"}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* LoRA Stack Cards */}
-                      {loras.length > 0 && (
-                        <div className="lora-stack">
-                          {loras.map((entry, index) => {
-                            const weightNum = entry.weight ? parseFloat(entry.weight) : 1;
-                            const weightPct = Math.min(Math.max(weightNum / 2, 0), 1);
-                            return (
-                              <div className="lora-card" key={`stack-${index}`}>
-                                <div className="lora-card-header">
-                                  <span className="lora-card-order">{index + 1}</span>
-                                  <span className="lora-card-name">
-                                    {entry.name ? cleanLoraDisplayName(entry.name) : "Empty slot"}
-                                  </span>
-                                  <div className="lora-card-actions">
-                                    <button
-                                      type="button"
-                                      className="lora-card-btn"
-                                      onClick={() => moveLoraUp(index)}
-                                      disabled={index === 0}
-                                      title="Move up"
-                                    >
-                                      &#9650;
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="lora-card-btn"
-                                      onClick={() => moveLoraDown(index)}
-                                      disabled={index === loras.length - 1}
-                                      title="Move down"
-                                    >
-                                      &#9660;
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="lora-card-btn lora-card-remove"
-                                      onClick={() => removeLora(index)}
-                                      title="Remove"
-                                    >
-                                      &#10005;
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="lora-card-weight">
-                                  <input
-                                    type="range"
-                                    min={0}
-                                    max={2}
-                                    step={0.05}
-                                    className="lora-slider"
-                                    value={entry.weight || "1"}
-                                    onChange={(e) => updateLoraWeight(index, e.target.value)}
-                                    style={{
-                                      background: `linear-gradient(90deg, rgba(0,234,255,0.5) ${weightPct * 100}%, rgba(255,255,255,0.06) ${weightPct * 100}%)`,
-                                    }}
-                                  />
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={2}
-                                    step={0.01}
-                                    className="generator-input"
-                                    value={entry.weight || ""}
-                                    onChange={(e) => updateLoraWeight(index, e.target.value)}
-                                    placeholder="1.00"
-                                  />
-                                  <span className="lora-weight-value">{(entry.weight || "1.00")}</span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {loras.length === 0 && !loraBrowserOpen && (
-                        <p className="generator-help" style={{ marginTop: "0.3rem" }}>
-                          No LoRAs selected. Click browse to explore your library.
-                        </p>
-                      )}
                     </div>
+                    )}
                   </div>
                 )}
 
