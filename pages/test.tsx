@@ -318,7 +318,14 @@ const TestPage: React.FC = () => {
         // Separate models by task type
         const imageModelsData = models.filter((m) => {
           const taskType = String(m.task_type || "").toUpperCase();
-          return taskType === "IMAGE_GEN" || !taskType;
+          const pipeline = String(m.pipeline || "").toLowerCase();
+          const tier = String(m.tier || "").toUpperCase();
+          if (!(taskType === "IMAGE_GEN" || !taskType)) return false;
+          // Keep generator model list focused on production-ready SDXL models only.
+          if (m.available !== true) return false;
+          if (!pipeline.includes("sdxl")) return false;
+          if (!["S", "A", "B"].includes(tier)) return false;
+          return true;
         });
         const videoModelsData = models.filter((m) => {
           const taskType = String(m.task_type || "").toUpperCase();
