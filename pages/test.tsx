@@ -85,6 +85,12 @@ type ModelListEntry = {
 
 type GeneratorMode = "image" | "face_swap" | "video";
 
+const pickPreferredVideoModel = (models: { id: string; label: string }[]): string => {
+  const animatediff = models.find((item) => item.id.toLowerCase() === "animatediff");
+  if (animatediff) return animatediff.id;
+  return models.length > 0 ? models[0].id : "";
+};
+
 const TestPage: React.FC = () => {
   const [mode, setMode] = useState<GeneratorMode>("image");
   const [prompt, setPrompt] = useState("");
@@ -115,6 +121,7 @@ const TestPage: React.FC = () => {
   const [extendChunks, setExtendChunks] = useState("0");
   const [sampler, setSampler] = useState("");
   const [seed, setSeed] = useState("");
+  const [sfwMode, setSfwMode] = useState(false);
   const [loras, setLoras] = useState<LoraDraft[]>([]);
   const [autoStitch, setAutoStitch] = useState(false);
   const [availableLoras, setAvailableLoras] = useState<string[]>([]);
@@ -392,6 +399,7 @@ const TestPage: React.FC = () => {
       setFaceSourceData(undefined);
       setFaceSourceName(undefined);
       setFaceswapGuidance("");
+      setSteps("30");
       // Set default model to auto for image mode
       setSelectedModel("auto");
     } else if (mode === "video") {
@@ -402,8 +410,15 @@ const TestPage: React.FC = () => {
       setFaceSourceData(undefined);
       setFaceSourceName(undefined);
       setFaceswapGuidance("");
-      // Select first available video model, otherwise clear selection.
-      setSelectedModel(videoModels.length > 0 ? videoModels[0].id : "");
+      // Do not carry image defaults into video requests.
+      setSteps("");
+      setGuidance("");
+      setWidth("");
+      setHeight("");
+      setFrames("");
+      setFps("");
+      // Prefer AnimateDiff by default on consumer GPUs.
+      setSelectedModel(pickPreferredVideoModel(videoModels));
     } else if (mode === "face_swap") {
       // Reset video-specific options
       setFrames("");
@@ -670,6 +685,7 @@ const TestPage: React.FC = () => {
 
     if (stepsValue !== undefined) options.steps = stepsValue;
     if (seedValue !== undefined) options.seed = seedValue;
+    if (sfwMode) options.sfwMode = true;
 
     return Object.keys(options).length > 0 ? options : undefined;
   };
@@ -715,6 +731,9 @@ const TestPage: React.FC = () => {
     }
     if (selectedModel) {
       request.model = selectedModel;
+    }
+    if (sfwMode) {
+      request.sfwMode = true;
     }
     return request;
   };
@@ -886,6 +905,7 @@ const TestPage: React.FC = () => {
           baseImageUrl: baseUrl,
           faceSourceUrl: faceUrl,
           seed: seedValue,
+          sfwMode,
         };
         if (strengthValue !== undefined) request.strength = strengthValue;
         if (stepsValue !== undefined) request.numSteps = stepsValue;
@@ -1577,6 +1597,14 @@ const TestPage: React.FC = () => {
                     disabled={mode !== "face_swap" && !prompt.trim()}
                     onClick={handleSubmit}
                   />
+                  <label className="generator-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={sfwMode}
+                      onChange={(e) => setSfwMode(e.target.checked)}
+                    />
+                    <span>SFW mode (adds stricter safety negatives)</span>
+                  </label>
                   {mode !== "face_swap" && (
                     <button
                       type="button"

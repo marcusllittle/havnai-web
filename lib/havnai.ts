@@ -64,6 +64,7 @@ export interface FaceSwapRequest {
   guidance?: number;
   loras?: LoraConfig[];
   seed?: number;
+  sfwMode?: boolean;
 }
 
 export interface WanVideoRequest {
@@ -76,6 +77,7 @@ export interface WanVideoRequest {
   fps?: number;
   width?: number;
   height?: number;
+  sfwMode?: boolean;
 }
 
 export interface VideoJobRequest {
@@ -92,6 +94,7 @@ export interface VideoJobRequest {
   initImage?: string;
   extendChunks?: number;
   strength?: number;
+  sfwMode?: boolean;
 }
 
 export interface WanVideoStatus {
@@ -153,6 +156,7 @@ export interface SubmitJobOptions {
   seed?: number;
   loras?: LoraConfig[];
   hardcoreMode?: boolean;
+  sfwMode?: boolean;
 }
 
 function getApiBase(): string {
@@ -260,6 +264,9 @@ export async function submitAutoJob(
     if (options.hardcoreMode === true) {
       body.hardcore_mode = true;
     }
+    if (options.sfwMode === true) {
+      body.sfw_mode = true;
+    }
   }
 
   const res = await fetch(apiUrl("/submit-job"), {
@@ -297,6 +304,7 @@ export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<strin
   if (request.loras && request.loras.length > 0) {
     body.loras = request.loras;
   }
+  if (request.sfwMode === true) body.sfw_mode = true;
 
   const res = await fetch(apiUrl("/submit-faceswap-job"), {
     method: "POST",
@@ -328,6 +336,7 @@ export async function submitWanVideoJob(request: WanVideoRequest): Promise<strin
   if (request.fps != null) body.fps = request.fps;
   if (request.width != null) body.width = request.width;
   if (request.height != null) body.height = request.height;
+  if (request.sfwMode === true) body.sfw_mode = true;
 
   const res = await fetch(apiUrl("/generate-video"), {
     method: "POST",
@@ -372,6 +381,7 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   if (request.initImage) body.init_image = request.initImage;
   if (request.extendChunks != null) body.extend_chunks = request.extendChunks;
   if (request.strength != null) body.strength = request.strength;
+  if (request.sfwMode === true) body.sfw_mode = true;
 
   const res = await fetch(apiUrl("/submit-job"), {
     method: "POST",
