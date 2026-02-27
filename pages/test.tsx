@@ -85,6 +85,12 @@ type ModelListEntry = {
 
 type GeneratorMode = "image" | "face_swap" | "video";
 
+const pickPreferredVideoModel = (models: { id: string; label: string }[]): string => {
+  const animatediff = models.find((item) => item.id.toLowerCase() === "animatediff");
+  if (animatediff) return animatediff.id;
+  return models.length > 0 ? models[0].id : "";
+};
+
 const TestPage: React.FC = () => {
   const [mode, setMode] = useState<GeneratorMode>("image");
   const [prompt, setPrompt] = useState("");
@@ -393,6 +399,7 @@ const TestPage: React.FC = () => {
       setFaceSourceData(undefined);
       setFaceSourceName(undefined);
       setFaceswapGuidance("");
+      setSteps("30");
       // Set default model to auto for image mode
       setSelectedModel("auto");
     } else if (mode === "video") {
@@ -403,8 +410,15 @@ const TestPage: React.FC = () => {
       setFaceSourceData(undefined);
       setFaceSourceName(undefined);
       setFaceswapGuidance("");
-      // Select first available video model, otherwise clear selection.
-      setSelectedModel(videoModels.length > 0 ? videoModels[0].id : "");
+      // Do not carry image defaults into video requests.
+      setSteps("");
+      setGuidance("");
+      setWidth("");
+      setHeight("");
+      setFrames("");
+      setFps("");
+      // Prefer AnimateDiff by default on consumer GPUs.
+      setSelectedModel(pickPreferredVideoModel(videoModels));
     } else if (mode === "face_swap") {
       // Reset video-specific options
       setFrames("");
