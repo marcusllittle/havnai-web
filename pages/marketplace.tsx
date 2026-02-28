@@ -507,29 +507,38 @@ const MarketplacePage: NextPage = () => {
           <a href="/#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
-              <span className="brand-stage">Stage 6 + 7 Alpha</span>
+              <span className="brand-stage">Stage 6 → 7 Alpha</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
           <button
             type="button"
             className={`nav-toggle ${navOpen ? "nav-open" : ""}`}
+            id="navToggle"
             aria-label="Toggle navigation"
             onClick={() => setNavOpen((open) => !open)}
           >
             <span />
             <span />
           </button>
-          <nav className={`nav-links ${navOpen ? "nav-open" : ""}`}>
+          <nav
+            className={`nav-links ${navOpen ? "nav-open" : ""}`}
+            id="primaryNav"
+            aria-label="Primary navigation"
+          >
             <a href="/#home">Home</a>
             <a href="/test">Generator</a>
             <a href="/library">My Library</a>
+            <a href="/api/dashboard" target="_blank" rel="noreferrer">
+              Dashboard
+            </a>
             <a href="/pricing">Buy Credits</a>
             <a href="/analytics">Analytics</a>
             <a href="/nodes">Nodes</a>
             <a href="/marketplace" className="nav-active">
               Marketplace
             </a>
+            <a href="#join">Join Alpha</a>
           </nav>
         </div>
       </header>
