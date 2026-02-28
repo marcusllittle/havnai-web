@@ -166,7 +166,7 @@ const HomePage: NextPage = () => {
           <a href="#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
-              <span className="brand-stage">Stage 6 → 7 Alpha</span>
+              <span className="brand-stage">Public Beta</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
@@ -187,7 +187,7 @@ const HomePage: NextPage = () => {
             onClick={() => setNavOpen(false)}
           >
             <a href="#home">Home</a>
-            <a href="/test">Generator</a>
+            <a href="/generator">Generator</a>
             <a href="/library">My Library</a>
             <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">
               Dashboard
@@ -544,7 +544,7 @@ const HomePage: NextPage = () => {
         <section id="join" className="section join-section">
           <div className="join-inner">
             <div className="join-copy">
-              <h2>Join Stage 6 → 7 Alpha</h2>
+              <h2>Join Public Beta</h2>
               <p>
                 We are running SDXL image + face-swap workloads and video when compatible nodes are online.
                 If you have a capable NVIDIA GPU and want to earn $HAI by powering generation, join the alpha.

@@ -370,7 +370,7 @@ const LibraryPage: NextPage = () => {
               className="brand-logo"
             />
             <div className="brand-text">
-              <span className="brand-stage">Stage 6 + 7 Alpha</span>
+              <span className="brand-stage">Public Beta</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
@@ -391,7 +391,7 @@ const LibraryPage: NextPage = () => {
             onClick={() => setNavOpen(false)}
           >
             <a href="/#home">Home</a>
-            <a href="/test">Generator</a>
+            <a href="/generator">Generator</a>
             <a href="/library" className="nav-active">My Library</a>
             <a href="/pricing">Buy Credits</a>
             <a href="/analytics">Analytics</a>

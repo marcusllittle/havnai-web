@@ -182,7 +182,7 @@ const PricingPage: NextPage = () => {
           <a href="/#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
-              <span className="brand-stage">Stage 6 + 7 Alpha</span>
+              <span className="brand-stage">Public Beta</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
@@ -191,7 +191,7 @@ const PricingPage: NextPage = () => {
           </button>
           <nav className={`nav-links ${navOpen ? "nav-open" : ""}`} onClick={() => setNavOpen(false)}>
             <a href="/#home">Home</a>
-            <a href="/test">Generator</a>
+            <a href="/generator">Generator</a>
             <a href="/library">My Library</a>
             <a href="/pricing" className="nav-active">Buy Credits</a>
             <a href="/analytics">Analytics</a>
