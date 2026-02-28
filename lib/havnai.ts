@@ -181,10 +181,11 @@ function getApiBase(): string {
 
 // Wallet used when submitting jobs from the /test page.
 // Configure NEXT_PUBLIC_HAVNAI_WALLET in .env.local to point to your real EVM address.
+const ZERO_WALLET = "0x0000000000000000000000000000000000000000";
 const WALLET =
   process.env.NEXT_PUBLIC_HAVNAI_WALLET && process.env.NEXT_PUBLIC_HAVNAI_WALLET.length > 0
     ? process.env.NEXT_PUBLIC_HAVNAI_WALLET
-    : "0x0000000000000000000000000000000000000000";
+    : ZERO_WALLET;
 
 function apiUrl(path: string): string {
   return `${getApiBase()}${path}`;
@@ -198,6 +199,13 @@ export function resolveAssetUrl(path: string | undefined | null): string | undef
   if (path.startsWith("/api/")) return path;
   // Otherwise, prefix with API_BASE so we hit the coordinator, not the Next dev server.
   return `${getApiBase()}${path}`;
+}
+
+export function isUsableWallet(wallet: string | null | undefined): wallet is string {
+  if (!wallet) return false;
+  const trimmed = wallet.trim();
+  if (!trimmed) return false;
+  return trimmed.toLowerCase() !== ZERO_WALLET.toLowerCase();
 }
 
 function buildHeaders(includeInvite = false): HeadersInit {
@@ -934,6 +942,216 @@ export interface WorkflowListResponse {
   limit: number;
 }
 
+export type GalleryListingStatus = "active" | "sold" | "delisted";
+
+export interface GalleryListing {
+  id: number;
+  job_id: string;
+  seller_wallet: string;
+  title: string;
+  description: string;
+  price_credits: number;
+  category?: string;
+  asset_type: "image" | "video" | string;
+  model?: string;
+  prompt?: string;
+  listed: boolean;
+  sold: boolean;
+  status: GalleryListingStatus;
+  image_url?: string;
+  video_url?: string;
+  preview_url?: string;
+  already_listed?: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface GalleryBrowseResponse {
+  listings: GalleryListing[];
+  total: number;
+  limit: number;
+  offset: number;
+  sort: string;
+}
+
+export interface GalleryPurchaseResponse {
+  ok: boolean;
+  sale: {
+    listing_id: number;
+    buyer_wallet: string;
+    seller_wallet: string;
+    price_paid: number;
+    job_id: string;
+  };
+  remaining_credits: number;
+}
+
+export interface GalleryPurchaseRecord {
+  id: number;
+  listing_id: number;
+  buyer_wallet: string;
+  seller_wallet: string;
+  price_paid: number;
+  created_at: number;
+  job_id: string;
+  title: string;
+  asset_type: "image" | "video" | string;
+  model?: string;
+  prompt?: string;
+  image_url?: string;
+  video_url?: string;
+  preview_url?: string;
+}
+
+export interface CreateGalleryListingInput {
+  wallet?: string;
+  job_id: string;
+  title: string;
+  description?: string;
+  price_credits: number;
+  category?: string;
+}
+
+function normalizeGalleryListing(raw: any): GalleryListing {
+  const imageUrl = resolveAssetUrl(raw?.image_url);
+  const videoUrl = resolveAssetUrl(raw?.video_url);
+  const previewUrl = resolveAssetUrl(raw?.preview_url) || videoUrl || imageUrl;
+  return {
+    id: Number(raw?.id || 0),
+    job_id: String(raw?.job_id || ""),
+    seller_wallet: String(raw?.seller_wallet || ""),
+    title: String(raw?.title || ""),
+    description: String(raw?.description || ""),
+    price_credits: Number(raw?.price_credits || 0),
+    category: raw?.category ? String(raw.category) : undefined,
+    asset_type: String(raw?.asset_type || "image"),
+    model: raw?.model ? String(raw.model) : undefined,
+    prompt: raw?.prompt ? String(raw.prompt) : undefined,
+    listed: Boolean(raw?.listed),
+    sold: Boolean(raw?.sold),
+    status:
+      raw?.status === "sold" || raw?.status === "delisted" || raw?.status === "active"
+        ? raw.status
+        : raw?.sold
+        ? "sold"
+        : raw?.listed
+        ? "active"
+        : "delisted",
+    image_url: imageUrl,
+    video_url: videoUrl,
+    preview_url: previewUrl,
+    already_listed: raw?.already_listed === true,
+    created_at: Number(raw?.created_at || 0),
+    updated_at: Number(raw?.updated_at || 0),
+  };
+}
+
+function normalizeGalleryPurchase(raw: any): GalleryPurchaseRecord {
+  return {
+    id: Number(raw?.id || 0),
+    listing_id: Number(raw?.listing_id || 0),
+    buyer_wallet: String(raw?.buyer_wallet || ""),
+    seller_wallet: String(raw?.seller_wallet || ""),
+    price_paid: Number(raw?.price_paid || 0),
+    created_at: Number(raw?.created_at || 0),
+    job_id: String(raw?.job_id || ""),
+    title: String(raw?.title || ""),
+    asset_type: String(raw?.asset_type || "image"),
+    model: raw?.model ? String(raw.model) : undefined,
+    prompt: raw?.prompt ? String(raw.prompt) : undefined,
+    image_url: resolveAssetUrl(raw?.image_url),
+    video_url: resolveAssetUrl(raw?.video_url),
+    preview_url: resolveAssetUrl(raw?.preview_url) || resolveAssetUrl(raw?.video_url) || resolveAssetUrl(raw?.image_url),
+  };
+}
+
+export async function fetchGalleryBrowse(
+  opts: {
+    search?: string;
+    asset_type?: string;
+    sort?: string;
+    offset?: number;
+    limit?: number;
+  } = {}
+): Promise<GalleryBrowseResponse> {
+  const params = new URLSearchParams();
+  if (opts.search) params.set("search", opts.search);
+  if (opts.asset_type) params.set("asset_type", opts.asset_type);
+  if (opts.sort) params.set("sort", opts.sort);
+  if (opts.offset != null) params.set("offset", String(opts.offset));
+  if (opts.limit != null) params.set("limit", String(opts.limit));
+  const qs = params.toString();
+  const res = await fetch(apiUrl(`/gallery/browse${qs ? `?${qs}` : ""}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return {
+    listings: Array.isArray(data?.listings) ? data.listings.map(normalizeGalleryListing) : [],
+    total: Number(data?.total || 0),
+    limit: Number(data?.limit || 0),
+    offset: Number(data?.offset || 0),
+    sort: String(data?.sort || opts.sort || "newest"),
+  };
+}
+
+export async function fetchMyGalleryListings(wallet: string = WALLET): Promise<GalleryListing[]> {
+  const res = await fetch(
+    apiUrl(`/gallery/my-listings?wallet=${encodeURIComponent(wallet)}&include_sold=true`),
+    { headers: buildHeaders(false) }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.listings) ? data.listings.map(normalizeGalleryListing) : [];
+}
+
+export async function fetchGalleryPurchases(wallet: string = WALLET): Promise<GalleryPurchaseRecord[]> {
+  const res = await fetch(
+    apiUrl(`/gallery/purchases?wallet=${encodeURIComponent(wallet)}`),
+    { headers: buildHeaders(false) }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.purchases) ? data.purchases.map(normalizeGalleryPurchase) : [];
+}
+
+export async function createGalleryListing(input: CreateGalleryListingInput): Promise<GalleryListing> {
+  const res = await fetch(apiUrl("/gallery/listings"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      ...input,
+      wallet: input.wallet || WALLET,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return normalizeGalleryListing(data);
+}
+
+export async function purchaseGalleryListing(
+  listingId: number,
+  wallet: string = WALLET
+): Promise<GalleryPurchaseResponse> {
+  const res = await fetch(apiUrl(`/gallery/listings/${listingId}/purchase`), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ wallet }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as GalleryPurchaseResponse;
+}
+
+export async function delistGalleryListing(listingId: number, wallet: string = WALLET): Promise<{ ok: boolean }> {
+  const res = await fetch(apiUrl(`/gallery/listings/${listingId}`), {
+    method: "DELETE",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ wallet }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as { ok: boolean };
+}
+
 export async function fetchMarketplace(
   opts: { search?: string; category?: string; offset?: number; limit?: number } = {}
 ): Promise<WorkflowListResponse> {
@@ -1012,4 +1230,4 @@ export async function claimRewards(): Promise<{ claimed: number; tx_hash?: strin
   return await res.json();
 }
 
-export { WALLET };
+export { WALLET, ZERO_WALLET };

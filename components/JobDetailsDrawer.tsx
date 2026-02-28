@@ -1,5 +1,14 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { JobDetailResponse, JobLoraEntry, ResultResponse, resolveAssetUrl, cancelJob, getJobStuckWarning } from "../lib/havnai";
+import {
+  JobDetailResponse,
+  JobLoraEntry,
+  ResultResponse,
+  createGalleryListing,
+  resolveAssetUrl,
+  cancelJob,
+  getJobStuckWarning,
+  isUsableWallet,
+} from "../lib/havnai";
 import { downloadAsset } from "../lib/download";
 import { getTimelineSteps, normalizeJobStatus, shortJobId } from "../lib/jobStatus";
 import { addToLibrary, isInLibrary, removeFromLibrary, LibraryItemType } from "../lib/libraryStore";
@@ -25,6 +34,10 @@ interface JobDetailsDrawerProps {
   result?: ResultResponse | null;
   loading?: boolean;
   error?: string;
+  marketplace?: {
+    wallet?: string | null;
+    onListingCreated?: (listingId: number) => void;
+  };
   onClose: () => void;
 }
 
@@ -133,6 +146,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
   result,
   loading,
   error,
+  marketplace,
   onClose,
 }) => {
   const resolvedId = job?.id || summary?.job_id || summary?.id || jobId;
@@ -148,6 +162,14 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     resolveAssetUrl(result?.video_url) ||
     resolveAssetUrl(summary?.video_url);
   const [isSaved, setIsSaved] = useState(false);
+  const [listingOpen, setListingOpen] = useState(false);
+  const [listingTitle, setListingTitle] = useState("");
+  const [listingDescription, setListingDescription] = useState("");
+  const [listingCategory, setListingCategory] = useState("");
+  const [listingPrice, setListingPrice] = useState("10");
+  const [listingSubmitting, setListingSubmitting] = useState(false);
+  const [listingError, setListingError] = useState<string | undefined>();
+  const [listingSuccess, setListingSuccess] = useState<string | undefined>();
 
   useEffect(() => {
     if (!resolvedId || !open) {
@@ -156,6 +178,23 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     }
     setIsSaved(isInLibrary(resolvedId));
   }, [resolvedId, open]);
+
+  useEffect(() => {
+    if (!open) {
+      setListingOpen(false);
+      setListingError(undefined);
+      setListingSuccess(undefined);
+      return;
+    }
+    const defaultTitle = resolvedId ? `Generation #${resolvedId.slice(0, 8)}` : "Generation";
+    setListingTitle(defaultTitle);
+    setListingDescription("");
+    setListingCategory("");
+    setListingPrice("10");
+    setListingError(undefined);
+    setListingSuccess(undefined);
+    setListingOpen(false);
+  }, [open, resolvedId]);
 
   const createdAt =
     formatUnixSeconds(job?.timestamp) ||
@@ -271,6 +310,50 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     if (!resolvedId) return;
     removeFromLibrary(resolvedId);
     setIsSaved(false);
+  };
+
+  const canListInMarketplace = Boolean(
+    resolvedId &&
+      isUsableWallet(marketplace?.wallet) &&
+      (previewImage || previewVideo)
+  );
+
+  const handleCreateListing = async () => {
+    if (!resolvedId || !isUsableWallet(marketplace?.wallet)) return;
+    if (!listingTitle.trim()) {
+      setListingError("Title is required.");
+      return;
+    }
+    const parsedPrice = Number.parseFloat(listingPrice);
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+      setListingError("Price must be greater than 0.");
+      return;
+    }
+
+    setListingSubmitting(true);
+    setListingError(undefined);
+    setListingSuccess(undefined);
+    try {
+      const listing = await createGalleryListing({
+        wallet: marketplace.wallet,
+        job_id: resolvedId,
+        title: listingTitle.trim(),
+        description: listingDescription.trim(),
+        category: listingCategory.trim(),
+        price_credits: parsedPrice,
+      });
+      setListingSuccess(
+        listing.already_listed
+          ? "Already listed. View it in My Listings."
+          : "Listed successfully. View it in My Listings."
+      );
+      setListingOpen(false);
+      marketplace?.onListingCreated?.(listing.id);
+    } catch (err: any) {
+      setListingError(err?.message || "Failed to create listing.");
+    } finally {
+      setListingSubmitting(false);
+    }
   };
 
   if (!open) return null;
@@ -428,9 +511,83 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   </button>
                 </div>
               )}
+              {canListInMarketplace && (
+                <button
+                  type="button"
+                  className="job-action-button secondary"
+                  onClick={() => setListingOpen((value) => !value)}
+                >
+                  {listingOpen ? "Close listing form" : "List on Marketplace"}
+                </button>
+              )}
             </div>
             {loading && <p className="job-hint">Loading job details...</p>}
             {error && <p className="job-hint error">{error}</p>}
+            {listingSuccess && (
+              <p className="job-hint" style={{ color: "#8ff0b6" }}>
+                {listingSuccess}{" "}
+                <a href="/marketplace?tab=gallery&galleryView=my-listings">My Listings</a>
+              </p>
+            )}
+            {canListInMarketplace && listingOpen && (
+              <div className="marketplace-listing-form">
+                <label>
+                  <span className="job-label">title</span>
+                  <input
+                    type="text"
+                    className="library-search"
+                    value={listingTitle}
+                    onChange={(event) => setListingTitle(event.target.value)}
+                    placeholder="Generation title"
+                  />
+                </label>
+                <label>
+                  <span className="job-label">description</span>
+                  <textarea
+                    className="library-search"
+                    value={listingDescription}
+                    onChange={(event) => setListingDescription(event.target.value)}
+                    placeholder="Optional description"
+                    rows={3}
+                    style={{ resize: "vertical" }}
+                  />
+                </label>
+                <div className="marketplace-listing-form-grid">
+                  <label>
+                    <span className="job-label">price_credits</span>
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      className="library-search"
+                      value={listingPrice}
+                      onChange={(event) => setListingPrice(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span className="job-label">category</span>
+                    <input
+                      type="text"
+                      className="library-search"
+                      value={listingCategory}
+                      onChange={(event) => setListingCategory(event.target.value)}
+                      placeholder="Optional category"
+                    />
+                  </label>
+                </div>
+                {listingError && <p className="job-hint error">{listingError}</p>}
+                <div className="job-actions">
+                  <button
+                    type="button"
+                    className="job-action-button"
+                    disabled={listingSubmitting}
+                    onClick={handleCreateListing}
+                  >
+                    {listingSubmitting ? "Listing..." : "Create Listing"}
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="job-section">

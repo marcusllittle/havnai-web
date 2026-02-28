@@ -6,9 +6,12 @@ import { downloadAsset } from "../lib/download";
 import {
   fetchJob,
   fetchResult,
+  getConnectedWallet,
   JobDetailResponse,
+  isUsableWallet,
   resolveAssetUrl,
   ResultResponse,
+  WALLET,
 } from "../lib/havnai";
 import {
   loadLibrary,
@@ -157,10 +160,36 @@ const LibraryPage: NextPage = () => {
   const [drawerSummary, setDrawerSummary] = useState<JobSummary | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerError, setDrawerError] = useState<string | undefined>();
+  const [marketplaceWallet, setMarketplaceWallet] = useState<string | null>(
+    isUsableWallet(WALLET) ? WALLET : null
+  );
 
   useEffect(() => {
     const stored = loadLibrary();
     setEntries(stored);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadWallet = async () => {
+      try {
+        const connected = await getConnectedWallet();
+        if (!active) return;
+        if (isUsableWallet(connected)) {
+          setMarketplaceWallet(connected);
+        } else {
+          setMarketplaceWallet(isUsableWallet(WALLET) ? WALLET : null);
+        }
+      } catch {
+        if (active) {
+          setMarketplaceWallet(isUsableWallet(WALLET) ? WALLET : null);
+        }
+      }
+    };
+    loadWallet();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -674,6 +703,7 @@ const LibraryPage: NextPage = () => {
         result={drawerResult}
         loading={drawerLoading}
         error={drawerError}
+        marketplace={{ wallet: marketplaceWallet }}
         onClose={() => setDrawerOpen(false)}
       />
     </>

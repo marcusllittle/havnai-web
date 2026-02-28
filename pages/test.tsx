@@ -14,6 +14,7 @@ import {
   fetchJobWithResult,
   fetchQuota,
   fetchCredits,
+  getConnectedWallet,
   stitchVideos,
   HavnaiApiError,
   JobDetailResponse,
@@ -22,6 +23,8 @@ import {
   SubmitJobOptions,
   QuotaStatus,
   CreditBalance,
+  isUsableWallet,
+  WALLET,
 } from "../lib/havnai";
 import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
 import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
@@ -150,6 +153,9 @@ const TestPage: React.FC = () => {
   const [drawerSummary, setDrawerSummary] = useState<JobSummary | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerError, setDrawerError] = useState<string | undefined>();
+  const [marketplaceWallet, setMarketplaceWallet] = useState<string | null>(
+    isUsableWallet(WALLET) ? WALLET : null
+  );
   const [inviteCode, setInviteCodeState] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [savedInviteCode, setSavedInviteCode] = useState<string | undefined>();
@@ -184,6 +190,29 @@ const TestPage: React.FC = () => {
       setInviteCodeState(storedInvite);
       setSavedInviteCode(storedInvite);
     }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadWallet = async () => {
+      try {
+        const connected = await getConnectedWallet();
+        if (!active) return;
+        if (isUsableWallet(connected)) {
+          setMarketplaceWallet(connected);
+        } else {
+          setMarketplaceWallet(isUsableWallet(WALLET) ? WALLET : null);
+        }
+      } catch {
+        if (active) {
+          setMarketplaceWallet(isUsableWallet(WALLET) ? WALLET : null);
+        }
+      }
+    };
+    loadWallet();
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Determine current model's pipeline for LoRA filtering
@@ -1987,6 +2016,7 @@ const TestPage: React.FC = () => {
         result={drawerResult}
         loading={drawerLoading}
         error={drawerError}
+        marketplace={{ wallet: marketplaceWallet }}
         onClose={() => setDrawerOpen(false)}
       />
     </>
