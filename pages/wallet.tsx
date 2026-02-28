@@ -65,7 +65,7 @@ const WalletPage: NextPage = () => {
           <button type="button" className={`nav-toggle ${navOpen ? "nav-open" : ""}`} aria-label="Toggle navigation" onClick={() => setNavOpen((o) => !o)}>
             <span /><span />
           </button>
-          <nav className={`nav-links ${navOpen ? "nav-open" : ""}`}>
+          <nav className={`nav-links ${navOpen ? "nav-open" : ""}`} onClick={() => setNavOpen(false)}>
             <a href="/#home">Home</a>
             <a href="/test">Generator</a>
             <a href="/library">My Library</a>
@@ -73,6 +73,7 @@ const WalletPage: NextPage = () => {
             <a href="/analytics">Analytics</a>
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
+            <a href="/join" className="nav-primary">Join</a>
           </nav>
         </div>
       </header>

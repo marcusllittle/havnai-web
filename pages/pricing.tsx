@@ -17,6 +17,7 @@ import {
 } from "../lib/havnai";
 
 const PricingPage: NextPage = () => {
+  const [navOpen, setNavOpen] = useState(false);
   const [packages, setPackages] = useState<CreditPackage[]>([]);
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const [balance, setBalance] = useState<CreditBalance | null>(null);
@@ -175,20 +176,25 @@ const PricingPage: NextPage = () => {
 
       <header className="site-header">
         <div className="header-inner">
-          <a href="/" className="brand">
+          <a href="/#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
+              <span className="brand-stage">Stage 6 → 7 Alpha</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
-          <nav className="nav-links" aria-label="Primary navigation">
-            <a href="/">Home</a>
+          <button type="button" className={`nav-toggle ${navOpen ? "nav-open" : ""}`} aria-label="Toggle navigation" onClick={() => setNavOpen((o) => !o)}>
+            <span /><span />
+          </button>
+          <nav className={`nav-links ${navOpen ? "nav-open" : ""}`} onClick={() => setNavOpen(false)}>
+            <a href="/#home">Home</a>
             <a href="/test">Generator</a>
             <a href="/library">My Library</a>
             <a href="/pricing" className="nav-active">Buy Credits</a>
             <a href="/analytics">Analytics</a>
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
+            <a href="/join" className="nav-primary">Join</a>
           </nav>
         </div>
       </header>

@@ -184,11 +184,9 @@ const HomePage: NextPage = () => {
             className={`nav-links ${navOpen ? "nav-open" : ""}`}
             id="primaryNav"
             aria-label="Primary navigation"
+            onClick={() => setNavOpen(false)}
           >
             <a href="#home">Home</a>
-            <a href="#how">How It Works</a>
-            <a href="#smart-routing">Models</a>
-            <a href="#rewards">Rewards</a>
             <a href="/test">Generator</a>
             <a href="/library">My Library</a>
             <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">
@@ -198,7 +196,7 @@ const HomePage: NextPage = () => {
             <a href="/analytics">Analytics</a>
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
-            <a href="#join">Join Alpha</a>
+            <a href="/join" className="nav-primary">Join</a>
           </nav>
         </div>
       </header>
@@ -226,9 +224,7 @@ const HomePage: NextPage = () => {
                   coordinator’s install guide.
                 </p>
                 <a
-                  href={`${apiBase}/join`}
-                  target="_blank"
-                  rel="noreferrer"
+                  href="/join"
                   className="btn tertiary wide"
                 >
                   Open full node install guide
@@ -317,35 +313,46 @@ const HomePage: NextPage = () => {
           <div className="section-header">
             <h2>Smart Routing · Weighted Models</h2>
             <p>
-              Models in the live registry are assigned routing weights. Higher-weight models get
-              picked more often and earn bigger rewards.
+              Every generation job goes through the coordinator, which picks the best available node
+              and model in real time.
             </p>
           </div>
           <div className="routing-layout">
             <div className="routing-copy">
               <p>
-                When you generate with <strong>auto mode</strong>, the coordinator picks a model using
-                weighted random selection. Weights come from our benchmark and scoring pipeline:
+                When a user submits a prompt, the coordinator checks which GPU nodes are online,
+                what models they have loaded, and routes the job accordingly:
               </p>
               <ul>
-                <li>Each model is scored on realism, detail, and consistency.</li>
-                <li>Scores map to tiers (S, A, B, C, D) with assigned weights.</li>
-                <li>Higher-tier models are selected more often and earn more $HAI per job.</li>
+                <li>
+                  <strong>Image jobs</strong> — routed to nodes running SDXL models. The coordinator
+                  uses weighted random selection so higher-quality models get picked more often.
+                </li>
+                <li>
+                  <strong>Face swap jobs</strong> — sent to nodes with the face-swap pipeline ready,
+                  combining SDXL generation with InsightFace.
+                </li>
+                <li>
+                  <strong>Video jobs</strong> — routed to nodes with LTX-Video loaded. These require
+                  more VRAM and earn a 2× reward bonus.
+                </li>
               </ul>
               <p>
-                The result: the best models get used the most and node operators running them earn the
-                highest rewards.
+                Models are tiered (S through D) based on output quality. Higher-tier models get
+                selected more often and node operators running them earn bigger $HAI rewards per job.
               </p>
             </div>
             <div className="json-card">
-              <div className="json-card-label">Live routing weights (from registry)</div>
+              <div className="json-card-label">How routing works</div>
               <pre>
                 <code>
-                  {`{
-  "top_tier_sdxl_model": 20,
-  "mid_tier_sdxl_model": 8,
-  "ltx2 (video)": 20
-}`}
+                  {`User submits prompt
+  → Coordinator checks online nodes
+  → Matches job type to capable nodes
+  → Picks model by weighted selection
+  → Routes job to healthiest node
+  → Node generates, returns result
+  → Node earns $HAI reward`}
                 </code>
               </pre>
             </div>
@@ -549,14 +556,14 @@ const HomePage: NextPage = () => {
               </ul>
             </div>
             <div className="join-actions">
-              <a href="https://joinhavn.io/alpha" className="btn primary wide">
-                Join Alpha (Typeform)
+              <a href="/join" className="btn primary wide">
+                Join the Grid
               </a>
               <a href={`${apiBase}/dashboard`} className="btn tertiary wide">
                 View Live Dashboard
               </a>
               <p className="join-note">
-                After joining, you’ll receive updated install + config steps tailored to your GPU and OS.
+                The install guide covers prerequisites, GPU setup, WAN I2V configuration, and systemd steps.
               </p>
             </div>
           </div>

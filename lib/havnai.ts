@@ -1012,4 +1012,121 @@ export async function claimRewards(): Promise<{ claimed: number; tx_hash?: strin
   return await res.json();
 }
 
+// ---------------------------------------------------------------------------
+// Gallery marketplace
+// ---------------------------------------------------------------------------
+
+export interface GalleryListing {
+  id: number;
+  job_id: string;
+  seller_wallet: string;
+  title: string;
+  description: string;
+  price_credits: number;
+  category: string;
+  asset_type: "image" | "video";
+  model: string;
+  prompt: string;
+  listed: boolean;
+  sold: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface GalleryBrowseResponse {
+  listings: GalleryListing[];
+  total: number;
+  limit: number;
+  offset: number;
+  sort: string;
+}
+
+export interface GallerySale {
+  listing_id: number;
+  buyer_wallet: string;
+  seller_wallet: string;
+  price_paid: number;
+  job_id: string;
+}
+
+export interface GalleryPurchaseResponse {
+  ok: boolean;
+  sale: GallerySale;
+  remaining_credits: number;
+}
+
+export async function fetchGallery(
+  opts: {
+    search?: string;
+    category?: string;
+    asset_type?: string;
+    sort?: string;
+    offset?: number;
+    limit?: number;
+  } = {}
+): Promise<GalleryBrowseResponse> {
+  const params = new URLSearchParams();
+  if (opts.search) params.set("search", opts.search);
+  if (opts.category) params.set("category", opts.category);
+  if (opts.asset_type) params.set("asset_type", opts.asset_type);
+  if (opts.sort) params.set("sort", opts.sort);
+  if (opts.offset) params.set("offset", String(opts.offset));
+  if (opts.limit) params.set("limit", String(opts.limit));
+  const qs = params.toString();
+  const res = await fetch(apiUrl(`/gallery/browse${qs ? `?${qs}` : ""}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as GalleryBrowseResponse;
+}
+
+export async function createGalleryListing(data: {
+  job_id: string;
+  title: string;
+  price_credits: number;
+  description?: string;
+  category?: string;
+}): Promise<GalleryListing> {
+  const res = await fetch(apiUrl("/gallery/listings"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ ...data, wallet: WALLET }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as GalleryListing;
+}
+
+export async function purchaseGalleryListing(
+  listingId: number
+): Promise<GalleryPurchaseResponse> {
+  const res = await fetch(apiUrl(`/gallery/listings/${listingId}/purchase`), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ wallet: WALLET }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as GalleryPurchaseResponse;
+}
+
+export async function delistGalleryListing(listingId: number): Promise<void> {
+  const res = await fetch(apiUrl(`/gallery/listings/${listingId}`), {
+    method: "DELETE",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ wallet: WALLET }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+}
+
+export async function fetchMyGalleryListings(
+  includeSold = false
+): Promise<{ listings: GalleryListing[] }> {
+  const params = new URLSearchParams({ wallet: WALLET });
+  if (includeSold) params.set("include_sold", "true");
+  const res = await fetch(apiUrl(`/gallery/my-listings?${params}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return await res.json();
+}
+
 export { WALLET };

@@ -6,6 +6,7 @@ import { downloadAsset } from "../lib/download";
 import {
   fetchJob,
   fetchResult,
+  createGalleryListing,
   JobDetailResponse,
   resolveAssetUrl,
   ResultResponse,
@@ -157,6 +158,47 @@ const LibraryPage: NextPage = () => {
   const [drawerSummary, setDrawerSummary] = useState<JobSummary | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerError, setDrawerError] = useState<string | undefined>();
+
+  // Sell listing state
+  const [sellItem, setSellItem] = useState<LibraryViewItem | null>(null);
+  const [sellTitle, setSellTitle] = useState("");
+  const [sellPrice, setSellPrice] = useState("1");
+  const [sellDesc, setSellDesc] = useState("");
+  const [sellCategory, setSellCategory] = useState("");
+  const [sellLoading, setSellLoading] = useState(false);
+  const [sellMsg, setSellMsg] = useState("");
+  const [sellErr, setSellErr] = useState("");
+
+  const openSellForm = (item: LibraryViewItem) => {
+    setSellItem(item);
+    setSellTitle(item.prompt ? item.prompt.slice(0, 60) : `Generation #${item.entry.job_id.slice(0, 8)}`);
+    setSellPrice("1");
+    setSellDesc("");
+    setSellCategory("");
+    setSellMsg("");
+    setSellErr("");
+  };
+
+  const handleSell = async () => {
+    if (!sellItem) return;
+    const price = parseFloat(sellPrice);
+    if (!price || price <= 0) { setSellErr("Price must be > 0"); return; }
+    setSellLoading(true);
+    setSellErr("");
+    try {
+      await createGalleryListing({
+        job_id: sellItem.entry.job_id,
+        title: sellTitle.trim() || `Generation #${sellItem.entry.job_id.slice(0, 8)}`,
+        price_credits: price,
+        description: sellDesc.trim(),
+        category: sellCategory.trim(),
+      });
+      setSellMsg("Listed on the marketplace!");
+    } catch (err: any) {
+      setSellErr(err?.message || "Failed to list.");
+    }
+    setSellLoading(false);
+  };
 
   useEffect(() => {
     const stored = loadLibrary();
@@ -346,24 +388,16 @@ const LibraryPage: NextPage = () => {
             className={`nav-links ${navOpen ? "nav-open" : ""}`}
             id="primaryNav"
             aria-label="Primary navigation"
+            onClick={() => setNavOpen(false)}
           >
             <a href="/#home">Home</a>
-            <a href="/#how">How It Works</a>
-            <a href="/#smart-routing">Smart Routing</a>
-            <a href="/#rewards">Rewards</a>
-            <a href="/#models">Models</a>
             <a href="/test">Generator</a>
-            <a href="/library" className="nav-active">
-              My Library
-            </a>
-            <a href="/api/dashboard" target="_blank" rel="noreferrer">
-              Dashboard
-            </a>
+            <a href="/library" className="nav-active">My Library</a>
             <a href="/pricing">Buy Credits</a>
             <a href="/analytics">Analytics</a>
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
-            <a href="#join">Join Alpha</a>
+            <a href="/join" className="nav-primary">Join</a>
           </nav>
         </div>
       </header>
@@ -648,6 +682,15 @@ const LibraryPage: NextPage = () => {
                           >
                             Download
                           </button>
+                          {item.available && (
+                            <button
+                              type="button"
+                              className="job-action-button secondary"
+                              onClick={() => openSellForm(item)}
+                            >
+                              Sell
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="job-action-button secondary"
@@ -676,6 +719,63 @@ const LibraryPage: NextPage = () => {
         error={drawerError}
         onClose={() => setDrawerOpen(false)}
       />
+
+      {/* Sell listing modal */}
+      {sellItem && (
+        <div className="job-drawer" onClick={() => setSellItem(null)}>
+          <div className="job-drawer-backdrop" />
+          <aside className="job-drawer-panel" role="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="job-drawer-header">
+              <div>
+                <p className="job-drawer-kicker">List for Sale</p>
+                <h3>Sell on Marketplace</h3>
+              </div>
+              <button type="button" className="job-drawer-close" onClick={() => setSellItem(null)}>Close</button>
+            </div>
+            <div className="job-drawer-body">
+              {sellItem.previewUrl && (
+                <section className="job-section">
+                  <div style={{ borderRadius: "12px", overflow: "hidden", background: "var(--bg-elevated)" }}>
+                    {sellItem.type === "video" ? (
+                      <video src={sellItem.previewUrl} muted playsInline style={{ width: "100%", display: "block" }} />
+                    ) : (
+                      <img src={sellItem.previewUrl} alt="preview" style={{ width: "100%", display: "block" }} />
+                    )}
+                  </div>
+                </section>
+              )}
+              <section className="job-section">
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
+                  <label>
+                    <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Title</span>
+                    <input type="text" className="library-search" value={sellTitle} onChange={(e) => setSellTitle(e.target.value)} />
+                  </label>
+                  <label>
+                    <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Price (credits)</span>
+                    <input type="number" className="library-search" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} min="0.1" step="0.5" />
+                  </label>
+                  <label>
+                    <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Description (optional)</span>
+                    <textarea className="library-search" style={{ minHeight: "50px", resize: "vertical" }} value={sellDesc} onChange={(e) => setSellDesc(e.target.value)} />
+                  </label>
+                  <label>
+                    <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Category (optional)</span>
+                    <input type="text" className="library-search" value={sellCategory} onChange={(e) => setSellCategory(e.target.value)} placeholder="Portrait, Landscape, etc." />
+                  </label>
+                  {sellErr && <p className="job-hint error">{sellErr}</p>}
+                  {sellMsg ? (
+                    <p style={{ color: "#8ff0b6", textAlign: "center" }}>{sellMsg}</p>
+                  ) : (
+                    <button type="button" className="job-action-button" disabled={sellLoading} onClick={handleSell}>
+                      {sellLoading ? "Listing..." : "List for Sale"}
+                    </button>
+                  )}
+                </div>
+              </section>
+            </div>
+          </aside>
+        </div>
+      )}
     </>
   );
 };

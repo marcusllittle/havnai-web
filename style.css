@@ -3109,6 +3109,92 @@ img.jobs-preview-tile {
   color: var(--accent-strong);
 }
 
+/* Gallery marketplace cards */
+.gallery-card {
+  background: rgba(5, 10, 18, 0.96);
+  border-radius: var(--card-radius);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.gallery-card:hover {
+  border-color: rgba(0, 234, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.gallery-preview {
+  position: relative;
+  aspect-ratio: 1;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.gallery-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gallery-preview-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.gallery-body {
+  padding: 0.8rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.gallery-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gallery-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gallery-price {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+.gallery-model {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50%;
+}
+
+.gallery-seller {
+  font-family: monospace;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
 /* Wallet section */
 .wallet-card {
   background: rgba(7, 12, 20, 0.9);
@@ -3863,8 +3949,8 @@ details[open] .faq-icon {
   }
 
   .nav-links a {
-    padding: 0.75rem 0;
-    min-height: 44px;
+    padding: 0.5rem 0;
+    min-height: 40px;
     display: flex;
     align-items: center;
   }
@@ -3962,6 +4048,8 @@ details[open] .faq-icon {
     display: none;
     flex-direction: column;
     gap: 0.55rem;
+    max-height: 70vh;
+    overflow-y: auto;
   }
 
   .nav-links.nav-open {
