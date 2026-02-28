@@ -1,89 +1,148 @@
 import type { NextPage } from "next";
 import Head from "next/head";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  fetchMarketplace,
-  createWorkflow,
-  publishWorkflow,
-  Workflow,
+  fetchGallery,
+  purchaseGalleryListing,
+  fetchResult,
+  resolveAssetUrl,
+  GalleryListing,
+  ResultResponse,
   WALLET,
 } from "../lib/havnai";
+import { getApiBase } from "../lib/apiBase";
 
-type ViewMode = "browse" | "create";
+type SortOption = "newest" | "price_low" | "price_high";
+type TypeFilter = "all" | "image" | "video";
 
-const CATEGORIES = ["All", "Image Generation", "Video Generation", "Face Swap", "Upscaling", "Style Transfer", "Other"];
+const CATEGORIES = ["All", "Portrait", "Landscape", "Abstract", "Cinematic", "Anime", "Other"];
 
 const MarketplacePage: NextPage = () => {
   const [navOpen, setNavOpen] = useState(false);
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [listings, setListings] = useState<GalleryListing[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<ViewMode>("browse");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [sort, setSort] = useState<SortOption>("newest");
   const [page, setPage] = useState(0);
-  const limit = 20;
+  const limit = 24;
 
-  // Create form
-  const [formName, setFormName] = useState("");
-  const [formDesc, setFormDesc] = useState("");
-  const [formCategory, setFormCategory] = useState("Image Generation");
-  const [formModel, setFormModel] = useState("");
-  const [formPrompt, setFormPrompt] = useState("");
-  const [formNeg, setFormNeg] = useState("");
-  const [formSteps, setFormSteps] = useState(28);
-  const [formGuidance, setFormGuidance] = useState(6);
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState("");
-  const [createSuccess, setCreateSuccess] = useState("");
+  // Preview/detail state
+  const [selected, setSelected] = useState<GalleryListing | null>(null);
+  const [selectedResult, setSelectedResult] = useState<ResultResponse | null>(null);
+  const [purchasing, setPurchasing] = useState(false);
+  const [purchaseMsg, setPurchaseMsg] = useState("");
+  const [purchaseErr, setPurchaseErr] = useState("");
 
-  // Selected workflow for detail view
-  const [selected, setSelected] = useState<Workflow | null>(null);
+  // Results cache for previews
+  const [resultCache, setResultCache] = useState<Record<string, ResultResponse>>({});
 
-  const loadWorkflows = useCallback(async () => {
+  const apiBase = getApiBase();
+
+  const loadListings = useCallback(async () => {
     setLoading(true);
     try {
       const cat = category === "All" ? undefined : category;
-      const res = await fetchMarketplace({ search: search || undefined, category: cat, offset: page * limit, limit });
-      setWorkflows(res.workflows);
+      const assetType = typeFilter === "all" ? undefined : typeFilter;
+      const res = await fetchGallery({
+        search: search || undefined,
+        category: cat,
+        asset_type: assetType,
+        sort,
+        offset: page * limit,
+        limit,
+      });
+      setListings(res.listings);
       setTotal(res.total);
+
+      // Fetch results for previews
+      const newCache: Record<string, ResultResponse> = { ...resultCache };
+      const toFetch = res.listings.filter((l) => !newCache[l.job_id]);
+      await Promise.all(
+        toFetch.slice(0, 12).map(async (l) => {
+          try {
+            const r = await fetchResult(l.job_id);
+            newCache[l.job_id] = r;
+          } catch {
+            // Result not available
+          }
+        })
+      );
+      setResultCache(newCache);
     } catch {
-      setWorkflows([]);
+      setListings([]);
     }
     setLoading(false);
-  }, [search, category, page]);
+  }, [search, category, typeFilter, sort, page]);
 
-  useEffect(() => { loadWorkflows(); }, [loadWorkflows]);
+  useEffect(() => {
+    loadListings();
+  }, [loadListings]);
+
+  // Fetch remaining previews after initial load
+  useEffect(() => {
+    if (listings.length === 0) return;
+    const missing = listings.filter((l) => !resultCache[l.job_id]);
+    if (missing.length === 0) return;
+    const fetchRemaining = async () => {
+      const newCache: Record<string, ResultResponse> = { ...resultCache };
+      await Promise.all(
+        missing.map(async (l) => {
+          try {
+            const r = await fetchResult(l.job_id);
+            newCache[l.job_id] = r;
+          } catch {
+            // skip
+          }
+        })
+      );
+      setResultCache(newCache);
+    };
+    fetchRemaining();
+  }, [listings]);
+
+  const openDetail = async (listing: GalleryListing) => {
+    setSelected(listing);
+    setPurchaseMsg("");
+    setPurchaseErr("");
+    if (resultCache[listing.job_id]) {
+      setSelectedResult(resultCache[listing.job_id]);
+    } else {
+      try {
+        const r = await fetchResult(listing.job_id);
+        setSelectedResult(r);
+        setResultCache((prev) => ({ ...prev, [listing.job_id]: r }));
+      } catch {
+        setSelectedResult(null);
+      }
+    }
+  };
+
+  const handlePurchase = async () => {
+    if (!selected) return;
+    setPurchasing(true);
+    setPurchaseErr("");
+    setPurchaseMsg("");
+    try {
+      const res = await purchaseGalleryListing(selected.id);
+      setPurchaseMsg(`Purchased! ${res.remaining_credits.toFixed(1)} credits remaining.`);
+      // Remove from browse view
+      setListings((prev) => prev.filter((l) => l.id !== selected.id));
+      setTotal((prev) => prev - 1);
+    } catch (err: any) {
+      setPurchaseErr(err?.message || "Purchase failed.");
+    }
+    setPurchasing(false);
+  };
 
   const totalPages = Math.ceil(total / limit);
 
-  const handleCreate = async () => {
-    if (!formName.trim()) { setCreateError("Name is required."); return; }
-    setCreating(true);
-    setCreateError("");
-    setCreateSuccess("");
-    try {
-      const workflow = await createWorkflow({
-        name: formName.trim(),
-        description: formDesc.trim(),
-        category: formCategory,
-        config: {
-          model: formModel.trim() || "auto",
-          prompt_template: formPrompt.trim(),
-          negative_prompt: formNeg.trim(),
-          steps: formSteps,
-          guidance: formGuidance,
-        },
-      });
-      setCreateSuccess(`Workflow "${workflow.name}" created! You can publish it to make it visible.`);
-      setFormName("");
-      setFormDesc("");
-      setFormPrompt("");
-      setFormNeg("");
-    } catch (err: any) {
-      setCreateError(err?.message || "Failed to create workflow.");
-    }
-    setCreating(false);
+  const getPreviewUrl = (listing: GalleryListing): string | undefined => {
+    const r = resultCache[listing.job_id];
+    if (!r) return undefined;
+    return resolveAssetUrl(r.video_url || r.image_url);
   };
 
   return (
@@ -94,21 +153,23 @@ const MarketplacePage: NextPage = () => {
           <a href="/#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
-              <span className="brand-stage">Stage 6 + 7 Alpha</span>
+              <span className="brand-stage">Stage 6 → 7 Alpha</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
           <button type="button" className={`nav-toggle ${navOpen ? "nav-open" : ""}`} aria-label="Toggle navigation" onClick={() => setNavOpen((o) => !o)}>
             <span /><span />
           </button>
-          <nav className={`nav-links ${navOpen ? "nav-open" : ""}`}>
+          <nav className={`nav-links ${navOpen ? "nav-open" : ""}`} onClick={() => setNavOpen(false)}>
             <a href="/#home">Home</a>
             <a href="/test">Generator</a>
             <a href="/library">My Library</a>
+            <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">Dashboard</a>
             <a href="/pricing">Buy Credits</a>
             <a href="/analytics">Analytics</a>
             <a href="/nodes">Nodes</a>
             <a href="/marketplace" className="nav-active">Marketplace</a>
+            <a href="/join" className="nav-primary">Join</a>
           </nav>
         </div>
       </header>
@@ -117,205 +178,236 @@ const MarketplacePage: NextPage = () => {
         <section className="page-hero">
           <div className="page-hero-inner">
             <p className="hero-kicker">Marketplace</p>
-            <h1 className="hero-title">Workflow Marketplace</h1>
-            <p className="hero-subtitle">Browse and publish reusable generation workflows.</p>
+            <h1 className="hero-title">Gallery</h1>
+            <p className="hero-subtitle">
+              Browse and purchase AI-generated images and videos created by the community.
+              Use credits to buy creations you like.
+            </p>
           </div>
         </section>
 
         <section className="page-container">
-          {/* View switcher */}
+          {/* Toolbar */}
           <div className="library-toolbar-inner" style={{ marginBottom: "1.5rem" }}>
+            <div className="library-search-wrapper">
+              <input
+                type="text"
+                className="library-search"
+                placeholder="Search by title, model, or prompt..."
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+              />
+            </div>
             <div className="library-filters">
               <div className="library-filter-group">
-                <span className="library-filter-label">View</span>
-                <button type="button" className={`library-chip ${view === "browse" ? "is-active" : ""}`} onClick={() => setView("browse")}>Browse</button>
-                <button type="button" className={`library-chip ${view === "create" ? "is-active" : ""}`} onClick={() => setView("create")}>Create Workflow</button>
+                <span className="library-filter-label">Type</span>
+                {(["all", "image", "video"] as TypeFilter[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    className={`library-chip ${typeFilter === t ? "is-active" : ""}`}
+                    onClick={() => { setTypeFilter(t); setPage(0); }}
+                  >
+                    {t === "all" ? "All" : t.charAt(0).toUpperCase() + t.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <div className="library-filter-group" style={{ flexWrap: "wrap" }}>
+                <span className="library-filter-label">Category</span>
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    className={`library-chip ${category === cat ? "is-active" : ""}`}
+                    onClick={() => { setCategory(cat); setPage(0); }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              <div className="library-filter-group">
+                <span className="library-filter-label">Sort</span>
+                <select
+                  className="library-sort-select"
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as SortOption)}
+                >
+                  <option value="newest">Newest</option>
+                  <option value="price_low">Price: Low to High</option>
+                  <option value="price_high">Price: High to Low</option>
+                </select>
               </div>
             </div>
           </div>
 
-          {/* Browse view */}
-          {view === "browse" && (
+          {loading && <p className="library-loading">Loading marketplace...</p>}
+
+          {!loading && listings.length === 0 && (
+            <div className="library-empty">
+              <p>No listings yet. Be the first to list something from your library!</p>
+              <a href="/library" className="job-action-button" style={{ textDecoration: "none", display: "inline-block", marginTop: "0.5rem" }}>
+                Go to Library
+              </a>
+            </div>
+          )}
+
+          {!loading && listings.length > 0 && (
             <>
-              <div className="library-toolbar-inner" style={{ marginBottom: "1.5rem" }}>
-                <div className="library-search-wrapper">
-                  <input
-                    type="text"
-                    className="library-search"
-                    placeholder="Search workflows..."
-                    value={search}
-                    onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-                  />
-                </div>
-                <div className="library-filters">
-                  <div className="library-filter-group" style={{ flexWrap: "wrap" }}>
-                    <span className="library-filter-label">Category</span>
-                    {CATEGORIES.map((cat) => (
-                      <button
-                        key={cat}
-                        type="button"
-                        className={`library-chip ${category === cat ? "is-active" : ""}`}
-                        onClick={() => { setCategory(cat); setPage(0); }}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {loading && <p className="library-loading">Loading workflows...</p>}
-
-              {!loading && workflows.length === 0 && (
-                <div className="library-empty">
-                  <p>No workflows found. Be the first to publish one!</p>
-                </div>
-              )}
-
-              {!loading && workflows.length > 0 && (
-                <>
-                  <div className="marketplace-grid">
-                    {workflows.map((wf) => (
-                      <div key={wf.id} className="workflow-card" onClick={() => setSelected(wf)}>
-                        <div className="workflow-name">{wf.name}</div>
-                        <div className="workflow-desc">{wf.description || "No description"}</div>
-                        <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-                          {wf.category && <span className="workflow-tag">{wf.category}</span>}
-                          {wf.config?.model && <span className="workflow-tag">{wf.config.model}</span>}
+              <div className="marketplace-grid">
+                {listings.map((listing) => {
+                  const previewUrl = getPreviewUrl(listing);
+                  return (
+                    <div
+                      key={listing.id}
+                      className="gallery-card"
+                      onClick={() => openDetail(listing)}
+                    >
+                      <div className="gallery-preview">
+                        {previewUrl ? (
+                          listing.asset_type === "video" ? (
+                            <video src={previewUrl} muted playsInline loop className="gallery-media" />
+                          ) : (
+                            <img src={previewUrl} alt={listing.title} loading="lazy" className="gallery-media" />
+                          )
+                        ) : (
+                          <div className="gallery-preview-empty">
+                            {listing.asset_type === "video" ? "Video" : "Image"}
+                          </div>
+                        )}
+                        <span className={`library-badge library-type-${listing.asset_type}`}>
+                          {listing.asset_type}
+                        </span>
+                      </div>
+                      <div className="gallery-body">
+                        <div className="gallery-title">{listing.title}</div>
+                        <div className="gallery-meta">
+                          <span className="gallery-price">{listing.price_credits} credits</span>
+                          <span className="gallery-model">{listing.model || "auto"}</span>
                         </div>
-                        <div className="workflow-meta">
-                          <span>{wf.usage_count} uses</span>
-                          <span>{new Date(wf.created_at).toLocaleDateString()}</span>
-                          <span style={{ fontFamily: "monospace", fontSize: "0.7rem" }}>
-                            {wf.creator_wallet.slice(0, 6)}...{wf.creator_wallet.slice(-4)}
-                          </span>
+                        <div className="gallery-seller">
+                          {listing.seller_wallet.slice(0, 6)}...{listing.seller_wallet.slice(-4)}
                         </div>
                       </div>
-                    ))}
-                  </div>
-
-                  {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", marginTop: "1.5rem" }}>
-                      <button type="button" className="library-chip" disabled={page === 0} onClick={() => setPage(page - 1)}>Prev</button>
-                      <span style={{ padding: "4px 10px", fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                        {page + 1} / {totalPages}
-                      </span>
-                      <button type="button" className="library-chip" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>Next</button>
                     </div>
-                  )}
-                </>
+                  );
+                })}
+              </div>
+
+              {totalPages > 1 && (
+                <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", marginTop: "1.5rem" }}>
+                  <button type="button" className="library-chip" disabled={page === 0} onClick={() => setPage(page - 1)}>Prev</button>
+                  <span style={{ padding: "4px 10px", fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                    {page + 1} / {totalPages}
+                  </span>
+                  <button type="button" className="library-chip" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>Next</button>
+                </div>
               )}
             </>
           )}
 
-          {/* Create workflow view */}
-          {view === "create" && (
-            <div className="chart-section">
-              <div className="chart-header">
-                <h3 className="chart-title">Create a Workflow</h3>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
-                <label>
-                  <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Name</span>
-                  <input type="text" className="library-search" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="My Awesome Workflow" />
-                </label>
-                <label>
-                  <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Description</span>
-                  <textarea className="library-search" style={{ minHeight: "60px", resize: "vertical" }} value={formDesc} onChange={(e) => setFormDesc(e.target.value)} placeholder="What does this workflow do?" />
-                </label>
-                <label>
-                  <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Category</span>
-                  <select className="library-sort-select" value={formCategory} onChange={(e) => setFormCategory(e.target.value)}>
-                    {CATEGORIES.filter((c) => c !== "All").map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Model (leave empty for auto)</span>
-                  <input type="text" className="library-search" value={formModel} onChange={(e) => setFormModel(e.target.value)} placeholder="juggernautXL_ragnarokBy" />
-                </label>
-                <label>
-                  <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Prompt Template</span>
-                  <textarea className="library-search" style={{ minHeight: "80px", resize: "vertical" }} value={formPrompt} onChange={(e) => setFormPrompt(e.target.value)} placeholder="A beautiful portrait of {subject}, cinematic lighting..." />
-                </label>
-                <label>
-                  <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Negative Prompt</span>
-                  <textarea className="library-search" style={{ minHeight: "50px", resize: "vertical" }} value={formNeg} onChange={(e) => setFormNeg(e.target.value)} placeholder="blurry, bad quality..." />
-                </label>
-                <div style={{ display: "flex", gap: "1rem" }}>
-                  <label style={{ flex: 1 }}>
-                    <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Steps</span>
-                    <input type="number" className="library-search" value={formSteps} onChange={(e) => setFormSteps(Number(e.target.value))} min={1} max={100} />
-                  </label>
-                  <label style={{ flex: 1 }}>
-                    <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Guidance</span>
-                    <input type="number" className="library-search" value={formGuidance} onChange={(e) => setFormGuidance(Number(e.target.value))} min={1} max={30} step={0.5} />
-                  </label>
-                </div>
-                {createError && <p className="job-hint error">{createError}</p>}
-                {createSuccess && <p className="job-hint" style={{ color: "#8ff0b6" }}>{createSuccess}</p>}
-                <button type="button" className="job-action-button" disabled={creating} onClick={handleCreate} style={{ alignSelf: "flex-start", marginTop: "0.5rem" }}>
-                  {creating ? "Creating..." : "Create Workflow"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Workflow detail modal */}
+          {/* Detail / Purchase drawer */}
           {selected && (
             <div className="job-drawer" onClick={() => setSelected(null)}>
               <div className="job-drawer-backdrop" />
               <aside className="job-drawer-panel" role="dialog" onClick={(e) => e.stopPropagation()}>
                 <div className="job-drawer-header">
                   <div>
-                    <p className="job-drawer-kicker">Workflow</p>
-                    <h3>{selected.name}</h3>
+                    <p className="job-drawer-kicker">Marketplace</p>
+                    <h3>{selected.title}</h3>
                     <div className="job-meta-row">
-                      {selected.category && <span className="workflow-tag">{selected.category}</span>}
-                      <span>{selected.usage_count} uses</span>
+                      <span className={`library-badge library-type-${selected.asset_type}`}>
+                        {selected.asset_type}
+                      </span>
+                      <span className="gallery-price" style={{ fontSize: "1.1rem" }}>
+                        {selected.price_credits} credits
+                      </span>
                     </div>
                   </div>
                   <button type="button" className="job-drawer-close" onClick={() => setSelected(null)}>Close</button>
                 </div>
                 <div className="job-drawer-body">
-                  <section className="job-section">
-                    <h4>Description</h4>
-                    <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>{selected.description || "No description provided."}</p>
-                  </section>
-                  <section className="job-section">
-                    <h4>Configuration</h4>
-                    <div className="job-details-grid">
-                      {selected.config?.model && (
-                        <div><span className="job-label">Model</span><span>{selected.config.model}</span></div>
-                      )}
-                      {selected.config?.steps && (
-                        <div><span className="job-label">Steps</span><span>{selected.config.steps}</span></div>
-                      )}
-                      {selected.config?.guidance && (
-                        <div><span className="job-label">Guidance</span><span>{selected.config.guidance}</span></div>
-                      )}
-                    </div>
-                  </section>
-                  {selected.config?.prompt_template && (
+                  {/* Preview */}
+                  {selectedResult && (
                     <section className="job-section">
-                      <h4>Prompt Template</h4>
-                      <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", lineHeight: 1.5 }}>{selected.config.prompt_template}</p>
+                      <div style={{ borderRadius: "12px", overflow: "hidden", background: "var(--bg-elevated)" }}>
+                        {selectedResult.video_url ? (
+                          <video
+                            src={resolveAssetUrl(selectedResult.video_url)}
+                            controls
+                            playsInline
+                            style={{ width: "100%", display: "block" }}
+                          />
+                        ) : selectedResult.image_url ? (
+                          <img
+                            src={resolveAssetUrl(selectedResult.image_url)}
+                            alt={selected.title}
+                            style={{ width: "100%", display: "block" }}
+                          />
+                        ) : null}
+                      </div>
                     </section>
                   )}
+
+                  {/* Info */}
                   <section className="job-section">
-                    <h4>Creator</h4>
-                    <p className="wallet-address">{selected.creator_wallet}</p>
-                    <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginTop: "0.3rem" }}>
-                      Created {new Date(selected.created_at).toLocaleDateString()}
-                    </p>
+                    <h4>Details</h4>
+                    <div className="job-details-grid">
+                      {selected.model && (
+                        <div><span className="job-label">Model</span><span>{selected.model}</span></div>
+                      )}
+                      {selected.category && (
+                        <div><span className="job-label">Category</span><span>{selected.category}</span></div>
+                      )}
+                      <div>
+                        <span className="job-label">Seller</span>
+                        <span style={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{selected.seller_wallet}</span>
+                      </div>
+                      <div>
+                        <span className="job-label">Listed</span>
+                        <span>{new Date(selected.created_at * 1000).toLocaleDateString()}</span>
+                      </div>
+                    </div>
                   </section>
+
+                  {selected.description && (
+                    <section className="job-section">
+                      <h4>Description</h4>
+                      <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>{selected.description}</p>
+                    </section>
+                  )}
+
+                  {selected.prompt && (
+                    <section className="job-section">
+                      <h4>Prompt</h4>
+                      <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", lineHeight: 1.5 }}>{selected.prompt}</p>
+                    </section>
+                  )}
+
+                  {/* Purchase action */}
                   <section className="job-section">
                     <div className="job-actions">
-                      <a href={`/test?workflow=${selected.id}`} className="job-action-button" style={{ textDecoration: "none", textAlign: "center" }}>
-                        Use This Workflow
-                      </a>
+                      {purchaseMsg ? (
+                        <p style={{ color: "#8ff0b6", textAlign: "center" }}>{purchaseMsg}</p>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="job-action-button"
+                            disabled={purchasing || selected.seller_wallet.toLowerCase() === WALLET.toLowerCase()}
+                            onClick={handlePurchase}
+                            style={{ width: "100%" }}
+                          >
+                            {purchasing
+                              ? "Processing..."
+                              : selected.seller_wallet.toLowerCase() === WALLET.toLowerCase()
+                              ? "Your Listing"
+                              : `Buy for ${selected.price_credits} Credits`}
+                          </button>
+                          {purchaseErr && (
+                            <p className="job-hint error" style={{ marginTop: "0.5rem" }}>{purchaseErr}</p>
+                          )}
+                        </>
+                      )}
                     </div>
                   </section>
                 </div>
