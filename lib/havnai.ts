@@ -135,6 +135,17 @@ export interface CreditCost {
   credits_enabled: boolean;
 }
 
+export interface CreditReferenceRow {
+  id: string;
+  label: string;
+  credits_per_job: number;
+}
+
+export interface CreditReferenceResponse {
+  credits_enabled: boolean;
+  reference: CreditReferenceRow[];
+}
+
 export class HavnaiApiError extends Error {
   code?: string;
   data?: Record<string, any>;
@@ -546,6 +557,26 @@ export async function fetchCreditCost(model: string, taskType?: string): Promise
   }
   return (await res.json()) as CreditCost;
 }
+
+export async function fetchCreditReference(): Promise<CreditReferenceResponse> {
+  const res = await fetch(apiUrl("/credits/reference"), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  const data = await res.json();
+  return {
+    credits_enabled: Boolean(data?.credits_enabled),
+    reference: Array.isArray(data?.reference)
+      ? data.reference.map((row: any) => ({
+          id: String(row?.id || ""),
+          label: String(row?.label || ""),
+          credits_per_job: Number(row?.credits_per_job || 0),
+        }))
+      : [],
+  };
+}
 export interface CreditConversion {
   wallet: string;
   converted: number;
@@ -697,7 +728,7 @@ export async function fetchPackages(): Promise<PackagesResponse> {
   return (await res.json()) as PackagesResponse;
 }
 
-export async function createCheckout(packageId: string): Promise<CheckoutResponse> {
+export async function createCheckout(packageId: string, wallet: string = WALLET): Promise<CheckoutResponse> {
   const successUrl = `${window.location.origin}/pricing?payment=success`;
   const cancelUrl = `${window.location.origin}/pricing?payment=cancelled`;
 
@@ -705,7 +736,7 @@ export async function createCheckout(packageId: string): Promise<CheckoutRespons
     method: "POST",
     headers: buildHeaders(false),
     body: JSON.stringify({
-      wallet: WALLET,
+      wallet,
       package_id: packageId,
       success_url: successUrl,
       cancel_url: cancelUrl,
