@@ -16,6 +16,16 @@ import {
   WALLET,
 } from "../lib/havnai";
 
+/** Wrap a promise with a timeout so it can't hang forever. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout")), ms)
+    ),
+  ]);
+}
+
 const PricingPage: NextPage = () => {
   const [navOpen, setNavOpen] = useState(false);
   const [packages, setPackages] = useState<CreditPackage[]>([]);
@@ -23,6 +33,7 @@ const PricingPage: NextPage = () => {
   const [balance, setBalance] = useState<CreditBalance | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -45,18 +56,14 @@ const PricingPage: NextPage = () => {
         fetchCredits(wallet),
         fetchPaymentHistory(wallet),
       ]);
-      if (updatedBalance.status === "fulfilled") {
-        setBalance(updatedBalance.value);
-      }
-      if (updatedPayments.status === "fulfilled") {
-        setPayments(updatedPayments.value);
-      }
-    } catch (error: any) {
+      if (updatedBalance.status === "fulfilled") setBalance(updatedBalance.value);
+      if (updatedPayments.status === "fulfilled") setPayments(updatedPayments.value);
+    } catch (err: any) {
       const message =
-        error instanceof HavnaiApiError
-          ? error.message
-          : typeof error?.message === "string"
-          ? error.message
+        err instanceof HavnaiApiError
+          ? err.message
+          : typeof err?.message === "string"
+          ? err.message
           : "Wallet connection failed.";
       setConvertError(message);
     } finally {
@@ -78,33 +85,25 @@ const PricingPage: NextPage = () => {
       const res = await convertCreditsWithMetaMask(convertAmount, connectedWallet);
       setConvertMessage(res.message || `Converted ${res.converted} credits to HAI.`);
       setConvertError(null);
-      // refresh credit balance
       const updated = await fetchCredits(connectedWallet);
       setBalance(updated);
-    } catch (error: any) {
+    } catch (err: any) {
       setConvertMessage(null);
-      if (error?.code === 4001 || /user rejected/i.test(String(error?.message || ""))) {
+      if (err?.code === 4001 || /user rejected/i.test(String(err?.message || ""))) {
         setConvertError("Signature request was rejected in MetaMask.");
-      } else if (error instanceof HavnaiApiError) {
-        if (error.code === "nonce_expired") {
-          setConvertError("Signature expired. Please try again.");
-        } else if (error.code === "nonce_used") {
-          setConvertError("This signature has already been used. Please try again.");
-        } else if (error.code === "invalid_signature") {
-          setConvertError("Wallet signature verification failed.");
-        } else if (error.code === "insufficient_credits") {
-          setConvertError("Insufficient credits for this conversion amount.");
-        } else {
-          setConvertError(error.message);
-        }
+      } else if (err instanceof HavnaiApiError) {
+        if (err.code === "nonce_expired") setConvertError("Signature expired. Please try again.");
+        else if (err.code === "nonce_used") setConvertError("This signature has already been used. Please try again.");
+        else if (err.code === "invalid_signature") setConvertError("Wallet signature verification failed.");
+        else if (err.code === "insufficient_credits") setConvertError("Insufficient credits for this conversion amount.");
+        else setConvertError(err.message);
       } else {
-        setConvertError(typeof error?.message === "string" ? error.message : "Conversion failed.");
+        setConvertError(typeof err?.message === "string" ? err.message : "Conversion failed.");
       }
     } finally {
       setConverting(false);
     }
   };
-
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -118,30 +117,34 @@ const PricingPage: NextPage = () => {
 
     async function load() {
       setLoading(true);
+      setLoadError(false);
+
+      // Detect wallet but don't let it block the rest of the page
+      let detectedWallet: string | null = null;
       try {
-        const detectedWallet = await getConnectedWallet();
-        if (detectedWallet) {
-          setConnectedWallet(detectedWallet);
-        }
-        const walletForQueries = detectedWallet || WALLET;
-        const [pkgRes, balRes, histRes] = await Promise.allSettled([
-          fetchPackages(),
-          fetchCredits(walletForQueries),
-          fetchPaymentHistory(walletForQueries),
-        ]);
-        if (pkgRes.status === "fulfilled") {
-          setPackages(pkgRes.value.packages);
-          setStripeEnabled(pkgRes.value.stripe_enabled);
-        }
-        if (balRes.status === "fulfilled") {
-          setBalance(balRes.value);
-        }
-        if (histRes.status === "fulfilled") {
-          setPayments(histRes.value);
-        }
-      } finally {
-        setLoading(false);
+        detectedWallet = await withTimeout(getConnectedWallet(), 3000);
+        if (detectedWallet) setConnectedWallet(detectedWallet);
+      } catch {
+        // MetaMask unavailable or timed out — that's fine
       }
+
+      const walletForQueries = detectedWallet || WALLET;
+      const [pkgRes, balRes, histRes] = await Promise.allSettled([
+        withTimeout(fetchPackages(), 8000),
+        withTimeout(fetchCredits(walletForQueries), 8000),
+        withTimeout(fetchPaymentHistory(walletForQueries), 8000),
+      ]);
+
+      if (pkgRes.status === "fulfilled") {
+        setPackages(pkgRes.value.packages);
+        setStripeEnabled(pkgRes.value.stripe_enabled);
+      } else {
+        setLoadError(true);
+      }
+      if (balRes.status === "fulfilled") setBalance(balRes.value);
+      if (histRes.status === "fulfilled") setPayments(histRes.value);
+
+      setLoading(false);
     }
     load();
   }, []);
@@ -179,7 +182,7 @@ const PricingPage: NextPage = () => {
           <a href="/#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
-              <span className="brand-stage">Stage 6 → 7 Alpha</span>
+              <span className="brand-stage">Public Beta</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
@@ -188,7 +191,7 @@ const PricingPage: NextPage = () => {
           </button>
           <nav className={`nav-links ${navOpen ? "nav-open" : ""}`} onClick={() => setNavOpen(false)}>
             <a href="/#home">Home</a>
-            <a href="/test">Generator</a>
+            <a href="/generator">Generator</a>
             <a href="/library">My Library</a>
             <a href="/pricing" className="nav-active">Buy Credits</a>
             <a href="/analytics">Analytics</a>
@@ -199,14 +202,20 @@ const PricingPage: NextPage = () => {
         </div>
       </header>
 
-      <main>
-        <section className="section pricing-section">
-          <div className="section-header">
-            <h2>Buy Credits</h2>
-            <p>Credits power every generation on the HavnAI grid. Pick a package, pay with card, and start creating.</p>
+      <main className="library-page">
+        <section className="page-hero">
+          <div className="page-hero-inner">
+            <p className="hero-kicker">Credits</p>
+            <h1 className="hero-title">Buy Credits</h1>
+            <p className="hero-subtitle">
+              Credits power every generation on the HavnAI grid.
+              Pick a package, pay with card, and start creating.
+            </p>
           </div>
+        </section>
 
-          {/* Current balance */}
+        <section className="page-container">
+          {/* Balance bar */}
           {balance && (
             <div className="pricing-balance">
               <span className="pricing-balance-label">Your Balance</span>
@@ -224,9 +233,21 @@ const PricingPage: NextPage = () => {
             <div className="pricing-alert pricing-alert-error">{error}</div>
           )}
 
-          {/* Packages */}
+          {/* Credit packages */}
           {loading ? (
             <div className="pricing-loading">Loading packages...</div>
+          ) : loadError && packages.length === 0 ? (
+            <div className="pricing-loading" style={{ color: "var(--text-muted)" }}>
+              <p>Unable to load packages right now.</p>
+              <button
+                type="button"
+                className="job-action-button"
+                style={{ marginTop: "0.75rem" }}
+                onClick={() => window.location.reload()}
+              >
+                Retry
+              </button>
+            </div>
           ) : (
             <div className="pricing-grid">
               {packages.map((pkg) => (
@@ -273,18 +294,11 @@ const PricingPage: NextPage = () => {
                     <td>500 images</td>
                   </tr>
                   <tr>
-                    <td>SD1.5 Image</td>
-                    <td>0.5</td>
-                    <td>100 images</td>
-                    <td>300 images</td>
-                    <td>1,000 images</td>
-                  </tr>
-                  <tr>
-                    <td>Face Swap</td>
-                    <td>1.5</td>
-                    <td>33 swaps</td>
-                    <td>100 swaps</td>
-                    <td>333 swaps</td>
+                    <td>Video (LTX / WAN)</td>
+                    <td>3.0</td>
+                    <td>16 clips</td>
+                    <td>50 clips</td>
+                    <td>166 clips</td>
                   </tr>
                   <tr>
                     <td>AnimateDiff Video</td>
@@ -294,11 +308,11 @@ const PricingPage: NextPage = () => {
                     <td>250 clips</td>
                   </tr>
                   <tr>
-                    <td>LTX2 Video</td>
-                    <td>3.0</td>
-                    <td>16 clips</td>
-                    <td>50 clips</td>
-                    <td>166 clips</td>
+                    <td>Face Swap</td>
+                    <td>1.5</td>
+                    <td>33 swaps</td>
+                    <td>100 swaps</td>
+                    <td>333 swaps</td>
                   </tr>
                 </tbody>
               </table>
@@ -337,46 +351,51 @@ const PricingPage: NextPage = () => {
           )}
 
           {/* Convert credits to $HAI */}
-        <div className="pricing-convert">
-          <h3>Convert credits to $HAI</h3>
-          <p>Convert your unused credits into $HAI tokens.</p>
-          <div className="convert-wallet-row">
-            <button type="button" onClick={handleConnectWallet} disabled={connectingWallet || converting}>
-              {connectedWallet
-                ? `Connected: ${connectedWallet.slice(0, 6)}...${connectedWallet.slice(-4)}`
-                : connectingWallet
-                ? "Connecting..."
-                : "Connect Wallet"}
-            </button>
+          <div className="pricing-convert">
+            <h3>Convert Credits to $HAI</h3>
+            <p className="pricing-convert-desc">Trade unused credits for $HAI tokens. Requires a MetaMask signature.</p>
+            <div className="convert-row">
+              <button
+                type="button"
+                className="convert-wallet-btn"
+                onClick={handleConnectWallet}
+                disabled={connectingWallet || converting}
+              >
+                {connectedWallet
+                  ? `${connectedWallet.slice(0, 6)}...${connectedWallet.slice(-4)}`
+                  : connectingWallet
+                  ? "Connecting..."
+                  : "Connect Wallet"}
+              </button>
+              <div className="convert-input-group">
+                <input
+                  type="number"
+                  className="convert-input"
+                  placeholder="Amount"
+                  min="0"
+                  value={convertAmount || ""}
+                  onChange={(e) => setConvertAmount(parseFloat(e.target.value) || 0)}
+                  disabled={!connectedWallet || converting}
+                />
+                <span className="convert-input-suffix">credits</span>
+              </div>
+              <button
+                type="button"
+                className="convert-submit-btn"
+                onClick={handleConvert}
+                disabled={converting || !connectedWallet || !convertAmount}
+              >
+                {converting ? "Converting..." : "Convert"}
+              </button>
+            </div>
+            {convertMessage && <p className="convert-message">{convertMessage}</p>}
+            {convertError && <p className="convert-error">{convertError}</p>}
           </div>
-          <div className="convert-controls">
-            <input
-              type="number"
-              min="0"
-              value={convertAmount}
-              onChange={(e) => setConvertAmount(parseFloat(e.target.value))}
-              disabled={!connectedWallet || converting}
-            />
-            <button
-              type="button"
-              onClick={handleConvert}
-              disabled={converting || !connectedWallet}
-            >
-              {converting ? "Converting..." : "Convert"}
-            </button>
-          </div>
-          {!connectedWallet && <p className="convert-note">Connect MetaMask to sign conversion requests.</p>}
-          {convertMessage && <p className="convert-message">{convertMessage}</p>}
-          {convertError && <p className="convert-error">{convertError}</p>}
-        </div>
 
           {/* Wallet info */}
           <div className="pricing-wallet-info">
             <p>
               Wallet: <code>{activeWallet}</code>
-            </p>
-            <p className="pricing-wallet-note">
-              Convert uses MetaMask signatures. Generator submissions still use <code>NEXT_PUBLIC_HAVNAI_WALLET</code>.
             </p>
           </div>
         </section>
@@ -384,7 +403,7 @@ const PricingPage: NextPage = () => {
 
       <footer className="site-footer">
         <div className="footer-inner">
-          <p className="footer-copy">© 2026 HavnAI Network</p>
+          <p className="footer-copy">&copy; 2025 HavnAI Network</p>
         </div>
       </footer>
     </>
