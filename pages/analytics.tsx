@@ -103,7 +103,7 @@ const AnalyticsPage: NextPage = () => {
               </div>
               <div className="stat-card">
                 <div className="stat-label">Success Rate</div>
-                <div className="stat-value">{((overview.success_rate ?? 0) * 100).toFixed(1)}%</div>
+                <div className="stat-value">{(overview.success_rate ?? 0).toFixed(1)}%</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Active Nodes</div>

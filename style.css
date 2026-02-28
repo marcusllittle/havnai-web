@@ -3863,8 +3863,8 @@ details[open] .faq-icon {
   }
 
   .nav-links a {
-    padding: 0.75rem 0;
-    min-height: 44px;
+    padding: 0.5rem 0;
+    min-height: 40px;
     display: flex;
     align-items: center;
   }
@@ -3962,6 +3962,8 @@ details[open] .faq-icon {
     display: none;
     flex-direction: column;
     gap: 0.55rem;
+    max-height: 70vh;
+    overflow-y: auto;
   }
 
   .nav-links.nav-open {
