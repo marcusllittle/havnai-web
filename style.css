@@ -4252,6 +4252,143 @@ details[open] .faq-icon {
   opacity: 0.7;
 }
 
+/* Convert credits to $HAI */
+.pricing-convert {
+  margin-top: 3rem;
+  padding: 1.75rem 2rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--card-radius);
+}
+
+.pricing-convert h3 {
+  font-size: 1.15rem;
+  margin: 0 0 0.35rem;
+  color: var(--text);
+}
+
+.pricing-convert-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0 0 1.25rem;
+}
+
+.convert-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.convert-wallet-btn {
+  padding: 0.6rem 1.25rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(0, 234, 255, 0.06);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+
+.convert-wallet-btn:hover:not(:disabled) {
+  background: rgba(0, 234, 255, 0.12);
+  border-color: var(--accent-soft);
+}
+
+.convert-wallet-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.convert-input-group {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  overflow: hidden;
+  flex: 1;
+  min-width: 140px;
+  max-width: 220px;
+}
+
+.convert-input {
+  flex: 1;
+  padding: 0.6rem 0.75rem;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 0.9rem;
+  outline: none;
+  min-width: 0;
+  -moz-appearance: textfield;
+}
+
+.convert-input::-webkit-outer-spin-button,
+.convert-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.convert-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.convert-input-suffix {
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.convert-submit-btn {
+  padding: 0.6rem 1.5rem;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: #02050a;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.convert-submit-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.convert-submit-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.convert-message {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #8ff0b6;
+}
+
+.convert-error {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #ff8888;
+}
+
+@media (max-width: 600px) {
+  .convert-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .convert-input-group {
+    max-width: none;
+  }
+}
+
 .nav-active {
   color: var(--accent) !important;
 }
