@@ -20,6 +20,13 @@ interface WalletContextValue extends WalletSnapshot {
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
+function getConflictMessage(providerName?: string): string {
+  if (providerName === "MetaMask") {
+    return "Multiple wallet extensions detected. MetaMask is being used as the active provider.";
+  }
+  return "Multiple wallet extensions detected. Using the browser's active wallet provider. If connection fails, disable other wallet extensions or make MetaMask the preferred wallet.";
+}
+
 function buildSnapshot(
   prev: WalletSnapshot,
   patch: Partial<WalletSnapshot>,
@@ -135,7 +142,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         chainAllowed: chain.chainAllowed,
         error: null,
         message: selection.hasConflict
-          ? "Multiple wallet extensions detected. MetaMask is being used as the active provider."
+          ? getConflictMessage(selection.providerName)
           : envWallet && accounts.length === 0
           ? "Using the fallback site wallet for env-based actions."
           : undefined,
@@ -262,7 +269,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           chainAllowed: chain.chainAllowed,
           error: null,
           message: selection.hasConflict
-            ? "Multiple wallet extensions detected. MetaMask was selected as the active provider."
+            ? getConflictMessage(selection.providerName)
             : undefined,
           connecting: false,
           status: "connected",
