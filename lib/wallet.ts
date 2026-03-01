@@ -200,15 +200,29 @@ export function detectProviderConflict(): {
     };
   }
 
+  // Multiple providers claim isMetaMask (e.g. Brave Wallet, Coinbase Wallet).
+  // Filter out known imposters and pick the real MetaMask if possible.
+  if (metaMaskProviders.length > 1) {
+    const realMM = metaMaskProviders.filter(
+      (p: any) => !p.isBraveWallet && !p.isCoinbaseWallet && !p.isTokenary
+    );
+    if (realMM.length >= 1) {
+      return {
+        providers: [realMM[0]],
+        hasConflict: true,
+        providerName: "MetaMask",
+        error: null,
+      };
+    }
+  }
+
+  // Fallback: can't identify the real MetaMask, but still pick the first
+  // provider so the user can at least attempt to connect.
   return {
-    providers,
-    provider: null,
+    providers: [providers[0]],
     hasConflict: true,
-    providerName: "Multiple wallets",
-    error: new WalletError(
-      "wallet_conflict",
-      "Multiple wallet extensions were detected, and no usable browser wallet provider could be selected."
-    ),
+    providerName: providers[0].isMetaMask ? "MetaMask" : "Injected wallet",
+    error: null,
   };
 }
 

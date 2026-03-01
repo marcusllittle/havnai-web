@@ -79,6 +79,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const connectPromiseRef = useRef<Promise<string | null> | null>(null);
   const promptTimerRef = useRef<number | null>(null);
   const attentionTimerRef = useRef<number | null>(null);
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
 
   const clearConnectTimers = useCallback(() => {
     if (promptTimerRef.current != null) {
@@ -165,12 +167,13 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [envWallet, patchSnapshot]);
 
   const dismissError = useCallback(() => {
+    const snap = snapshotRef.current;
     patchSnapshot({
       error: null,
       message: envWallet ? "Using the fallback site wallet for env-based actions." : undefined,
-      status: snapshot.connectedWallet ? "connected" : envWallet ? "fallback" : "idle",
+      status: snap.connectedWallet ? "connected" : envWallet ? "fallback" : "idle",
     });
-  }, [envWallet, patchSnapshot, snapshot.connectedWallet]);
+  }, [envWallet, patchSnapshot]);
 
   const disconnect = useCallback(() => {
     clearConnectTimers();
