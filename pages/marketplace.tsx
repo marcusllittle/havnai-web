@@ -3,7 +3,7 @@ import Head from "next/head";
 import { useCallback, useEffect, useState } from "react";
 import {
   fetchGallery,
-  purchaseGalleryListing,
+  purchaseGalleryListingWithMetaMask,
   fetchResult,
   resolveAssetUrl,
   GalleryListing,
@@ -126,7 +126,7 @@ const MarketplacePage: NextPage = () => {
     setPurchaseErr("");
     setPurchaseMsg("");
     try {
-      const res = await purchaseGalleryListing(selected.id);
+      const res = await purchaseGalleryListingWithMetaMask(selected.id, selected.price_credits);
       setPurchaseMsg(`Purchased! ${res.remaining_credits.toFixed(1)} credits remaining.`);
       // Remove from browse view
       setListings((prev) => prev.filter((l) => l.id !== selected.id));

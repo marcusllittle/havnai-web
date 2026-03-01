@@ -6,7 +6,7 @@ import { downloadAsset } from "../lib/download";
 import {
   fetchJob,
   fetchResult,
-  createGalleryListing,
+  createGalleryListingWithMetaMask,
   JobDetailResponse,
   resolveAssetUrl,
   ResultResponse,
@@ -186,7 +186,7 @@ const LibraryPage: NextPage = () => {
     setSellLoading(true);
     setSellErr("");
     try {
-      await createGalleryListing({
+      await createGalleryListingWithMetaMask({
         job_id: sellItem.entry.job_id,
         title: sellTitle.trim() || `Generation #${sellItem.entry.job_id.slice(0, 8)}`,
         price_credits: price,
