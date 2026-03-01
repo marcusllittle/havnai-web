@@ -19,14 +19,16 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 export function useWallet(): LegacyWalletContextValue {
   const wallet = useAppWallet();
   return {
-    address: wallet.connectedWallet || wallet.activeWallet,
+    // Legacy nav/button consumers should only treat an actual MetaMask account
+    // as "connected". The env fallback wallet is not disconnectable.
+    address: wallet.connectedWallet,
     connecting: wallet.connecting,
     connect: async () => {
       await wallet.connect();
     },
     disconnect: wallet.disconnect,
-    shortAddress: wallet.activeWallet
-      ? `${wallet.activeWallet.slice(0, 6)}...${wallet.activeWallet.slice(-4)}`
+    shortAddress: wallet.connectedWallet
+      ? `${wallet.connectedWallet.slice(0, 6)}...${wallet.connectedWallet.slice(-4)}`
       : null,
   };
 }
