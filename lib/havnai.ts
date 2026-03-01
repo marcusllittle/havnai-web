@@ -1080,12 +1080,29 @@ export async function fetchGallery(
   return (await res.json()) as GalleryBrowseResponse;
 }
 
+export async function requestGalleryNonce(
+  wallet: string,
+  amount: number,
+  purpose: "gallery_purchase" | "gallery_list",
+  context: { listing_id?: number; job_id?: string } = {},
+): Promise<WalletNonceChallenge> {
+  const res = await fetch(apiUrl("/wallet/nonce"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ wallet, amount, purpose, ...context }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as WalletNonceChallenge;
+}
+
 export async function createGalleryListing(data: {
   job_id: string;
   title: string;
   price_credits: number;
   description?: string;
   category?: string;
+  nonce: string;
+  signature: string;
 }): Promise<GalleryListing> {
   const res = await fetch(apiUrl("/gallery/listings"), {
     method: "POST",
@@ -1096,16 +1113,57 @@ export async function createGalleryListing(data: {
   return (await res.json()) as GalleryListing;
 }
 
+export async function createGalleryListingWithMetaMask(data: {
+  job_id: string;
+  title: string;
+  price_credits: number;
+  description?: string;
+  category?: string;
+}): Promise<GalleryListing> {
+  const ethereum = requireEthereumProvider();
+  const provider = new BrowserProvider(ethereum);
+  const signer = await provider.getSigner();
+  const signerWallet = getAddress(WALLET || (await signer.getAddress()));
+  const challenge = await requestGalleryNonce(
+    signerWallet, data.price_credits, "gallery_list", { job_id: data.job_id },
+  );
+  const signature = await signer.signMessage(challenge.message);
+  return createGalleryListing({
+    ...data,
+    nonce: challenge.nonce,
+    signature,
+  });
+}
+
 export async function purchaseGalleryListing(
-  listingId: number
+  listingId: number,
+  opts: { nonce: string; signature: string },
 ): Promise<GalleryPurchaseResponse> {
   const res = await fetch(apiUrl(`/gallery/listings/${listingId}/purchase`), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet: WALLET }),
+    body: JSON.stringify({ wallet: WALLET, nonce: opts.nonce, signature: opts.signature }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as GalleryPurchaseResponse;
+}
+
+export async function purchaseGalleryListingWithMetaMask(
+  listingId: number,
+  price: number,
+): Promise<GalleryPurchaseResponse> {
+  const ethereum = requireEthereumProvider();
+  const provider = new BrowserProvider(ethereum);
+  const signer = await provider.getSigner();
+  const signerWallet = getAddress(WALLET || (await signer.getAddress()));
+  const challenge = await requestGalleryNonce(
+    signerWallet, price, "gallery_purchase", { listing_id: listingId },
+  );
+  const signature = await signer.signMessage(challenge.message);
+  return purchaseGalleryListing(listingId, {
+    nonce: challenge.nonce,
+    signature,
+  });
 }
 
 export async function delistGalleryListing(listingId: number): Promise<void> {
