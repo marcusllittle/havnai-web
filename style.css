@@ -173,6 +173,82 @@ main,
   color: #ffffff;
 }
 
+/* Wallet connect button in header */
+.wallet-connect-btn {
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 234, 255, 0.4);
+  background: rgba(0, 234, 255, 0.1);
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+.wallet-connect-btn:hover:not(:disabled) {
+  background: rgba(0, 234, 255, 0.2);
+  border-color: rgba(0, 234, 255, 0.6);
+}
+.wallet-connect-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.wallet-connect-btn.wallet-connected {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(0, 234, 255, 0.08);
+  border-color: rgba(0, 234, 255, 0.25);
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-weight: 500;
+  font-size: 0.78rem;
+}
+.wallet-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8ff0b6;
+  flex-shrink: 0;
+}
+.wallet-btn-wrapper {
+  position: relative;
+}
+.wallet-dropdown {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  background: var(--card-bg, #0d1117);
+  border: 1px solid rgba(0, 234, 255, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 100;
+  min-width: 140px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.wallet-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+.wallet-dropdown-item:hover {
+  background: rgba(0, 234, 255, 0.08);
+  color: var(--text);
+}
+.wallet-dropdown-disconnect {
+  color: #ffb3b3;
+}
+.wallet-dropdown-disconnect:hover {
+  background: rgba(255, 100, 100, 0.1);
+  color: #ff8a8a;
+}
+
 .nav-toggle {
   display: none;
   border: none;

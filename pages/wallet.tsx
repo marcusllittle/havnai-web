@@ -1,16 +1,18 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useState } from "react";
+import { WalletButton } from "../components/WalletButton";
+import { useWallet } from "../lib/WalletContext";
 import {
   fetchCredits,
   fetchWalletRewards,
   claimRewards,
   CreditBalance,
   WalletRewards,
-  WALLET,
 } from "../lib/havnai";
 
 const WalletPage: NextPage = () => {
+  const { address, connect } = useWallet();
   const [navOpen, setNavOpen] = useState(false);
   const [credits, setCredits] = useState<CreditBalance | null>(null);
   const [rewards, setRewards] = useState<WalletRewards | null>(null);
@@ -31,7 +33,7 @@ const WalletPage: NextPage = () => {
       setLoading(false);
     });
     return () => { active = false; };
-  }, []);
+  }, [address]);
 
   const handleClaim = async () => {
     setClaiming(true);
@@ -47,8 +49,6 @@ const WalletPage: NextPage = () => {
     }
     setClaiming(false);
   };
-
-  const isZeroWallet = WALLET === "0x0000000000000000000000000000000000000000";
 
   return (
     <>
@@ -74,6 +74,7 @@ const WalletPage: NextPage = () => {
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
             <a href="/join" className="nav-primary">Join</a>
+            <WalletButton />
           </nav>
         </div>
       </header>
@@ -88,18 +89,22 @@ const WalletPage: NextPage = () => {
         </section>
 
         <section className="page-container">
-          {isZeroWallet && (
+          {!address && (
             <div className="library-empty" style={{ marginBottom: "1.5rem" }}>
-              <p>No wallet configured. Set <code>NEXT_PUBLIC_HAVNAI_WALLET</code> in your .env.local to connect your EVM wallet.</p>
-              <p style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>Web3 wallet connect (MetaMask, WalletConnect) is coming in a future update.</p>
+              <p>No wallet connected. Connect your MetaMask wallet to view your credits and rewards.</p>
+              <button type="button" className="job-action-button" style={{ marginTop: "0.75rem" }} onClick={connect}>
+                Connect Wallet
+              </button>
             </div>
           )}
 
           {/* Wallet address */}
-          <div className="wallet-card">
-            <div className="stat-label">Connected Wallet</div>
-            <div className="wallet-address">{WALLET}</div>
-          </div>
+          {address && (
+            <div className="wallet-card">
+              <div className="stat-label">Connected Wallet</div>
+              <div className="wallet-address">{address}</div>
+            </div>
+          )}
 
           {loading && <p className="library-loading">Loading wallet data...</p>}
 

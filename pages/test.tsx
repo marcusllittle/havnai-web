@@ -27,6 +27,7 @@ import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
 import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 import { getJobSSE, SSEEvent } from "../lib/sse";
 import { getApiBase } from "../lib/apiBase";
+import { WalletButton } from "../components/WalletButton";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
@@ -1288,6 +1289,7 @@ const TestPage: React.FC = () => {
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
             <a href="/join" className="nav-primary">Join</a>
+            <WalletButton />
           </nav>
         </div>
       </header>

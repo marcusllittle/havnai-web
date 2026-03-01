@@ -1,6 +1,7 @@
 import type { AppProps } from "next/app";
 import React from "react";
 import "../style.css";
+import { WalletProvider } from "../lib/WalletContext";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -73,7 +74,9 @@ class ErrorBoundary extends React.Component<
 export default function HavnAIApp({ Component, pageProps }: AppProps) {
   return (
     <ErrorBoundary>
-      <Component {...pageProps} />
+      <WalletProvider>
+        <Component {...pageProps} />
+      </WalletProvider>
     </ErrorBoundary>
   );
 }
