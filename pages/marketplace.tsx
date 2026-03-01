@@ -3,6 +3,7 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import { useWallet } from "../components/WalletProvider";
+import { getApiBase } from "../lib/apiBase";
 import {
   createWorkflow,
   fetchCredits,
@@ -93,6 +94,7 @@ const MarketplacePage: NextPage = () => {
   const wallet = useWallet();
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
+  const apiBase = getApiBase();
 
   const [tab, setTab] = useState<MarketplaceTab>("gallery");
   const [galleryView, setGalleryView] = useState<GalleryView>("browse");
@@ -509,9 +511,9 @@ const MarketplacePage: NextPage = () => {
             aria-label="Primary navigation"
           >
             <a href="/#home">Home</a>
-            <a href="/test">Generator</a>
+            <a href="/generator">Generator</a>
             <a href="/library">My Library</a>
-            <a href="/api/dashboard" target="_blank" rel="noreferrer">
+            <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">
               Dashboard
             </a>
             <a href="/pricing">Buy Credits</a>
@@ -520,7 +522,7 @@ const MarketplacePage: NextPage = () => {
             <a href="/marketplace" className="nav-active">
               Marketplace
             </a>
-            <a href="#join">Join Alpha</a>
+            <a href="/join">Join Alpha</a>
           </nav>
         </div>
       </header>
@@ -1259,7 +1261,7 @@ const MarketplacePage: NextPage = () => {
                   <section className="job-section">
                     <div className="job-actions">
                       <a
-                        href={`/test?workflow=${selectedWorkflow.id}`}
+                        href={`/generator?workflow=${selectedWorkflow.id}`}
                         className="job-action-button"
                         style={{ textDecoration: "none", textAlign: "center" }}
                       >

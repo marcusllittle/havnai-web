@@ -1,4 +1,4 @@
-import { BrowserProvider, getAddress } from "ethers";
+import { getAddress } from "ethers";
 
 export const ZERO_WALLET = "0x0000000000000000000000000000000000000000";
 export const WALLET =
@@ -124,16 +124,54 @@ function getProviderList(root: InjectedProvider | undefined): InjectedProvider[]
   return [root];
 }
 
+function isProviderUsable(provider: InjectedProvider | undefined | null): provider is InjectedProvider {
+  return Boolean(provider && typeof provider.request === "function");
+}
+
+function choosePreferredProvider(
+  root: InjectedProvider | undefined,
+  providers: InjectedProvider[]
+): { provider: InjectedProvider | null; providerName?: string } {
+  if (isProviderUsable(root) && root.isMetaMask) {
+    return { provider: root, providerName: "MetaMask" };
+  }
+
+  const metaMaskProvider = providers.find((provider) => provider.isMetaMask && isProviderUsable(provider));
+  if (metaMaskProvider) {
+    return { provider: metaMaskProvider, providerName: "MetaMask" };
+  }
+
+  if (isProviderUsable(root)) {
+    return {
+      provider: root,
+      providerName: root.isMetaMask ? "MetaMask" : "Browser wallet",
+    };
+  }
+
+  const firstUsableProvider = providers.find((provider) => isProviderUsable(provider));
+  if (firstUsableProvider) {
+    return {
+      provider: firstUsableProvider,
+      providerName: firstUsableProvider.isMetaMask ? "MetaMask" : "Injected wallet",
+    };
+  }
+
+  return { provider: null, providerName: undefined };
+}
+
 export function detectProviderConflict(): {
   providers: InjectedProvider[];
+  provider: InjectedProvider | null;
   hasConflict: boolean;
   providerName?: string;
   error: WalletError | null;
 } {
-  const providers = getProviderList(getWindowEthereum());
+  const root = getWindowEthereum();
+  const providers = getProviderList(root);
   if (providers.length === 0) {
     return {
       providers: [],
+      provider: null,
       hasConflict: false,
       providerName: undefined,
       error: null,
@@ -141,20 +179,23 @@ export function detectProviderConflict(): {
   }
 
   if (providers.length === 1) {
+    const provider = choosePreferredProvider(root, providers);
     return {
       providers,
+      provider: provider.provider,
       hasConflict: false,
-      providerName: providers[0].isMetaMask ? "MetaMask" : "Injected wallet",
+      providerName: provider.providerName || (providers[0].isMetaMask ? "MetaMask" : "Injected wallet"),
       error: null,
     };
   }
 
-  const metaMaskProviders = providers.filter((provider) => provider.isMetaMask);
-  if (metaMaskProviders.length === 1) {
+  const preferred = choosePreferredProvider(root, providers);
+  if (preferred.provider) {
     return {
-      providers: metaMaskProviders,
+      providers,
+      provider: preferred.provider,
       hasConflict: true,
-      providerName: "MetaMask",
+      providerName: preferred.providerName || "Browser wallet",
       error: null,
     };
   }
@@ -208,7 +249,7 @@ export function getInjectedProvider(): InjectedProviderSelection {
     };
   }
 
-  const provider = conflict.providers[0] || ethereum;
+  const provider = conflict.provider || conflict.providers[0] || ethereum;
   return {
     provider,
     providerName: conflict.providerName || (provider.isMetaMask ? "MetaMask" : "Injected wallet"),
@@ -254,15 +295,13 @@ function chainAllowed(chainId?: string): boolean {
 
 export async function readConnectedAccounts(provider?: InjectedProvider | null): Promise<string[]> {
   const injected = requireProvider(provider);
-  const browserProvider = new BrowserProvider(injected as any);
-  const accounts = await browserProvider.send("eth_accounts", []);
+  const accounts = await injected.request({ method: "eth_accounts" });
   return normalizeAccounts(accounts);
 }
 
 export async function requestAccounts(provider?: InjectedProvider | null): Promise<string[]> {
   const injected = requireProvider(provider);
-  const browserProvider = new BrowserProvider(injected as any);
-  const accounts = await browserProvider.send("eth_requestAccounts", []);
+  const accounts = await injected.request({ method: "eth_requestAccounts" });
   return normalizeAccounts(accounts);
 }
 
