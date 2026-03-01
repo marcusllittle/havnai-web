@@ -17,6 +17,7 @@ export interface JobSummary {
   job_id?: string;
   id?: string;
   model?: string;
+  wallet?: string;
   status?: string;
   task_type?: string;
   submitted_at?: string;
@@ -36,6 +37,8 @@ interface JobDetailsDrawerProps {
   error?: string;
   marketplace?: {
     wallet?: string | null;
+    canSign?: boolean;
+    source?: "connected" | "env" | "none";
     onListingCreated?: (listingId: number) => void;
   };
   onClose: () => void;
@@ -314,12 +317,34 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
 
   const canListInMarketplace = Boolean(
     resolvedId &&
-      isUsableWallet(marketplace?.wallet) &&
       (previewImage || previewVideo)
   );
+  const jobOwnerWallet =
+    typeof job?.wallet === "string" && job.wallet.trim()
+      ? job.wallet.trim()
+      : typeof summary?.wallet === "string" && summary.wallet.trim()
+      ? summary.wallet.trim()
+      : undefined;
+  const marketplaceWalletMatchesJob =
+    isUsableWallet(marketplace?.wallet) &&
+    typeof jobOwnerWallet === "string" &&
+    marketplace.wallet.toLowerCase() === jobOwnerWallet.toLowerCase();
+  const showListingAction =
+    canListInMarketplace &&
+    marketplaceWalletMatchesJob &&
+    marketplace?.canSign === true;
+  const listingBlockedReason = !canListInMarketplace
+    ? undefined
+    : !jobOwnerWallet
+    ? "Loading job owner wallet before enabling marketplace listing."
+    : !marketplaceWalletMatchesJob
+    ? `This job belongs to ${jobOwnerWallet}. Connect that wallet to list it on the marketplace.`
+    : marketplace?.canSign !== true
+    ? "MetaMask must be connected with the job owner wallet to sign a marketplace listing."
+    : undefined;
 
   const handleCreateListing = async () => {
-    if (!resolvedId || !isUsableWallet(marketplace?.wallet)) return;
+    if (!resolvedId || !isUsableWallet(marketplace?.wallet) || !showListingAction) return;
     if (!listingTitle.trim()) {
       setListingError("Title is required.");
       return;
@@ -511,7 +536,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   </button>
                 </div>
               )}
-              {canListInMarketplace && (
+              {showListingAction && (
                 <button
                   type="button"
                   className="job-action-button secondary"
@@ -529,7 +554,10 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                 <a href="/marketplace?tab=gallery&galleryView=my-listings">My Listings</a>
               </p>
             )}
-            {canListInMarketplace && listingOpen && (
+            {canListInMarketplace && !showListingAction && listingBlockedReason && (
+              <p className="job-hint">{listingBlockedReason}</p>
+            )}
+            {showListingAction && listingOpen && (
               <div className="marketplace-listing-form">
                 <label>
                   <span className="job-label">title</span>

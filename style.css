@@ -3421,6 +3421,117 @@ img.jobs-preview-tile {
   font-family: "Orbitron", system-ui, sans-serif;
 }
 
+.wallet-status-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  background: rgba(7, 12, 20, 0.9);
+  border-radius: var(--card-radius);
+  border: 1px solid var(--border-subtle);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.wallet-status-card-inline {
+  margin-top: 1.5rem;
+}
+
+.wallet-status-copy-block {
+  min-width: 0;
+}
+
+.wallet-status-heading-row {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 0.65rem;
+}
+
+.wallet-status-pill,
+.wallet-status-provider {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.68rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.wallet-status-pill {
+  border: 1px solid rgba(0, 234, 255, 0.28);
+}
+
+.wallet-source-connected {
+  color: #8ff0b6;
+  background: rgba(143, 240, 182, 0.12);
+  border-color: rgba(143, 240, 182, 0.28);
+}
+
+.wallet-source-env {
+  color: #ffd27a;
+  background: rgba(255, 210, 122, 0.12);
+  border-color: rgba(255, 210, 122, 0.28);
+}
+
+.wallet-source-none {
+  color: #c2d0da;
+  background: rgba(194, 208, 218, 0.08);
+  border-color: rgba(194, 208, 218, 0.18);
+}
+
+.wallet-status-provider {
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.wallet-status-provider.is-warning {
+  color: #ffd27a;
+  border-color: rgba(255, 210, 122, 0.28);
+  background: rgba(255, 210, 122, 0.12);
+}
+
+.wallet-status-address {
+  font-family: monospace;
+  font-size: 0.92rem;
+  color: var(--accent-strong);
+  word-break: break-all;
+  margin-bottom: 0.45rem;
+}
+
+.wallet-status-note {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+  font-size: 0.88rem;
+}
+
+.wallet-status-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.generator-wallet-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.9rem;
+  align-items: flex-start;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 0.9rem;
+}
+
+.generator-wallet-copy {
+  min-width: 0;
+}
+
 /* Responsive for new toolbar */
 @media (max-width: 768px) {
   .library-filters {
@@ -3467,6 +3578,15 @@ img.jobs-preview-tile {
 
   .marketplace-grid {
     grid-template-columns: 1fr;
+  }
+
+  .wallet-status-card,
+  .generator-wallet-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .wallet-status-actions {
+    justify-content: flex-start;
   }
 }
 

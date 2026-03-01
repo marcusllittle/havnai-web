@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useWallet } from "../components/WalletProvider";
 import { HavnAIPrompt } from "../components/HavnAIPrompt";
 import { HavnAIButton } from "../components/HavnAIButton";
 import { StatusBox } from "../components/StatusBox";
@@ -14,7 +15,6 @@ import {
   fetchJobWithResult,
   fetchQuota,
   fetchCredits,
-  getConnectedWallet,
   stitchVideos,
   HavnaiApiError,
   JobDetailResponse,
@@ -23,13 +23,12 @@ import {
   SubmitJobOptions,
   QuotaStatus,
   CreditBalance,
-  isUsableWallet,
-  WALLET,
 } from "../lib/havnai";
 import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
 import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 import { getJobSSE, SSEEvent } from "../lib/sse";
 import { getApiBase } from "../lib/apiBase";
+import { getConnectButtonLabel } from "../lib/wallet";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
@@ -95,6 +94,7 @@ const pickPreferredVideoModel = (models: { id: string; label: string }[]): strin
 };
 
 const TestPage: React.FC = () => {
+  const wallet = useWallet();
   const [mode, setMode] = useState<GeneratorMode>("image");
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
@@ -153,9 +153,6 @@ const TestPage: React.FC = () => {
   const [drawerSummary, setDrawerSummary] = useState<JobSummary | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerError, setDrawerError] = useState<string | undefined>();
-  const [marketplaceWallet, setMarketplaceWallet] = useState<string | null>(
-    isUsableWallet(WALLET) ? WALLET : null
-  );
   const [inviteCode, setInviteCodeState] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [savedInviteCode, setSavedInviteCode] = useState<string | undefined>();
@@ -163,6 +160,7 @@ const TestPage: React.FC = () => {
   const [quotaError, setQuotaError] = useState<string | undefined>();
   const [credits, setCredits] = useState<CreditBalance | null>(null);
   const inviteSaved = Boolean(savedInviteCode);
+  const connectLabel = getConnectButtonLabel(wallet);
   const imagePrefillKeyRef = useRef<string>("");
   const videoPrefillKeyRef = useRef<string>("");
   const faceSwapPrefillKeyRef = useRef<string>("");
@@ -190,29 +188,6 @@ const TestPage: React.FC = () => {
       setInviteCodeState(storedInvite);
       setSavedInviteCode(storedInvite);
     }
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    const loadWallet = async () => {
-      try {
-        const connected = await getConnectedWallet();
-        if (!active) return;
-        if (isUsableWallet(connected)) {
-          setMarketplaceWallet(connected);
-        } else {
-          setMarketplaceWallet(isUsableWallet(WALLET) ? WALLET : null);
-        }
-      } catch {
-        if (active) {
-          setMarketplaceWallet(isUsableWallet(WALLET) ? WALLET : null);
-        }
-      }
-    };
-    loadWallet();
-    return () => {
-      active = false;
-    };
   }, []);
 
   // Determine current model's pipeline for LoRA filtering
@@ -550,7 +525,13 @@ const TestPage: React.FC = () => {
   // Fetch credit balance on mount and after each job completes
   useEffect(() => {
     let cancelled = false;
-    fetchCredits()
+    if (!wallet.envWallet) {
+      setCredits(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+    fetchCredits(wallet.envWallet)
       .then((data) => {
         if (!cancelled) setCredits(data);
       })
@@ -559,7 +540,7 @@ const TestPage: React.FC = () => {
         if (!cancelled) setCredits(null);
       });
     return () => { cancelled = true; };
-  }, [loading]); // re-fetch when loading toggles (i.e. after a job finishes)
+  }, [loading, wallet.envWallet]); // re-fetch when loading toggles (i.e. after a job finishes)
 
   const saveHistory = (items: HistoryItem[]) => {
     setHistory(items);
@@ -1400,6 +1381,34 @@ const TestPage: React.FC = () => {
                       Credits: {credits.balance.toFixed(1)}
                     </div>
                   )}
+                  <div className="generator-wallet-summary">
+                    <div className="generator-wallet-copy">
+                      <span className={`wallet-status-pill wallet-source-${wallet.source}`}>
+                        {wallet.source === "connected"
+                          ? "Connected wallet"
+                          : wallet.source === "env"
+                          ? "Fallback site wallet"
+                          : "No wallet"}
+                      </span>
+                      <p className="generator-help" style={{ marginTop: "0.5rem" }}>
+                        Submission wallet:{" "}
+                        <strong>{wallet.envWallet || "Not configured"}</strong>
+                      </p>
+                      <p className="generator-help">
+                        {wallet.error?.message ||
+                          wallet.message ||
+                          "Generator jobs still submit under NEXT_PUBLIC_HAVNAI_WALLET in this alpha. A connected MetaMask wallet does not change job ownership yet."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="generator-mini-button"
+                      onClick={() => void wallet.connect()}
+                      disabled={wallet.connecting}
+                    >
+                      {connectLabel}
+                    </button>
+                  </div>
                   <button
                     type="button"
                     className="invite-toggle"
@@ -2016,7 +2025,11 @@ const TestPage: React.FC = () => {
         result={drawerResult}
         loading={drawerLoading}
         error={drawerError}
-        marketplace={{ wallet: marketplaceWallet }}
+        marketplace={{
+          wallet: wallet.activeWallet,
+          canSign: Boolean(wallet.connectedWallet),
+          source: wallet.source,
+        }}
         onClose={() => setDrawerOpen(false)}
       />
     </>

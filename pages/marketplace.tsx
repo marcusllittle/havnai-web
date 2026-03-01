@@ -2,8 +2,8 @@ import type { NextPage } from "next";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
+import { useWallet } from "../components/WalletProvider";
 import {
-  connectWallet,
   createWorkflow,
   fetchCredits,
   fetchGalleryBrowse,
@@ -13,12 +13,11 @@ import {
   GalleryListing,
   GalleryPurchaseRecord,
   HavnaiApiError,
-  isUsableWallet,
   delistGalleryListing,
   purchaseGalleryListing,
   Workflow,
-  WALLET,
 } from "../lib/havnai";
+import { getConnectButtonLabel, isUsableWallet } from "../lib/wallet";
 
 type MarketplaceTab = "gallery" | "workflows";
 type GalleryView = "browse" | "my-listings" | "purchases";
@@ -41,6 +40,12 @@ const GALLERY_SORT_OPTIONS: { value: string; label: string }[] = [
   { value: "price_low", label: "Price low" },
   { value: "price_high", label: "Price high" },
 ];
+
+function describeWalletSource(source: "connected" | "env" | "none"): string {
+  if (source === "connected") return "Connected wallet";
+  if (source === "env") return "Fallback site wallet";
+  return "No wallet";
+}
 
 function formatWallet(wallet?: string | null): string {
   if (!wallet) return "--";
@@ -85,6 +90,7 @@ function purchaseToListing(purchase: GalleryPurchaseRecord): GalleryListing {
 }
 
 const MarketplacePage: NextPage = () => {
+  const wallet = useWallet();
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
 
@@ -92,9 +98,6 @@ const MarketplacePage: NextPage = () => {
   const [galleryView, setGalleryView] = useState<GalleryView>("browse");
   const [workflowView, setWorkflowView] = useState<WorkflowView>("browse");
 
-  const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
-  const [walletLoading, setWalletLoading] = useState(false);
-  const [walletError, setWalletError] = useState<string | null>(null);
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [creditLoading, setCreditLoading] = useState(false);
 
@@ -144,31 +147,12 @@ const MarketplacePage: NextPage = () => {
 
   const workflowLimit = 20;
   const galleryLimit = 24;
-  const envWallet = isUsableWallet(WALLET) ? WALLET : null;
-  const activeWallet = isUsableWallet(connectedWallet) ? connectedWallet : envWallet;
+  const activeWallet = wallet.activeWallet;
+  const connectedWallet = wallet.connectedWallet;
+  const walletSourceLabel = describeWalletSource(wallet.source);
+  const connectLabel = getConnectButtonLabel(wallet);
   const galleryTotalPages = Math.max(1, Math.ceil(galleryTotal / galleryLimit));
   const workflowTotalPages = Math.max(1, Math.ceil(workflowTotal / workflowLimit));
-
-  useEffect(() => {
-    let active = true;
-    const loadConnectedWallet = async () => {
-      try {
-        const mod = await import("../lib/havnai");
-        const wallet = await mod.getConnectedWallet();
-        if (active) {
-          setConnectedWallet(isUsableWallet(wallet) ? wallet : null);
-        }
-      } catch {
-        if (active) {
-          setConnectedWallet(null);
-        }
-      }
-    };
-    loadConnectedWallet();
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -352,22 +336,19 @@ const MarketplacePage: NextPage = () => {
   const galleryCards = useMemo(() => galleryListings, [galleryListings]);
 
   const handleConnectWallet = async () => {
-    setWalletLoading(true);
-    setWalletError(null);
     try {
-      const wallet = await connectWallet();
-      setConnectedWallet(wallet);
+      await wallet.connect();
       setGalleryRefreshKey((value) => value + 1);
     } catch (err: any) {
-      const message =
+      setGalleryActionError(
         err instanceof HavnaiApiError
+          ? err.message
+          : err instanceof Error
           ? err.message
           : typeof err?.message === "string"
           ? err.message
-          : "Wallet connection failed.";
-      setWalletError(message);
-    } finally {
-      setWalletLoading(false);
+          : "Wallet connection failed."
+      );
     }
   };
 
@@ -381,6 +362,7 @@ const MarketplacePage: NextPage = () => {
     setWorkflowCreateSuccess("");
     try {
       const workflow = await createWorkflow({
+        wallet: activeWallet || undefined,
         name: formName.trim(),
         description: formDesc.trim(),
         category: formCategory,
@@ -427,12 +409,12 @@ const MarketplacePage: NextPage = () => {
   };
 
   const handlePurchase = async () => {
-    if (!selectedListing || !activeWallet || !isUsableWallet(activeWallet)) return;
+    if (!selectedListing || !connectedWallet || !isUsableWallet(connectedWallet)) return;
     setGalleryActionLoading(true);
     setGalleryActionError(null);
     setGalleryActionSuccess(null);
     try {
-      await purchaseGalleryListing(selectedListing.id, activeWallet);
+      await purchaseGalleryListing(selectedListing.id, connectedWallet, selectedListing.price_credits);
       setGalleryActionSuccess("Purchase complete.");
       setGalleryRefreshKey((value) => value + 1);
       closeListingDrawer();
@@ -480,7 +462,7 @@ const MarketplacePage: NextPage = () => {
   const galleryPrimaryActionDisabled =
     !selectedListing ||
     selectedListingReadonly ||
-    !activeWallet ||
+    !connectedWallet ||
     userOwnsSelectedListing ||
     selectedListing.status !== "active";
 
@@ -488,8 +470,8 @@ const MarketplacePage: NextPage = () => {
     ? "Unavailable"
     : selectedListingReadonly
     ? "Purchased"
-    : !activeWallet
-    ? "Connect wallet to buy"
+    : !connectedWallet
+    ? "Connect MetaMask to buy"
     : userOwnsSelectedListing
     ? "Your listing"
     : selectedListing.status !== "active"
@@ -575,11 +557,29 @@ const MarketplacePage: NextPage = () => {
           {tab === "gallery" && (
             <>
               <div className="marketplace-wallet-strip">
-                <div>
+                <div className="wallet-status-copy-block">
+                  <div className="wallet-status-heading-row">
+                    <span className={`wallet-status-pill wallet-source-${wallet.source}`}>{walletSourceLabel}</span>
+                    {wallet.providerName && <span className="wallet-status-provider">{wallet.providerName}</span>}
+                    {wallet.chainName && (
+                      <span className={`wallet-status-provider${wallet.chainAllowed ? "" : " is-warning"}`}>
+                        {wallet.chainName}
+                      </span>
+                    )}
+                  </div>
                   <div className="marketplace-wallet-label">Active wallet</div>
                   <div className="marketplace-wallet-value">
                     {activeWallet ? activeWallet : "Browse-only mode"}
                   </div>
+                  <p className="wallet-status-note">
+                    {wallet.error?.message ||
+                      wallet.message ||
+                      (wallet.source === "connected"
+                        ? "Gallery purchases use your connected wallet for signatures. Generator outputs may still belong to the env submission wallet."
+                        : wallet.source === "env"
+                        ? "Browsing and wallet views can use the fallback site wallet, but purchases and new gallery listings still require MetaMask signatures."
+                        : "Browse without a wallet. Connect MetaMask to buy listings or create signed gallery actions.")}
+                  </p>
                 </div>
                 <div>
                   <div className="marketplace-wallet-label">Credits</div>
@@ -592,9 +592,9 @@ const MarketplacePage: NextPage = () => {
                     type="button"
                     className="job-action-button secondary"
                     onClick={handleConnectWallet}
-                    disabled={walletLoading}
+                    disabled={wallet.connecting}
                   >
-                    {walletLoading ? "Connecting..." : activeWallet ? "Reconnect Wallet" : "Connect Wallet"}
+                    {connectLabel}
                   </button>
                   {!activeWallet && (
                     <span className="marketplace-wallet-note">
@@ -604,7 +604,6 @@ const MarketplacePage: NextPage = () => {
                 </div>
               </div>
 
-              {walletError && <p className="job-hint error">{walletError}</p>}
               {galleryActionSuccess && <p className="job-hint" style={{ color: "#8ff0b6" }}>{galleryActionSuccess}</p>}
 
               <div className="marketplace-subtabs">
@@ -767,9 +766,9 @@ const MarketplacePage: NextPage = () => {
                   <div className="chart-header">
                     <h3 className="chart-title">My Listings</h3>
                   </div>
-                  {!activeWallet && (
-                    <p className="job-hint">Connect a wallet or configure `NEXT_PUBLIC_HAVNAI_WALLET` to manage listings.</p>
-                  )}
+                    {!activeWallet && (
+                      <p className="job-hint">Connect a wallet or configure `NEXT_PUBLIC_HAVNAI_WALLET` to manage listings.</p>
+                    )}
                   {activeWallet && myListingsLoading && <p className="library-loading">Loading your listings...</p>}
                   {activeWallet && myListingsError && <p className="job-hint error">{myListingsError}</p>}
                   {activeWallet && !myListingsLoading && myListings.length === 0 && (
@@ -815,9 +814,9 @@ const MarketplacePage: NextPage = () => {
                   <div className="chart-header">
                     <h3 className="chart-title">Purchases</h3>
                   </div>
-                  {!activeWallet && (
-                    <p className="job-hint">Connect a wallet or configure `NEXT_PUBLIC_HAVNAI_WALLET` to view purchases.</p>
-                  )}
+                    {!activeWallet && (
+                      <p className="job-hint">Connect a wallet or configure `NEXT_PUBLIC_HAVNAI_WALLET` to view purchases.</p>
+                    )}
                   {activeWallet && purchasesLoading && <p className="library-loading">Loading purchases...</p>}
                   {activeWallet && purchasesError && <p className="job-hint error">{purchasesError}</p>}
                   {activeWallet && !purchasesLoading && purchases.length === 0 && (
@@ -1184,8 +1183,10 @@ const MarketplacePage: NextPage = () => {
                         </a>
                       )}
                     </div>
-                    {!activeWallet && (
-                      <p className="job-hint">Connect a wallet or configure a non-zero app wallet to buy listings.</p>
+                    {!connectedWallet && (
+                      <p className="job-hint">
+                        Connect MetaMask to sign gallery purchases. Fallback env wallets can browse but cannot sign buys.
+                      </p>
                     )}
                     {galleryActionError && <p className="job-hint error">{galleryActionError}</p>}
                   </section>

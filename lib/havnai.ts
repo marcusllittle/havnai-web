@@ -1,6 +1,16 @@
 import type { NextPage } from "next";
 import { getInviteCode } from "./invite";
 import { BrowserProvider, getAddress } from "ethers";
+import {
+  getInjectedProvider,
+  isUsableWallet,
+  normalizeWalletError,
+  readConnectedAccounts,
+  requestAccounts,
+  WALLET,
+  WalletError,
+  ZERO_WALLET,
+} from "./wallet";
 
 // Simple API helper for talking to the HavnAI coordinator.
 // Uses relative URLs so it works behind whatever proxy is fronting the core.
@@ -190,14 +200,6 @@ function getApiBase(): string {
   return envBase || "/api";
 }
 
-// Wallet used when submitting jobs from the /test page.
-// Configure NEXT_PUBLIC_HAVNAI_WALLET in .env.local to point to your real EVM address.
-const ZERO_WALLET = "0x0000000000000000000000000000000000000000";
-const WALLET =
-  process.env.NEXT_PUBLIC_HAVNAI_WALLET && process.env.NEXT_PUBLIC_HAVNAI_WALLET.length > 0
-    ? process.env.NEXT_PUBLIC_HAVNAI_WALLET
-    : ZERO_WALLET;
-
 function apiUrl(path: string): string {
   return `${getApiBase()}${path}`;
 }
@@ -210,13 +212,6 @@ export function resolveAssetUrl(path: string | undefined | null): string | undef
   if (path.startsWith("/api/")) return path;
   // Otherwise, prefix with API_BASE so we hit the coordinator, not the Next dev server.
   return `${getApiBase()}${path}`;
-}
-
-export function isUsableWallet(wallet: string | null | undefined): wallet is string {
-  if (!wallet) return false;
-  const trimmed = wallet.trim();
-  if (!trimmed) return false;
-  return trimmed.toLowerCase() !== ZERO_WALLET.toLowerCase();
 }
 
 function buildHeaders(includeInvite = false): HeadersInit {
@@ -604,46 +599,92 @@ function requireEthereumProvider(): any {
   if (typeof window === "undefined") {
     throw new HavnaiApiError("Wallet connection is only available in the browser.", "wallet_unavailable");
   }
-  const ethereum = (window as any).ethereum;
-  if (!ethereum) {
-    throw new HavnaiApiError("MetaMask not found. Install MetaMask and try again.", "wallet_unavailable");
+  const selection = getInjectedProvider();
+  if (!selection.provider) {
+    const issue =
+      selection.error || new WalletError("wallet_unavailable", "MetaMask not found. Install MetaMask and try again.");
+    throw new HavnaiApiError(issue.message, issue.code);
   }
-  return ethereum;
+  return selection.provider;
 }
 
 export async function getConnectedWallet(): Promise<string | null> {
   if (typeof window === "undefined") return null;
-  const ethereum = (window as any).ethereum;
-  if (!ethereum) return null;
-  const provider = new BrowserProvider(ethereum);
-  const accounts = (await provider.send("eth_accounts", [])) as string[];
-  if (!accounts || accounts.length === 0) return null;
-  return getAddress(accounts[0]);
+  try {
+    const accounts = await readConnectedAccounts();
+    return accounts[0] || null;
+  } catch {
+    return null;
+  }
 }
 
 export async function connectWallet(): Promise<string> {
-  const provider = new BrowserProvider(requireEthereumProvider());
-  const accounts = (await provider.send("eth_requestAccounts", [])) as string[];
-  if (!accounts || accounts.length === 0) {
-    throw new HavnaiApiError("No wallet account returned by MetaMask.", "wallet_unavailable");
+  try {
+    const accounts = await requestAccounts();
+    if (!accounts || accounts.length === 0) {
+      throw new HavnaiApiError("No wallet account returned by MetaMask.", "wallet_unavailable");
+    }
+    return getAddress(accounts[0]);
+  } catch (error) {
+    const issue = normalizeWalletError(error);
+    throw new HavnaiApiError(issue.message, issue.code);
   }
-  return getAddress(accounts[0]);
 }
 
 export async function requestConversionNonce(wallet: string, amount: number): Promise<WalletNonceChallenge> {
+  return requestWalletNonce({
+    wallet,
+    amount,
+    purpose: "convert_credits_to_hai",
+  });
+}
+
+type WalletNoncePurpose = "convert_credits_to_hai" | "gallery_purchase" | "gallery_list";
+
+interface WalletNonceRequest {
+  wallet: string;
+  amount: number;
+  purpose: WalletNoncePurpose;
+  listing_id?: number;
+  job_id?: string;
+}
+
+async function requestWalletNonce(payload: WalletNonceRequest): Promise<WalletNonceChallenge> {
   const res = await fetch(apiUrl("/wallet/nonce"), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({
-      wallet,
-      amount,
-      purpose: "convert_credits_to_hai",
-    }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     throw await parseErrorResponse(res);
   }
   return (await res.json()) as WalletNonceChallenge;
+}
+
+async function signWalletNonce(payload: WalletNonceRequest): Promise<{
+  wallet: string;
+  nonce: string;
+  signature: string;
+}> {
+  const provider = new BrowserProvider(requireEthereumProvider());
+  const signer = await provider.getSigner();
+  const signerWallet = getAddress(await signer.getAddress());
+  if (payload.wallet && signerWallet.toLowerCase() !== payload.wallet.toLowerCase()) {
+    throw new HavnaiApiError(
+      `Connected wallet ${signerWallet} does not match ${payload.wallet}.`,
+      "wallet_mismatch"
+    );
+  }
+  const challenge = await requestWalletNonce({
+    ...payload,
+    wallet: signerWallet,
+  });
+  const signature = await signer.signMessage(challenge.message);
+  return {
+    wallet: signerWallet,
+    nonce: challenge.nonce,
+    signature,
+  };
 }
 
 export async function convertCredits(payload: ConvertCreditsPayload): Promise<CreditConversion> {
@@ -671,8 +712,7 @@ export async function convertCredits(payload: ConvertCreditsPayload): Promise<Cr
 }
 
 export async function convertCreditsWithMetaMask(amount: number, wallet?: string): Promise<CreditConversion> {
-  const ethereum = requireEthereumProvider();
-  const provider = new BrowserProvider(ethereum);
+  const provider = new BrowserProvider(requireEthereumProvider());
   const signer = await provider.getSigner();
   const signerWallet = getAddress(wallet || (await signer.getAddress()));
   const challenge = await requestConversionNonce(signerWallet, amount);
@@ -1147,12 +1187,20 @@ export async function fetchGalleryPurchases(wallet: string = WALLET): Promise<Ga
 }
 
 export async function createGalleryListing(input: CreateGalleryListingInput): Promise<GalleryListing> {
+  const signed = await signWalletNonce({
+    wallet: input.wallet || WALLET,
+    amount: input.price_credits,
+    purpose: "gallery_list",
+    job_id: input.job_id,
+  });
   const res = await fetch(apiUrl("/gallery/listings"), {
     method: "POST",
     headers: buildHeaders(true),
     body: JSON.stringify({
       ...input,
-      wallet: input.wallet || WALLET,
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
     }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
@@ -1162,12 +1210,32 @@ export async function createGalleryListing(input: CreateGalleryListingInput): Pr
 
 export async function purchaseGalleryListing(
   listingId: number,
-  wallet: string = WALLET
+  wallet: string = WALLET,
+  priceCredits?: number
 ): Promise<GalleryPurchaseResponse> {
+  let price = priceCredits;
+  if (!(typeof price === "number" && Number.isFinite(price) && price > 0)) {
+    const detailRes = await fetch(apiUrl(`/gallery/listings/${listingId}`), {
+      headers: buildHeaders(false),
+    });
+    if (!detailRes.ok) throw await parseErrorResponse(detailRes);
+    const detail = await detailRes.json();
+    price = Number(detail?.price_credits || 0);
+  }
+  const signed = await signWalletNonce({
+    wallet,
+    amount: price,
+    purpose: "gallery_purchase",
+    listing_id: listingId,
+  });
   const res = await fetch(apiUrl(`/gallery/listings/${listingId}/purchase`), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet }),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as GalleryPurchaseResponse;
@@ -1212,21 +1280,22 @@ export async function createWorkflow(data: {
   description: string;
   category?: string;
   config: Record<string, any>;
+  wallet?: string;
 }): Promise<Workflow> {
   const res = await fetch(apiUrl("/workflows"), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ ...data, wallet: WALLET }),
+    body: JSON.stringify({ ...data, wallet: data.wallet || WALLET }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as Workflow;
 }
 
-export async function publishWorkflow(id: string): Promise<Workflow> {
+export async function publishWorkflow(id: string, wallet: string = WALLET): Promise<Workflow> {
   const res = await fetch(apiUrl(`/workflows/${encodeURIComponent(id)}/publish`), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet: WALLET }),
+    body: JSON.stringify({ wallet }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as Workflow;
@@ -1243,22 +1312,22 @@ export interface WalletRewards {
   claimed: number;
 }
 
-export async function fetchWalletRewards(): Promise<WalletRewards> {
-  const res = await fetch(apiUrl(`/rewards/claimable?wallet=${encodeURIComponent(WALLET)}`), {
+export async function fetchWalletRewards(wallet: string = WALLET): Promise<WalletRewards> {
+  const res = await fetch(apiUrl(`/rewards/claimable?wallet=${encodeURIComponent(wallet)}`), {
     headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as WalletRewards;
 }
 
-export async function claimRewards(): Promise<{ claimed: number; tx_hash?: string }> {
+export async function claimRewards(wallet: string = WALLET): Promise<{ claimed: number; tx_hash?: string }> {
   const res = await fetch(apiUrl("/rewards/claim"), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet: WALLET }),
+    body: JSON.stringify({ wallet }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return await res.json();
 }
 
-export { WALLET, ZERO_WALLET };
+export { WALLET, ZERO_WALLET, isUsableWallet };

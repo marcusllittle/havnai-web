@@ -1,13 +1,12 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useMemo, useState } from "react";
+import { useWallet } from "../components/WalletProvider";
 import {
   fetchPackages,
   fetchCredits,
   fetchPaymentHistory,
   createCheckout,
-  connectWallet,
-  getConnectedWallet,
   convertCreditsWithMetaMask,
   fetchCreditReference,
   CreditPackage,
@@ -15,9 +14,8 @@ import {
   PaymentRecord,
   CreditReferenceRow,
   HavnaiApiError,
-  isUsableWallet,
-  WALLET,
 } from "../lib/havnai";
+import { formatWalletShort, getConnectButtonLabel } from "../lib/wallet";
 
 const FALLBACK_PACKAGES: CreditPackage[] = [
   { id: "starter", name: "Starter Pack", credits: 50, price_cents: 500, description: "50 credits" },
@@ -47,7 +45,14 @@ function formatOutputCount(referenceId: string, credits: number, cost: number): 
   }
 }
 
+function describeWalletSource(source: "connected" | "env" | "none"): string {
+  if (source === "connected") return "Connected wallet";
+  if (source === "env") return "Fallback site wallet";
+  return "No wallet";
+}
+
 const PricingPage: NextPage = () => {
+  const wallet = useWallet();
   const [navOpen, setNavOpen] = useState(false);
   const [packages, setPackages] = useState<CreditPackage[]>([]);
   const [stripeEnabled, setStripeEnabled] = useState(false);
@@ -60,7 +65,7 @@ const PricingPage: NextPage = () => {
 
   const [balance, setBalance] = useState<CreditBalance | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
-  const [walletLoading, setWalletLoading] = useState(true);
+  const [accountLoading, setAccountLoading] = useState(true);
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -68,12 +73,18 @@ const PricingPage: NextPage = () => {
   const [convertMessage, setConvertMessage] = useState<string | null>(null);
   const [convertError, setConvertError] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
-  const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
-  const [connectingWallet, setConnectingWallet] = useState(false);
 
-  const envWallet = isUsableWallet(WALLET) ? WALLET : null;
-  const activeWallet = isUsableWallet(connectedWallet) ? connectedWallet : envWallet;
+  const activeWallet = wallet.activeWallet;
+  const connectedWallet = wallet.connectedWallet;
   const referencePackages = packages.length > 0 ? packages : FALLBACK_PACKAGES;
+  const connectLabel = getConnectButtonLabel(wallet);
+  const walletSourceLabel = describeWalletSource(wallet.source);
+  const walletStatusCopy =
+    wallet.source === "connected"
+      ? "Credit purchases and balance/history use your connected MetaMask wallet."
+      : wallet.source === "env"
+      ? "The site is currently using NEXT_PUBLIC_HAVNAI_WALLET as a fallback identity for purchases and balance/history."
+      : "Connect MetaMask or configure NEXT_PUBLIC_HAVNAI_WALLET to enable wallet-aware actions.";
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -84,26 +95,6 @@ const PricingPage: NextPage = () => {
       setError("Payment was cancelled.");
       window.history.replaceState({}, "", "/pricing");
     }
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    const detectWallet = async () => {
-      try {
-        const wallet = await getConnectedWallet();
-        if (active) {
-          setConnectedWallet(isUsableWallet(wallet) ? wallet : null);
-        }
-      } catch {
-        if (active) {
-          setConnectedWallet(null);
-        }
-      }
-    };
-    detectWallet();
-    return () => {
-      active = false;
-    };
   }, []);
 
   useEffect(() => {
@@ -161,11 +152,11 @@ const PricingPage: NextPage = () => {
   useEffect(() => {
     let active = true;
     const loadWalletData = async () => {
-      setWalletLoading(true);
+      setAccountLoading(true);
       if (!activeWallet) {
         setBalance(null);
         setPayments([]);
-        setWalletLoading(false);
+        setAccountLoading(false);
         return;
       }
       try {
@@ -185,7 +176,7 @@ const PricingPage: NextPage = () => {
           setPayments([]);
         }
       } finally {
-        if (active) setWalletLoading(false);
+        if (active) setAccountLoading(false);
       }
     };
     loadWalletData();
@@ -195,22 +186,20 @@ const PricingPage: NextPage = () => {
   }, [activeWallet, successMessage]);
 
   const handleConnectWallet = async () => {
-    setConnectingWallet(true);
     setConvertError(null);
     setError(null);
     try {
-      const wallet = await connectWallet();
-      setConnectedWallet(wallet);
+      await wallet.connect();
     } catch (err: any) {
       const message =
         err instanceof HavnaiApiError
+          ? err.message
+          : err instanceof Error
           ? err.message
           : typeof err?.message === "string"
           ? err.message
           : "Wallet connection failed.";
       setConvertError(message);
-    } finally {
-      setConnectingWallet(false);
     }
   };
 
@@ -362,7 +351,35 @@ const PricingPage: NextPage = () => {
             </div>
           )}
 
-          {walletLoading && activeWallet && <div className="pricing-loading">Loading wallet data...</div>}
+          <div className="wallet-status-card">
+            <div className="wallet-status-copy-block">
+              <div className="wallet-status-heading-row">
+                <span className={`wallet-status-pill wallet-source-${wallet.source}`}>{walletSourceLabel}</span>
+                {wallet.providerName && <span className="wallet-status-provider">{wallet.providerName}</span>}
+                {wallet.chainName && (
+                  <span className={`wallet-status-provider${wallet.chainAllowed ? "" : " is-warning"}`}>
+                    {wallet.chainName}
+                  </span>
+                )}
+              </div>
+              <div className="wallet-status-address">
+                {activeWallet ? activeWallet : "No wallet connected"}
+              </div>
+              <p className="wallet-status-note">{wallet.error?.message || wallet.message || walletStatusCopy}</p>
+            </div>
+            <div className="wallet-status-actions">
+              <button
+                type="button"
+                className="job-action-button secondary"
+                onClick={handleConnectWallet}
+                disabled={wallet.connecting || converting}
+              >
+                {connectLabel}
+              </button>
+            </div>
+          </div>
+
+          {accountLoading && activeWallet && <div className="pricing-loading">Loading wallet data...</div>}
           {successMessage && <div className="pricing-alert pricing-alert-success">{successMessage}</div>}
           {error && <div className="pricing-alert pricing-alert-error">{error}</div>}
 
@@ -371,7 +388,7 @@ const PricingPage: NextPage = () => {
               Purchase destination: <code>{packageDestination}</code>
             </p>
             <p className="pricing-wallet-note">
-              Credit purchases and balance/history use the active wallet above. Generator submissions still use{" "}
+              {walletStatusCopy} Generator submissions still use{" "}
               <code>NEXT_PUBLIC_HAVNAI_WALLET</code>.
             </p>
           </div>
@@ -491,12 +508,8 @@ const PricingPage: NextPage = () => {
             <h3>Convert credits to $HAI</h3>
             <p>Convert your unused credits into $HAI tokens.</p>
             <div className="convert-wallet-row">
-              <button type="button" onClick={handleConnectWallet} disabled={connectingWallet || converting}>
-                {connectedWallet
-                  ? `Connected: ${connectedWallet.slice(0, 6)}...${connectedWallet.slice(-4)}`
-                  : connectingWallet
-                  ? "Connecting..."
-                  : "Connect Wallet"}
+              <button type="button" onClick={handleConnectWallet} disabled={wallet.connecting || converting}>
+                {connectedWallet ? `Connected: ${formatWalletShort(connectedWallet)}` : connectLabel}
               </button>
             </div>
             <div className="convert-controls">
@@ -513,7 +526,9 @@ const PricingPage: NextPage = () => {
               </button>
             </div>
             {!connectedWallet && (
-              <p className="convert-note">Connect MetaMask to sign conversion requests.</p>
+              <p className="convert-note">
+                Connect MetaMask to sign conversion requests. Fallback env wallets cannot sign them.
+              </p>
             )}
             {convertMessage && <p className="convert-message">{convertMessage}</p>}
             {convertError && <p className="convert-error">{convertError}</p>}
