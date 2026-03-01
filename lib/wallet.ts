@@ -1,4 +1,4 @@
-import { BrowserProvider, getAddress } from "ethers";
+import { getAddress } from "ethers";
 
 export const ZERO_WALLET = "0x0000000000000000000000000000000000000000";
 export const WALLET =
@@ -281,15 +281,13 @@ function chainAllowed(chainId?: string): boolean {
 
 export async function readConnectedAccounts(provider?: InjectedProvider | null): Promise<string[]> {
   const injected = requireProvider(provider);
-  const browserProvider = new BrowserProvider(injected as any);
-  const accounts = await browserProvider.send("eth_accounts", []);
+  const accounts = await injected.request({ method: "eth_accounts" });
   return normalizeAccounts(accounts);
 }
 
 export async function requestAccounts(provider?: InjectedProvider | null): Promise<string[]> {
   const injected = requireProvider(provider);
-  const browserProvider = new BrowserProvider(injected as any);
-  const accounts = await browserProvider.send("eth_requestAccounts", []);
+  const accounts = await injected.request({ method: "eth_requestAccounts" });
   return normalizeAccounts(accounts);
 }
 
