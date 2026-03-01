@@ -1,6 +1,8 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useCallback, useEffect, useState } from "react";
+import { WalletButton } from "../components/WalletButton";
+import { useWallet } from "../lib/WalletContext";
 import {
   fetchGallery,
   purchaseGalleryListingWithMetaMask,
@@ -8,7 +10,6 @@ import {
   resolveAssetUrl,
   GalleryListing,
   ResultResponse,
-  WALLET,
 } from "../lib/havnai";
 import { getApiBase } from "../lib/apiBase";
 
@@ -18,6 +19,7 @@ type TypeFilter = "all" | "image" | "video";
 const CATEGORIES = ["All", "Portrait", "Landscape", "Abstract", "Cinematic", "Anime", "Other"];
 
 const MarketplacePage: NextPage = () => {
+  const { address } = useWallet();
   const [navOpen, setNavOpen] = useState(false);
   const [listings, setListings] = useState<GalleryListing[]>([]);
   const [total, setTotal] = useState(0);
@@ -170,6 +172,7 @@ const MarketplacePage: NextPage = () => {
             <a href="/nodes">Nodes</a>
             <a href="/marketplace" className="nav-active">Marketplace</a>
             <a href="/join" className="nav-primary">Join</a>
+            <WalletButton />
           </nav>
         </div>
       </header>
@@ -393,13 +396,13 @@ const MarketplacePage: NextPage = () => {
                           <button
                             type="button"
                             className="job-action-button"
-                            disabled={purchasing || selected.seller_wallet.toLowerCase() === WALLET.toLowerCase()}
+                            disabled={purchasing || (!!address && selected.seller_wallet.toLowerCase() === address.toLowerCase())}
                             onClick={handlePurchase}
                             style={{ width: "100%" }}
                           >
                             {purchasing
                               ? "Processing..."
-                              : selected.seller_wallet.toLowerCase() === WALLET.toLowerCase()
+                              : address && selected.seller_wallet.toLowerCase() === address.toLowerCase()
                               ? "Your Listing"
                               : `Buy for ${selected.price_credits} Credits`}
                           </button>

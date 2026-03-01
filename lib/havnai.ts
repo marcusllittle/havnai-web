@@ -179,12 +179,27 @@ function getApiBase(): string {
   return envBase || "/api";
 }
 
-// Wallet used when submitting jobs from the /test page.
-// Configure NEXT_PUBLIC_HAVNAI_WALLET in .env.local to point to your real EVM address.
-const WALLET =
+// Fallback wallet from env — used when no MetaMask wallet is connected.
+const FALLBACK_WALLET =
   process.env.NEXT_PUBLIC_HAVNAI_WALLET && process.env.NEXT_PUBLIC_HAVNAI_WALLET.length > 0
     ? process.env.NEXT_PUBLIC_HAVNAI_WALLET
     : "0x0000000000000000000000000000000000000000";
+
+// Module-level active wallet — set by WalletContext when user connects MetaMask.
+let _activeWallet: string | null = null;
+
+/** Called by WalletContext to set the active wallet for all API calls. */
+export function setActiveWallet(address: string | null) {
+  _activeWallet = address;
+}
+
+/** Returns the currently active wallet (MetaMask-connected or env fallback). */
+function getWallet(): string {
+  return _activeWallet || FALLBACK_WALLET;
+}
+
+// Keep WALLET export for backward compatibility — returns the env fallback.
+const WALLET = FALLBACK_WALLET;
 
 function apiUrl(path: string): string {
   return `${getApiBase()}${path}`;
@@ -241,7 +256,7 @@ export async function submitAutoJob(
       : "auto";
 
   const body: Record<string, any> = {
-    wallet: WALLET,
+    wallet: getWallet(),
     model,
     prompt,
   };
@@ -291,7 +306,7 @@ export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<strin
     request.model && request.model.trim().length > 0 ? request.model.trim() : "epicrealismXL_vxviiCrystalclear";
 
   const body: Record<string, any> = {
-    wallet: WALLET,
+    wallet: getWallet(),
     model,
     prompt: request.prompt || "",
     base_image_url: request.baseImageUrl,
@@ -326,7 +341,7 @@ export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<strin
 export async function submitWanVideoJob(request: WanVideoRequest): Promise<string> {
   const body: Record<string, any> = {
     prompt: request.prompt,
-    wallet: WALLET,
+    wallet: getWallet(),
   };
   if (request.negativePrompt) body.negative_prompt = request.negativePrompt;
   if (request.motionType) body.motion_type = request.motionType;
@@ -366,7 +381,7 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   }
 
   const body: Record<string, any> = {
-    wallet: WALLET,
+    wallet: getWallet(),
     model,
     prompt: request.prompt,
   };
@@ -515,7 +530,8 @@ export async function fetchQuota(): Promise<QuotaStatus> {
   return (await res.json()) as QuotaStatus;
 }
 
-export async function fetchCredits(wallet: string = WALLET): Promise<CreditBalance> {
+export async function fetchCredits(wallet?: string): Promise<CreditBalance> {
+  wallet = wallet || getWallet();
   const res = await fetch(apiUrl(`/credits/balance?wallet=${encodeURIComponent(wallet)}`), {
     headers: buildHeaders(false),
   });
@@ -697,7 +713,7 @@ export async function createCheckout(packageId: string): Promise<CheckoutRespons
     method: "POST",
     headers: buildHeaders(false),
     body: JSON.stringify({
-      wallet: WALLET,
+      wallet: getWallet(),
       package_id: packageId,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -709,7 +725,8 @@ export async function createCheckout(packageId: string): Promise<CheckoutRespons
   return (await res.json()) as CheckoutResponse;
 }
 
-export async function fetchPaymentHistory(wallet: string = WALLET): Promise<PaymentRecord[]> {
+export async function fetchPaymentHistory(wallet?: string): Promise<PaymentRecord[]> {
+  wallet = wallet || getWallet();
   const res = await fetch(
     apiUrl(`/payments/history?wallet=${encodeURIComponent(wallet)}`),
     { headers: buildHeaders(false) }
@@ -778,7 +795,7 @@ export async function fetchAnalyticsJobs(days = 30): Promise<AnalyticsJobsRespon
 
 export async function fetchAnalyticsCosts(days = 30): Promise<AnalyticsCostsResponse> {
   const res = await fetch(
-    apiUrl(`/analytics/costs?days=${days}&wallet=${encodeURIComponent(WALLET)}`),
+    apiUrl(`/analytics/costs?days=${days}&wallet=${encodeURIComponent(getWallet())}`),
     { headers: buildHeaders(true) }
   );
   if (!res.ok) throw await parseErrorResponse(res);
@@ -967,7 +984,7 @@ export async function createWorkflow(data: {
   const res = await fetch(apiUrl("/workflows"), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ ...data, wallet: WALLET }),
+    body: JSON.stringify({ ...data, wallet: getWallet() }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as Workflow;
@@ -977,7 +994,7 @@ export async function publishWorkflow(id: string): Promise<Workflow> {
   const res = await fetch(apiUrl(`/workflows/${encodeURIComponent(id)}/publish`), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet: WALLET }),
+    body: JSON.stringify({ wallet: getWallet() }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as Workflow;
@@ -995,7 +1012,7 @@ export interface WalletRewards {
 }
 
 export async function fetchWalletRewards(): Promise<WalletRewards> {
-  const res = await fetch(apiUrl(`/rewards/claimable?wallet=${encodeURIComponent(WALLET)}`), {
+  const res = await fetch(apiUrl(`/rewards/claimable?wallet=${encodeURIComponent(getWallet())}`), {
     headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
@@ -1006,7 +1023,7 @@ export async function claimRewards(): Promise<{ claimed: number; tx_hash?: strin
   const res = await fetch(apiUrl("/rewards/claim"), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet: WALLET }),
+    body: JSON.stringify({ wallet: getWallet() }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return await res.json();
@@ -1107,7 +1124,7 @@ export async function createGalleryListing(data: {
   const res = await fetch(apiUrl("/gallery/listings"), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ ...data, wallet: WALLET }),
+    body: JSON.stringify({ ...data, wallet: getWallet() }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as GalleryListing;
@@ -1123,7 +1140,7 @@ export async function createGalleryListingWithMetaMask(data: {
   const ethereum = requireEthereumProvider();
   const provider = new BrowserProvider(ethereum);
   const signer = await provider.getSigner();
-  const signerWallet = getAddress(WALLET || (await signer.getAddress()));
+  const signerWallet = getAddress(getWallet() || (await signer.getAddress()));
   const challenge = await requestGalleryNonce(
     signerWallet, data.price_credits, "gallery_list", { job_id: data.job_id },
   );
@@ -1142,7 +1159,7 @@ export async function purchaseGalleryListing(
   const res = await fetch(apiUrl(`/gallery/listings/${listingId}/purchase`), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet: WALLET, nonce: opts.nonce, signature: opts.signature }),
+    body: JSON.stringify({ wallet: getWallet(), nonce: opts.nonce, signature: opts.signature }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as GalleryPurchaseResponse;
@@ -1155,7 +1172,7 @@ export async function purchaseGalleryListingWithMetaMask(
   const ethereum = requireEthereumProvider();
   const provider = new BrowserProvider(ethereum);
   const signer = await provider.getSigner();
-  const signerWallet = getAddress(WALLET || (await signer.getAddress()));
+  const signerWallet = getAddress(getWallet() || (await signer.getAddress()));
   const challenge = await requestGalleryNonce(
     signerWallet, price, "gallery_purchase", { listing_id: listingId },
   );
@@ -1170,7 +1187,7 @@ export async function delistGalleryListing(listingId: number): Promise<void> {
   const res = await fetch(apiUrl(`/gallery/listings/${listingId}`), {
     method: "DELETE",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet: WALLET }),
+    body: JSON.stringify({ wallet: getWallet() }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
 }
@@ -1178,7 +1195,7 @@ export async function delistGalleryListing(listingId: number): Promise<void> {
 export async function fetchMyGalleryListings(
   includeSold = false
 ): Promise<{ listings: GalleryListing[] }> {
-  const params = new URLSearchParams({ wallet: WALLET });
+  const params = new URLSearchParams({ wallet: getWallet() });
   if (includeSold) params.set("include_sold", "true");
   const res = await fetch(apiUrl(`/gallery/my-listings?${params}`), {
     headers: buildHeaders(false),

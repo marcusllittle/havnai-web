@@ -1,12 +1,13 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { WalletButton } from "../components/WalletButton";
+import { useWallet } from "../lib/WalletContext";
 import {
   fetchMarketplace,
   createWorkflow,
   publishWorkflow,
   Workflow,
-  WALLET,
 } from "../lib/havnai";
 
 type ViewMode = "browse" | "create";
@@ -14,6 +15,7 @@ type ViewMode = "browse" | "create";
 const CATEGORIES = ["All", "Image Generation", "Video Generation", "Face Swap", "Upscaling", "Style Transfer", "Other"];
 
 const MarketplacePage: NextPage = () => {
+  const { address } = useWallet();
   const [navOpen, setNavOpen] = useState(false);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [total, setTotal] = useState(0);
@@ -111,6 +113,7 @@ const MarketplacePage: NextPage = () => {
             <a href="/marketplace">Marketplace</a>
             <a href="/templates" className="nav-active">Templates</a>
             <a href="/join" className="nav-primary">Join</a>
+            <WalletButton />
           </nav>
         </div>
       </header>

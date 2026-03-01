@@ -1,6 +1,7 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useState } from "react";
+import { WalletButton } from "../components/WalletButton";
 import {
   fetchAnalyticsOverview,
   fetchAnalyticsJobs,
@@ -64,6 +65,7 @@ const AnalyticsPage: NextPage = () => {
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
             <a href="/join" className="nav-primary">Join</a>
+            <WalletButton />
           </nav>
         </div>
       </header>

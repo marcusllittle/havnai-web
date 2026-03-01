@@ -1,19 +1,18 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useState } from "react";
+import { WalletButton } from "../components/WalletButton";
+import { useWallet } from "../lib/WalletContext";
 import {
   fetchPackages,
   fetchCredits,
   fetchPaymentHistory,
   createCheckout,
-  connectWallet,
-  getConnectedWallet,
   convertCreditsWithMetaMask,
   CreditPackage,
   CreditBalance,
   PaymentRecord,
   HavnaiApiError,
-  WALLET,
 } from "../lib/havnai";
 
 /** Wrap a promise with a timeout so it can't hang forever. */
@@ -27,6 +26,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 const PricingPage: NextPage = () => {
+  const { address: connectedWallet, connect: handleConnectWallet, connecting: connectingWallet } = useWallet();
   const [navOpen, setNavOpen] = useState(false);
   const [packages, setPackages] = useState<CreditPackage[]>([]);
   const [stripeEnabled, setStripeEnabled] = useState(false);
@@ -41,35 +41,6 @@ const PricingPage: NextPage = () => {
   const [convertMessage, setConvertMessage] = useState<string | null>(null);
   const [convertError, setConvertError] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
-  const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
-  const [connectingWallet, setConnectingWallet] = useState(false);
-
-  const activeWallet = connectedWallet || WALLET;
-
-  const handleConnectWallet = async () => {
-    setConnectingWallet(true);
-    setConvertError(null);
-    try {
-      const wallet = await connectWallet();
-      setConnectedWallet(wallet);
-      const [updatedBalance, updatedPayments] = await Promise.allSettled([
-        fetchCredits(wallet),
-        fetchPaymentHistory(wallet),
-      ]);
-      if (updatedBalance.status === "fulfilled") setBalance(updatedBalance.value);
-      if (updatedPayments.status === "fulfilled") setPayments(updatedPayments.value);
-    } catch (err: any) {
-      const message =
-        err instanceof HavnaiApiError
-          ? err.message
-          : typeof err?.message === "string"
-          ? err.message
-          : "Wallet connection failed.";
-      setConvertError(message);
-    } finally {
-      setConnectingWallet(false);
-    }
-  };
 
   const handleConvert = async () => {
     if (!convertAmount || convertAmount <= 0) {
@@ -119,20 +90,10 @@ const PricingPage: NextPage = () => {
       setLoading(true);
       setLoadError(false);
 
-      // Detect wallet but don't let it block the rest of the page
-      let detectedWallet: string | null = null;
-      try {
-        detectedWallet = await withTimeout(getConnectedWallet(), 3000);
-        if (detectedWallet) setConnectedWallet(detectedWallet);
-      } catch {
-        // MetaMask unavailable or timed out — that's fine
-      }
-
-      const walletForQueries = detectedWallet || WALLET;
       const [pkgRes, balRes, histRes] = await Promise.allSettled([
         withTimeout(fetchPackages(), 8000),
-        withTimeout(fetchCredits(walletForQueries), 8000),
-        withTimeout(fetchPaymentHistory(walletForQueries), 8000),
+        withTimeout(fetchCredits(), 8000),
+        withTimeout(fetchPaymentHistory(), 8000),
       ]);
 
       if (pkgRes.status === "fulfilled") {
@@ -147,7 +108,7 @@ const PricingPage: NextPage = () => {
       setLoading(false);
     }
     load();
-  }, []);
+  }, [connectedWallet]);
 
   const handleBuy = async (pkg: CreditPackage) => {
     setBuyingId(pkg.id);
@@ -198,6 +159,7 @@ const PricingPage: NextPage = () => {
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
             <a href="/join" className="nav-primary">Join</a>
+            <WalletButton />
           </nav>
         </div>
       </header>
@@ -395,7 +357,7 @@ const PricingPage: NextPage = () => {
           {/* Wallet info */}
           <div className="pricing-wallet-info">
             <p>
-              Wallet: <code>{activeWallet}</code>
+              Wallet: <code>{connectedWallet || "Not connected"}</code>
             </p>
           </div>
         </section>

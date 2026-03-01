@@ -3,6 +3,7 @@ import Head from "next/head";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { fetchNodes, fetchLeaderboard, NodeInfo, LeaderboardEntry } from "../lib/havnai";
 import { getNodeSSE, SSEEvent } from "../lib/sse";
+import { WalletButton } from "../components/WalletButton";
 
 type ViewMode = "grid" | "leaderboard";
 
@@ -111,6 +112,7 @@ const NodesPage: NextPage = () => {
             <a href="/nodes" className="nav-active">Nodes</a>
             <a href="/marketplace">Marketplace</a>
             <a href="/join" className="nav-primary">Join</a>
+            <WalletButton />
           </nav>
         </div>
       </header>

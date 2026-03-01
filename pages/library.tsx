@@ -2,6 +2,7 @@ import type { NextPage } from "next";
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
+import { WalletButton } from "../components/WalletButton";
 import { downloadAsset } from "../lib/download";
 import {
   fetchJob,
@@ -398,6 +399,7 @@ const LibraryPage: NextPage = () => {
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
             <a href="/join" className="nav-primary">Join</a>
+            <WalletButton />
           </nav>
         </div>
       </header>
