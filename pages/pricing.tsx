@@ -2,6 +2,7 @@ import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useMemo, useState } from "react";
 import { useWallet } from "../components/WalletProvider";
+import { getApiBase } from "../lib/apiBase";
 import {
   fetchPackages,
   fetchCredits,
@@ -54,6 +55,7 @@ function describeWalletSource(source: "connected" | "env" | "none"): string {
 const PricingPage: NextPage = () => {
   const wallet = useWallet();
   const [navOpen, setNavOpen] = useState(false);
+  const apiBase = getApiBase();
   const [packages, setPackages] = useState<CreditPackage[]>([]);
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const [packagesLoading, setPackagesLoading] = useState(true);
@@ -317,16 +319,16 @@ const PricingPage: NextPage = () => {
             aria-label="Primary navigation"
           >
             <a href="/#home">Home</a>
-            <a href="/test">Generator</a>
+            <a href="/generator">Generator</a>
             <a href="/library">My Library</a>
-            <a href="/api/dashboard" target="_blank" rel="noreferrer">
+            <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">
               Dashboard
             </a>
             <a href="/pricing" className="nav-active">Buy Credits</a>
             <a href="/analytics">Analytics</a>
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
-            <a href="#join">Join Alpha</a>
+            <a href="/join">Join Alpha</a>
           </nav>
         </div>
       </header>

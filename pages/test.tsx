@@ -1293,7 +1293,7 @@ const TestPage: React.FC = () => {
             <a href="/">Home</a>
             <a href="/#how">How It Works</a>
             <a href="/#models">Models</a>
-            <a href="/test" className="nav-active">Generator</a>
+            <a href="/generator" className="nav-active">Generator</a>
             <a href="/library">My Library</a>
             <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">
               Dashboard

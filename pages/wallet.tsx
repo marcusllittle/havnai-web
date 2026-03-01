@@ -77,7 +77,7 @@ const WalletPage: NextPage = () => {
           </button>
           <nav className={`nav-links ${navOpen ? "nav-open" : ""}`}>
             <a href="/#home">Home</a>
-            <a href="/test">Generator</a>
+            <a href="/generator">Generator</a>
             <a href="/library">My Library</a>
             <a href="/pricing">Buy Credits</a>
             <a href="/analytics">Analytics</a>
