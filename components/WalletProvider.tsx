@@ -13,6 +13,7 @@ import {
 
 interface WalletContextValue extends WalletSnapshot {
   connect: () => Promise<string | null>;
+  disconnect: () => void;
   refresh: () => Promise<void>;
   dismissError: () => void;
 }
@@ -163,6 +164,18 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       status: snapshot.connectedWallet ? "connected" : envWallet ? "fallback" : "idle",
     });
   }, [envWallet, patchSnapshot, snapshot.connectedWallet]);
+
+  const disconnect = useCallback(() => {
+    clearConnectTimers();
+    connectPromiseRef.current = null;
+    patchSnapshot({
+      connectedWallet: null,
+      error: null,
+      message: envWallet ? "Using the fallback site wallet for env-based actions." : undefined,
+      connecting: false,
+      status: envWallet ? "fallback" : "idle",
+    });
+  }, [clearConnectTimers, envWallet, patchSnapshot]);
 
   const connect = useCallback(async () => {
     const selection = getInjectedProvider();
@@ -348,9 +361,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const value = useMemo<WalletContextValue>(() => ({
     ...snapshot,
     connect,
+    disconnect,
     refresh,
     dismissError,
-  }), [connect, dismissError, refresh, snapshot]);
+  }), [connect, disconnect, dismissError, refresh, snapshot]);
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 };

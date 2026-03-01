@@ -1208,6 +1208,12 @@ export async function createGalleryListing(input: CreateGalleryListingInput): Pr
   return normalizeGalleryListing(data);
 }
 
+export async function createGalleryListingWithMetaMask(
+  input: Omit<CreateGalleryListingInput, "wallet"> & { wallet?: string }
+): Promise<GalleryListing> {
+  return createGalleryListing(input);
+}
+
 export async function purchaseGalleryListing(
   listingId: number,
   wallet: string = WALLET,

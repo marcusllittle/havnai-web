@@ -1,6 +1,7 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useState } from "react";
+import { WalletButton } from "../components/WalletButton";
 import {
   fetchAnalyticsOverview,
   fetchAnalyticsJobs,
@@ -48,21 +49,23 @@ const AnalyticsPage: NextPage = () => {
           <a href="/#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
-              <span className="brand-stage">Stage 6 + 7 Alpha</span>
+              <span className="brand-stage">Public Beta</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
           <button type="button" className={`nav-toggle ${navOpen ? "nav-open" : ""}`} aria-label="Toggle navigation" onClick={() => setNavOpen((o) => !o)}>
             <span /><span />
           </button>
-          <nav className={`nav-links ${navOpen ? "nav-open" : ""}`}>
+          <nav className={`nav-links ${navOpen ? "nav-open" : ""}`} onClick={() => setNavOpen(false)}>
             <a href="/#home">Home</a>
-            <a href="/test">Generator</a>
+            <a href="/generator">Generator</a>
             <a href="/library">My Library</a>
             <a href="/pricing">Buy Credits</a>
             <a href="/analytics" className="nav-active">Analytics</a>
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
+            <a href="/join" className="nav-primary">Join</a>
+            <WalletButton />
           </nav>
         </div>
       </header>
@@ -103,7 +106,7 @@ const AnalyticsPage: NextPage = () => {
               </div>
               <div className="stat-card">
                 <div className="stat-label">Success Rate</div>
-                <div className="stat-value">{((overview.success_rate ?? 0) * 100).toFixed(1)}%</div>
+                <div className="stat-value">{(overview.success_rate ?? 0).toFixed(1)}%</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Active Nodes</div>
