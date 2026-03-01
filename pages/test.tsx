@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useWallet } from "../components/WalletProvider";
 import { HavnAIPrompt } from "../components/HavnAIPrompt";
 import { HavnAIButton } from "../components/HavnAIButton";
 import { StatusBox } from "../components/StatusBox";
@@ -27,7 +28,7 @@ import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
 import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 import { getJobSSE, SSEEvent } from "../lib/sse";
 import { getApiBase } from "../lib/apiBase";
-import { WalletButton } from "../components/WalletButton";
+import { getConnectButtonLabel } from "../lib/wallet";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
@@ -93,6 +94,7 @@ const pickPreferredVideoModel = (models: { id: string; label: string }[]): strin
 };
 
 const TestPage: React.FC = () => {
+  const wallet = useWallet();
   const [mode, setMode] = useState<GeneratorMode>("image");
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
@@ -158,6 +160,7 @@ const TestPage: React.FC = () => {
   const [quotaError, setQuotaError] = useState<string | undefined>();
   const [credits, setCredits] = useState<CreditBalance | null>(null);
   const inviteSaved = Boolean(savedInviteCode);
+  const connectLabel = getConnectButtonLabel(wallet);
   const imagePrefillKeyRef = useRef<string>("");
   const videoPrefillKeyRef = useRef<string>("");
   const faceSwapPrefillKeyRef = useRef<string>("");
@@ -522,7 +525,13 @@ const TestPage: React.FC = () => {
   // Fetch credit balance on mount and after each job completes
   useEffect(() => {
     let cancelled = false;
-    fetchCredits()
+    if (!wallet.envWallet) {
+      setCredits(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+    fetchCredits(wallet.envWallet)
       .then((data) => {
         if (!cancelled) setCredits(data);
       })
@@ -531,7 +540,7 @@ const TestPage: React.FC = () => {
         if (!cancelled) setCredits(null);
       });
     return () => { cancelled = true; };
-  }, [loading]); // re-fetch when loading toggles (i.e. after a job finishes)
+  }, [loading, wallet.envWallet]); // re-fetch when loading toggles (i.e. after a job finishes)
 
   const saveHistory = (items: HistoryItem[]) => {
     setHistory(items);
@@ -1272,7 +1281,7 @@ const TestPage: React.FC = () => {
           <a href="#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
-              <span className="brand-stage">Public Beta</span>
+              <span className="brand-stage">Stage 6 → 7 Alpha</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
@@ -1281,15 +1290,18 @@ const TestPage: React.FC = () => {
             <span />
           </button>
           <nav className="nav-links" id="primaryNav">
-            <a href="/#home">Home</a>
-            <a href="/generator" className="nav-active">Generator</a>
+            <a href="/">Home</a>
+            <a href="/#how">How It Works</a>
+            <a href="/#models">Models</a>
+            <a href="/test" className="nav-active">Generator</a>
             <a href="/library">My Library</a>
+            <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">
+              Dashboard
+            </a>
             <a href="/pricing">Buy Credits</a>
             <a href="/analytics">Analytics</a>
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
-            <a href="/join" className="nav-primary">Join</a>
-            <WalletButton />
           </nav>
         </div>
       </header>
@@ -1369,6 +1381,34 @@ const TestPage: React.FC = () => {
                       Credits: {credits.balance.toFixed(1)}
                     </div>
                   )}
+                  <div className="generator-wallet-summary">
+                    <div className="generator-wallet-copy">
+                      <span className={`wallet-status-pill wallet-source-${wallet.source}`}>
+                        {wallet.source === "connected"
+                          ? "Connected wallet"
+                          : wallet.source === "env"
+                          ? "Fallback site wallet"
+                          : "No wallet"}
+                      </span>
+                      <p className="generator-help" style={{ marginTop: "0.5rem" }}>
+                        Submission wallet:{" "}
+                        <strong>{wallet.envWallet || "Not configured"}</strong>
+                      </p>
+                      <p className="generator-help">
+                        {wallet.error?.message ||
+                          wallet.message ||
+                          "Generator jobs still submit under NEXT_PUBLIC_HAVNAI_WALLET in this alpha. A connected MetaMask wallet does not change job ownership yet."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="generator-mini-button"
+                      onClick={() => void wallet.connect()}
+                      disabled={wallet.connecting}
+                    >
+                      {connectLabel}
+                    </button>
+                  </div>
                   <button
                     type="button"
                     className="invite-toggle"
@@ -1985,6 +2025,11 @@ const TestPage: React.FC = () => {
         result={drawerResult}
         loading={drawerLoading}
         error={drawerError}
+        marketplace={{
+          wallet: wallet.activeWallet,
+          canSign: Boolean(wallet.connectedWallet),
+          source: wallet.source,
+        }}
         onClose={() => setDrawerOpen(false)}
       />
     </>

@@ -1,6 +1,16 @@
 import type { NextPage } from "next";
 import { getInviteCode } from "./invite";
 import { BrowserProvider, getAddress } from "ethers";
+import {
+  getInjectedProvider,
+  isUsableWallet,
+  normalizeWalletError,
+  readConnectedAccounts,
+  requestAccounts,
+  WALLET,
+  WalletError,
+  ZERO_WALLET,
+} from "./wallet";
 
 // Simple API helper for talking to the HavnAI coordinator.
 // Uses relative URLs so it works behind whatever proxy is fronting the core.
@@ -135,6 +145,17 @@ export interface CreditCost {
   credits_enabled: boolean;
 }
 
+export interface CreditReferenceRow {
+  id: string;
+  label: string;
+  credits_per_job: number;
+}
+
+export interface CreditReferenceResponse {
+  credits_enabled: boolean;
+  reference: CreditReferenceRow[];
+}
+
 export class HavnaiApiError extends Error {
   code?: string;
   data?: Record<string, any>;
@@ -178,28 +199,6 @@ function getApiBase(): string {
 
   return envBase || "/api";
 }
-
-// Fallback wallet from env — used when no MetaMask wallet is connected.
-const FALLBACK_WALLET =
-  process.env.NEXT_PUBLIC_HAVNAI_WALLET && process.env.NEXT_PUBLIC_HAVNAI_WALLET.length > 0
-    ? process.env.NEXT_PUBLIC_HAVNAI_WALLET
-    : "0x0000000000000000000000000000000000000000";
-
-// Module-level active wallet — set by WalletContext when user connects MetaMask.
-let _activeWallet: string | null = null;
-
-/** Called by WalletContext to set the active wallet for all API calls. */
-export function setActiveWallet(address: string | null) {
-  _activeWallet = address;
-}
-
-/** Returns the currently active wallet (MetaMask-connected or env fallback). */
-function getWallet(): string {
-  return _activeWallet || FALLBACK_WALLET;
-}
-
-// Keep WALLET export for backward compatibility — returns the env fallback.
-const WALLET = FALLBACK_WALLET;
 
 function apiUrl(path: string): string {
   return `${getApiBase()}${path}`;
@@ -256,7 +255,7 @@ export async function submitAutoJob(
       : "auto";
 
   const body: Record<string, any> = {
-    wallet: getWallet(),
+    wallet: WALLET,
     model,
     prompt,
   };
@@ -306,7 +305,7 @@ export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<strin
     request.model && request.model.trim().length > 0 ? request.model.trim() : "epicrealismXL_vxviiCrystalclear";
 
   const body: Record<string, any> = {
-    wallet: getWallet(),
+    wallet: WALLET,
     model,
     prompt: request.prompt || "",
     base_image_url: request.baseImageUrl,
@@ -341,7 +340,7 @@ export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<strin
 export async function submitWanVideoJob(request: WanVideoRequest): Promise<string> {
   const body: Record<string, any> = {
     prompt: request.prompt,
-    wallet: getWallet(),
+    wallet: WALLET,
   };
   if (request.negativePrompt) body.negative_prompt = request.negativePrompt;
   if (request.motionType) body.motion_type = request.motionType;
@@ -381,7 +380,7 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   }
 
   const body: Record<string, any> = {
-    wallet: getWallet(),
+    wallet: WALLET,
     model,
     prompt: request.prompt,
   };
@@ -530,8 +529,7 @@ export async function fetchQuota(): Promise<QuotaStatus> {
   return (await res.json()) as QuotaStatus;
 }
 
-export async function fetchCredits(wallet?: string): Promise<CreditBalance> {
-  wallet = wallet || getWallet();
+export async function fetchCredits(wallet: string = WALLET): Promise<CreditBalance> {
   const res = await fetch(apiUrl(`/credits/balance?wallet=${encodeURIComponent(wallet)}`), {
     headers: buildHeaders(false),
   });
@@ -553,6 +551,26 @@ export async function fetchCreditCost(model: string, taskType?: string): Promise
     throw await parseErrorResponse(res);
   }
   return (await res.json()) as CreditCost;
+}
+
+export async function fetchCreditReference(): Promise<CreditReferenceResponse> {
+  const res = await fetch(apiUrl("/credits/reference"), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  const data = await res.json();
+  return {
+    credits_enabled: Boolean(data?.credits_enabled),
+    reference: Array.isArray(data?.reference)
+      ? data.reference.map((row: any) => ({
+          id: String(row?.id || ""),
+          label: String(row?.label || ""),
+          credits_per_job: Number(row?.credits_per_job || 0),
+        }))
+      : [],
+  };
 }
 export interface CreditConversion {
   wallet: string;
@@ -581,46 +599,92 @@ function requireEthereumProvider(): any {
   if (typeof window === "undefined") {
     throw new HavnaiApiError("Wallet connection is only available in the browser.", "wallet_unavailable");
   }
-  const ethereum = (window as any).ethereum;
-  if (!ethereum) {
-    throw new HavnaiApiError("MetaMask not found. Install MetaMask and try again.", "wallet_unavailable");
+  const selection = getInjectedProvider();
+  if (!selection.provider) {
+    const issue =
+      selection.error || new WalletError("wallet_unavailable", "MetaMask not found. Install MetaMask and try again.");
+    throw new HavnaiApiError(issue.message, issue.code);
   }
-  return ethereum;
+  return selection.provider;
 }
 
 export async function getConnectedWallet(): Promise<string | null> {
   if (typeof window === "undefined") return null;
-  const ethereum = (window as any).ethereum;
-  if (!ethereum) return null;
-  const provider = new BrowserProvider(ethereum);
-  const accounts = (await provider.send("eth_accounts", [])) as string[];
-  if (!accounts || accounts.length === 0) return null;
-  return getAddress(accounts[0]);
+  try {
+    const accounts = await readConnectedAccounts();
+    return accounts[0] || null;
+  } catch {
+    return null;
+  }
 }
 
 export async function connectWallet(): Promise<string> {
-  const provider = new BrowserProvider(requireEthereumProvider());
-  const accounts = (await provider.send("eth_requestAccounts", [])) as string[];
-  if (!accounts || accounts.length === 0) {
-    throw new HavnaiApiError("No wallet account returned by MetaMask.", "wallet_unavailable");
+  try {
+    const accounts = await requestAccounts();
+    if (!accounts || accounts.length === 0) {
+      throw new HavnaiApiError("No wallet account returned by MetaMask.", "wallet_unavailable");
+    }
+    return getAddress(accounts[0]);
+  } catch (error) {
+    const issue = normalizeWalletError(error);
+    throw new HavnaiApiError(issue.message, issue.code);
   }
-  return getAddress(accounts[0]);
 }
 
 export async function requestConversionNonce(wallet: string, amount: number): Promise<WalletNonceChallenge> {
+  return requestWalletNonce({
+    wallet,
+    amount,
+    purpose: "convert_credits_to_hai",
+  });
+}
+
+type WalletNoncePurpose = "convert_credits_to_hai" | "gallery_purchase" | "gallery_list";
+
+interface WalletNonceRequest {
+  wallet: string;
+  amount: number;
+  purpose: WalletNoncePurpose;
+  listing_id?: number;
+  job_id?: string;
+}
+
+async function requestWalletNonce(payload: WalletNonceRequest): Promise<WalletNonceChallenge> {
   const res = await fetch(apiUrl("/wallet/nonce"), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({
-      wallet,
-      amount,
-      purpose: "convert_credits_to_hai",
-    }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     throw await parseErrorResponse(res);
   }
   return (await res.json()) as WalletNonceChallenge;
+}
+
+async function signWalletNonce(payload: WalletNonceRequest): Promise<{
+  wallet: string;
+  nonce: string;
+  signature: string;
+}> {
+  const provider = new BrowserProvider(requireEthereumProvider());
+  const signer = await provider.getSigner();
+  const signerWallet = getAddress(await signer.getAddress());
+  if (payload.wallet && signerWallet.toLowerCase() !== payload.wallet.toLowerCase()) {
+    throw new HavnaiApiError(
+      `Connected wallet ${signerWallet} does not match ${payload.wallet}.`,
+      "wallet_mismatch"
+    );
+  }
+  const challenge = await requestWalletNonce({
+    ...payload,
+    wallet: signerWallet,
+  });
+  const signature = await signer.signMessage(challenge.message);
+  return {
+    wallet: signerWallet,
+    nonce: challenge.nonce,
+    signature,
+  };
 }
 
 export async function convertCredits(payload: ConvertCreditsPayload): Promise<CreditConversion> {
@@ -648,8 +712,7 @@ export async function convertCredits(payload: ConvertCreditsPayload): Promise<Cr
 }
 
 export async function convertCreditsWithMetaMask(amount: number, wallet?: string): Promise<CreditConversion> {
-  const ethereum = requireEthereumProvider();
-  const provider = new BrowserProvider(ethereum);
+  const provider = new BrowserProvider(requireEthereumProvider());
   const signer = await provider.getSigner();
   const signerWallet = getAddress(wallet || (await signer.getAddress()));
   const challenge = await requestConversionNonce(signerWallet, amount);
@@ -705,7 +768,7 @@ export async function fetchPackages(): Promise<PackagesResponse> {
   return (await res.json()) as PackagesResponse;
 }
 
-export async function createCheckout(packageId: string): Promise<CheckoutResponse> {
+export async function createCheckout(packageId: string, wallet: string = WALLET): Promise<CheckoutResponse> {
   const successUrl = `${window.location.origin}/pricing?payment=success`;
   const cancelUrl = `${window.location.origin}/pricing?payment=cancelled`;
 
@@ -713,7 +776,7 @@ export async function createCheckout(packageId: string): Promise<CheckoutRespons
     method: "POST",
     headers: buildHeaders(false),
     body: JSON.stringify({
-      wallet: getWallet(),
+      wallet,
       package_id: packageId,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -725,8 +788,7 @@ export async function createCheckout(packageId: string): Promise<CheckoutRespons
   return (await res.json()) as CheckoutResponse;
 }
 
-export async function fetchPaymentHistory(wallet?: string): Promise<PaymentRecord[]> {
-  wallet = wallet || getWallet();
+export async function fetchPaymentHistory(wallet: string = WALLET): Promise<PaymentRecord[]> {
   const res = await fetch(
     apiUrl(`/payments/history?wallet=${encodeURIComponent(wallet)}`),
     { headers: buildHeaders(false) }
@@ -795,7 +857,7 @@ export async function fetchAnalyticsJobs(days = 30): Promise<AnalyticsJobsRespon
 
 export async function fetchAnalyticsCosts(days = 30): Promise<AnalyticsCostsResponse> {
   const res = await fetch(
-    apiUrl(`/analytics/costs?days=${days}&wallet=${encodeURIComponent(getWallet())}`),
+    apiUrl(`/analytics/costs?days=${days}&wallet=${encodeURIComponent(WALLET)}`),
     { headers: buildHeaders(true) }
   );
   if (!res.ok) throw await parseErrorResponse(res);
@@ -951,6 +1013,250 @@ export interface WorkflowListResponse {
   limit: number;
 }
 
+export type GalleryListingStatus = "active" | "sold" | "delisted";
+
+export interface GalleryListing {
+  id: number;
+  job_id: string;
+  seller_wallet: string;
+  title: string;
+  description: string;
+  price_credits: number;
+  category?: string;
+  asset_type: "image" | "video" | string;
+  model?: string;
+  prompt?: string;
+  listed: boolean;
+  sold: boolean;
+  status: GalleryListingStatus;
+  image_url?: string;
+  video_url?: string;
+  preview_url?: string;
+  already_listed?: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface GalleryBrowseResponse {
+  listings: GalleryListing[];
+  total: number;
+  limit: number;
+  offset: number;
+  sort: string;
+}
+
+export interface GalleryPurchaseResponse {
+  ok: boolean;
+  sale: {
+    listing_id: number;
+    buyer_wallet: string;
+    seller_wallet: string;
+    price_paid: number;
+    job_id: string;
+  };
+  remaining_credits: number;
+}
+
+export interface GalleryPurchaseRecord {
+  id: number;
+  listing_id: number;
+  buyer_wallet: string;
+  seller_wallet: string;
+  price_paid: number;
+  created_at: number;
+  job_id: string;
+  title: string;
+  asset_type: "image" | "video" | string;
+  model?: string;
+  prompt?: string;
+  image_url?: string;
+  video_url?: string;
+  preview_url?: string;
+}
+
+export interface CreateGalleryListingInput {
+  wallet?: string;
+  job_id: string;
+  title: string;
+  description?: string;
+  price_credits: number;
+  category?: string;
+}
+
+function normalizeGalleryListing(raw: any): GalleryListing {
+  const imageUrl = resolveAssetUrl(raw?.image_url);
+  const videoUrl = resolveAssetUrl(raw?.video_url);
+  const previewUrl = resolveAssetUrl(raw?.preview_url) || videoUrl || imageUrl;
+  return {
+    id: Number(raw?.id || 0),
+    job_id: String(raw?.job_id || ""),
+    seller_wallet: String(raw?.seller_wallet || ""),
+    title: String(raw?.title || ""),
+    description: String(raw?.description || ""),
+    price_credits: Number(raw?.price_credits || 0),
+    category: raw?.category ? String(raw.category) : undefined,
+    asset_type: String(raw?.asset_type || "image"),
+    model: raw?.model ? String(raw.model) : undefined,
+    prompt: raw?.prompt ? String(raw.prompt) : undefined,
+    listed: Boolean(raw?.listed),
+    sold: Boolean(raw?.sold),
+    status:
+      raw?.status === "sold" || raw?.status === "delisted" || raw?.status === "active"
+        ? raw.status
+        : raw?.sold
+        ? "sold"
+        : raw?.listed
+        ? "active"
+        : "delisted",
+    image_url: imageUrl,
+    video_url: videoUrl,
+    preview_url: previewUrl,
+    already_listed: raw?.already_listed === true,
+    created_at: Number(raw?.created_at || 0),
+    updated_at: Number(raw?.updated_at || 0),
+  };
+}
+
+function normalizeGalleryPurchase(raw: any): GalleryPurchaseRecord {
+  return {
+    id: Number(raw?.id || 0),
+    listing_id: Number(raw?.listing_id || 0),
+    buyer_wallet: String(raw?.buyer_wallet || ""),
+    seller_wallet: String(raw?.seller_wallet || ""),
+    price_paid: Number(raw?.price_paid || 0),
+    created_at: Number(raw?.created_at || 0),
+    job_id: String(raw?.job_id || ""),
+    title: String(raw?.title || ""),
+    asset_type: String(raw?.asset_type || "image"),
+    model: raw?.model ? String(raw.model) : undefined,
+    prompt: raw?.prompt ? String(raw.prompt) : undefined,
+    image_url: resolveAssetUrl(raw?.image_url),
+    video_url: resolveAssetUrl(raw?.video_url),
+    preview_url: resolveAssetUrl(raw?.preview_url) || resolveAssetUrl(raw?.video_url) || resolveAssetUrl(raw?.image_url),
+  };
+}
+
+export async function fetchGalleryBrowse(
+  opts: {
+    search?: string;
+    asset_type?: string;
+    sort?: string;
+    offset?: number;
+    limit?: number;
+  } = {}
+): Promise<GalleryBrowseResponse> {
+  const params = new URLSearchParams();
+  if (opts.search) params.set("search", opts.search);
+  if (opts.asset_type) params.set("asset_type", opts.asset_type);
+  if (opts.sort) params.set("sort", opts.sort);
+  if (opts.offset != null) params.set("offset", String(opts.offset));
+  if (opts.limit != null) params.set("limit", String(opts.limit));
+  const qs = params.toString();
+  const res = await fetch(apiUrl(`/gallery/browse${qs ? `?${qs}` : ""}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return {
+    listings: Array.isArray(data?.listings) ? data.listings.map(normalizeGalleryListing) : [],
+    total: Number(data?.total || 0),
+    limit: Number(data?.limit || 0),
+    offset: Number(data?.offset || 0),
+    sort: String(data?.sort || opts.sort || "newest"),
+  };
+}
+
+export async function fetchMyGalleryListings(wallet: string = WALLET): Promise<GalleryListing[]> {
+  const res = await fetch(
+    apiUrl(`/gallery/my-listings?wallet=${encodeURIComponent(wallet)}&include_sold=true`),
+    { headers: buildHeaders(false) }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.listings) ? data.listings.map(normalizeGalleryListing) : [];
+}
+
+export async function fetchGalleryPurchases(wallet: string = WALLET): Promise<GalleryPurchaseRecord[]> {
+  const res = await fetch(
+    apiUrl(`/gallery/purchases?wallet=${encodeURIComponent(wallet)}`),
+    { headers: buildHeaders(false) }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.purchases) ? data.purchases.map(normalizeGalleryPurchase) : [];
+}
+
+export async function createGalleryListing(input: CreateGalleryListingInput): Promise<GalleryListing> {
+  const signed = await signWalletNonce({
+    wallet: input.wallet || WALLET,
+    amount: input.price_credits,
+    purpose: "gallery_list",
+    job_id: input.job_id,
+  });
+  const res = await fetch(apiUrl("/gallery/listings"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      ...input,
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return normalizeGalleryListing(data);
+}
+
+export async function createGalleryListingWithMetaMask(
+  input: Omit<CreateGalleryListingInput, "wallet"> & { wallet?: string }
+): Promise<GalleryListing> {
+  return createGalleryListing(input);
+}
+
+export async function purchaseGalleryListing(
+  listingId: number,
+  wallet: string = WALLET,
+  priceCredits?: number
+): Promise<GalleryPurchaseResponse> {
+  let price = priceCredits;
+  if (!(typeof price === "number" && Number.isFinite(price) && price > 0)) {
+    const detailRes = await fetch(apiUrl(`/gallery/listings/${listingId}`), {
+      headers: buildHeaders(false),
+    });
+    if (!detailRes.ok) throw await parseErrorResponse(detailRes);
+    const detail = await detailRes.json();
+    price = Number(detail?.price_credits || 0);
+  }
+  const signed = await signWalletNonce({
+    wallet,
+    amount: price,
+    purpose: "gallery_purchase",
+    listing_id: listingId,
+  });
+  const res = await fetch(apiUrl(`/gallery/listings/${listingId}/purchase`), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as GalleryPurchaseResponse;
+}
+
+export async function delistGalleryListing(listingId: number, wallet: string = WALLET): Promise<{ ok: boolean }> {
+  const res = await fetch(apiUrl(`/gallery/listings/${listingId}`), {
+    method: "DELETE",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ wallet }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as { ok: boolean };
+}
+
 export async function fetchMarketplace(
   opts: { search?: string; category?: string; offset?: number; limit?: number } = {}
 ): Promise<WorkflowListResponse> {
@@ -980,21 +1286,22 @@ export async function createWorkflow(data: {
   description: string;
   category?: string;
   config: Record<string, any>;
+  wallet?: string;
 }): Promise<Workflow> {
   const res = await fetch(apiUrl("/workflows"), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ ...data, wallet: getWallet() }),
+    body: JSON.stringify({ ...data, wallet: data.wallet || WALLET }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as Workflow;
 }
 
-export async function publishWorkflow(id: string): Promise<Workflow> {
+export async function publishWorkflow(id: string, wallet: string = WALLET): Promise<Workflow> {
   const res = await fetch(apiUrl(`/workflows/${encodeURIComponent(id)}/publish`), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet: getWallet() }),
+    body: JSON.stringify({ wallet }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as Workflow;
@@ -1011,197 +1318,22 @@ export interface WalletRewards {
   claimed: number;
 }
 
-export async function fetchWalletRewards(): Promise<WalletRewards> {
-  const res = await fetch(apiUrl(`/rewards/claimable?wallet=${encodeURIComponent(getWallet())}`), {
+export async function fetchWalletRewards(wallet: string = WALLET): Promise<WalletRewards> {
+  const res = await fetch(apiUrl(`/rewards/claimable?wallet=${encodeURIComponent(wallet)}`), {
     headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as WalletRewards;
 }
 
-export async function claimRewards(): Promise<{ claimed: number; tx_hash?: string }> {
+export async function claimRewards(wallet: string = WALLET): Promise<{ claimed: number; tx_hash?: string }> {
   const res = await fetch(apiUrl("/rewards/claim"), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet: getWallet() }),
+    body: JSON.stringify({ wallet }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return await res.json();
 }
 
-// ---------------------------------------------------------------------------
-// Gallery marketplace
-// ---------------------------------------------------------------------------
-
-export interface GalleryListing {
-  id: number;
-  job_id: string;
-  seller_wallet: string;
-  title: string;
-  description: string;
-  price_credits: number;
-  category: string;
-  asset_type: "image" | "video";
-  model: string;
-  prompt: string;
-  listed: boolean;
-  sold: boolean;
-  created_at: number;
-  updated_at: number;
-}
-
-export interface GalleryBrowseResponse {
-  listings: GalleryListing[];
-  total: number;
-  limit: number;
-  offset: number;
-  sort: string;
-}
-
-export interface GallerySale {
-  listing_id: number;
-  buyer_wallet: string;
-  seller_wallet: string;
-  price_paid: number;
-  job_id: string;
-}
-
-export interface GalleryPurchaseResponse {
-  ok: boolean;
-  sale: GallerySale;
-  remaining_credits: number;
-}
-
-export async function fetchGallery(
-  opts: {
-    search?: string;
-    category?: string;
-    asset_type?: string;
-    sort?: string;
-    offset?: number;
-    limit?: number;
-  } = {}
-): Promise<GalleryBrowseResponse> {
-  const params = new URLSearchParams();
-  if (opts.search) params.set("search", opts.search);
-  if (opts.category) params.set("category", opts.category);
-  if (opts.asset_type) params.set("asset_type", opts.asset_type);
-  if (opts.sort) params.set("sort", opts.sort);
-  if (opts.offset) params.set("offset", String(opts.offset));
-  if (opts.limit) params.set("limit", String(opts.limit));
-  const qs = params.toString();
-  const res = await fetch(apiUrl(`/gallery/browse${qs ? `?${qs}` : ""}`), {
-    headers: buildHeaders(false),
-  });
-  if (!res.ok) throw await parseErrorResponse(res);
-  return (await res.json()) as GalleryBrowseResponse;
-}
-
-export async function requestGalleryNonce(
-  wallet: string,
-  amount: number,
-  purpose: "gallery_purchase" | "gallery_list",
-  context: { listing_id?: number; job_id?: string } = {},
-): Promise<WalletNonceChallenge> {
-  const res = await fetch(apiUrl("/wallet/nonce"), {
-    method: "POST",
-    headers: buildHeaders(true),
-    body: JSON.stringify({ wallet, amount, purpose, ...context }),
-  });
-  if (!res.ok) throw await parseErrorResponse(res);
-  return (await res.json()) as WalletNonceChallenge;
-}
-
-export async function createGalleryListing(data: {
-  job_id: string;
-  title: string;
-  price_credits: number;
-  description?: string;
-  category?: string;
-  nonce: string;
-  signature: string;
-}): Promise<GalleryListing> {
-  const res = await fetch(apiUrl("/gallery/listings"), {
-    method: "POST",
-    headers: buildHeaders(true),
-    body: JSON.stringify({ ...data, wallet: getWallet() }),
-  });
-  if (!res.ok) throw await parseErrorResponse(res);
-  return (await res.json()) as GalleryListing;
-}
-
-export async function createGalleryListingWithMetaMask(data: {
-  job_id: string;
-  title: string;
-  price_credits: number;
-  description?: string;
-  category?: string;
-}): Promise<GalleryListing> {
-  const ethereum = requireEthereumProvider();
-  const provider = new BrowserProvider(ethereum);
-  const signer = await provider.getSigner();
-  const signerWallet = getAddress(getWallet() || (await signer.getAddress()));
-  const challenge = await requestGalleryNonce(
-    signerWallet, data.price_credits, "gallery_list", { job_id: data.job_id },
-  );
-  const signature = await signer.signMessage(challenge.message);
-  return createGalleryListing({
-    ...data,
-    nonce: challenge.nonce,
-    signature,
-  });
-}
-
-export async function purchaseGalleryListing(
-  listingId: number,
-  opts: { nonce: string; signature: string },
-): Promise<GalleryPurchaseResponse> {
-  const res = await fetch(apiUrl(`/gallery/listings/${listingId}/purchase`), {
-    method: "POST",
-    headers: buildHeaders(true),
-    body: JSON.stringify({ wallet: getWallet(), nonce: opts.nonce, signature: opts.signature }),
-  });
-  if (!res.ok) throw await parseErrorResponse(res);
-  return (await res.json()) as GalleryPurchaseResponse;
-}
-
-export async function purchaseGalleryListingWithMetaMask(
-  listingId: number,
-  price: number,
-): Promise<GalleryPurchaseResponse> {
-  const ethereum = requireEthereumProvider();
-  const provider = new BrowserProvider(ethereum);
-  const signer = await provider.getSigner();
-  const signerWallet = getAddress(getWallet() || (await signer.getAddress()));
-  const challenge = await requestGalleryNonce(
-    signerWallet, price, "gallery_purchase", { listing_id: listingId },
-  );
-  const signature = await signer.signMessage(challenge.message);
-  return purchaseGalleryListing(listingId, {
-    nonce: challenge.nonce,
-    signature,
-  });
-}
-
-export async function delistGalleryListing(listingId: number): Promise<void> {
-  const res = await fetch(apiUrl(`/gallery/listings/${listingId}`), {
-    method: "DELETE",
-    headers: buildHeaders(true),
-    body: JSON.stringify({ wallet: getWallet() }),
-  });
-  if (!res.ok) throw await parseErrorResponse(res);
-}
-
-export async function fetchMyGalleryListings(
-  includeSold = false
-): Promise<{ listings: GalleryListing[] }> {
-  const params = new URLSearchParams({ wallet: getWallet() });
-  if (includeSold) params.set("include_sold", "true");
-  const res = await fetch(apiUrl(`/gallery/my-listings?${params}`), {
-    headers: buildHeaders(false),
-  });
-  if (!res.ok) throw await parseErrorResponse(res);
-  return await res.json();
-}
-
-export { WALLET };
+export { WALLET, ZERO_WALLET, isUsableWallet };

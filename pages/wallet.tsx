@@ -1,8 +1,7 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useState } from "react";
-import { WalletButton } from "../components/WalletButton";
-import { useWallet } from "../lib/WalletContext";
+import { useWallet } from "../components/WalletProvider";
 import {
   fetchCredits,
   fetchWalletRewards,
@@ -10,22 +9,32 @@ import {
   CreditBalance,
   WalletRewards,
 } from "../lib/havnai";
+import { getConnectButtonLabel } from "../lib/wallet";
 
 const WalletPage: NextPage = () => {
-  const { address, connect } = useWallet();
+  const wallet = useWallet();
   const [navOpen, setNavOpen] = useState(false);
   const [credits, setCredits] = useState<CreditBalance | null>(null);
   const [rewards, setRewards] = useState<WalletRewards | null>(null);
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
   const [claimResult, setClaimResult] = useState<string | null>(null);
+  const connectLabel = getConnectButtonLabel(wallet);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
+    if (!wallet.activeWallet) {
+      setCredits(null);
+      setRewards(null);
+      setLoading(false);
+      return () => {
+        active = false;
+      };
+    }
     Promise.all([
-      fetchCredits().catch(() => null),
-      fetchWalletRewards().catch(() => null),
+      fetchCredits(wallet.activeWallet).catch(() => null),
+      fetchWalletRewards(wallet.activeWallet).catch(() => null),
     ]).then(([cr, rw]) => {
       if (!active) return;
       setCredits(cr);
@@ -33,16 +42,17 @@ const WalletPage: NextPage = () => {
       setLoading(false);
     });
     return () => { active = false; };
-  }, [address]);
+  }, [wallet.activeWallet]);
 
   const handleClaim = async () => {
+    if (!wallet.activeWallet) return;
     setClaiming(true);
     setClaimResult(null);
     try {
-      const res = await claimRewards();
+      const res = await claimRewards(wallet.activeWallet);
       setClaimResult(`Claimed ${res.claimed.toFixed(4)} HAI${res.tx_hash ? ` (tx: ${res.tx_hash})` : ""}`);
       // Refresh rewards
-      const rw = await fetchWalletRewards().catch(() => null);
+      const rw = await fetchWalletRewards(wallet.activeWallet).catch(() => null);
       if (rw) setRewards(rw);
     } catch (err: any) {
       setClaimResult(err?.message || "Claim failed.");
@@ -58,23 +68,21 @@ const WalletPage: NextPage = () => {
           <a href="/#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
-              <span className="brand-stage">Public Beta</span>
+              <span className="brand-stage">Stage 6 + 7 Alpha</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
           <button type="button" className={`nav-toggle ${navOpen ? "nav-open" : ""}`} aria-label="Toggle navigation" onClick={() => setNavOpen((o) => !o)}>
             <span /><span />
           </button>
-          <nav className={`nav-links ${navOpen ? "nav-open" : ""}`} onClick={() => setNavOpen(false)}>
+          <nav className={`nav-links ${navOpen ? "nav-open" : ""}`}>
             <a href="/#home">Home</a>
-            <a href="/generator">Generator</a>
+            <a href="/test">Generator</a>
             <a href="/library">My Library</a>
             <a href="/pricing">Buy Credits</a>
             <a href="/analytics">Analytics</a>
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
-            <a href="/join" className="nav-primary">Join</a>
-            <WalletButton />
           </nav>
         </div>
       </header>
@@ -89,22 +97,45 @@ const WalletPage: NextPage = () => {
         </section>
 
         <section className="page-container">
-          {!address && (
-            <div className="library-empty" style={{ marginBottom: "1.5rem" }}>
-              <p>No wallet connected. Connect your MetaMask wallet to view your credits and rewards.</p>
-              <button type="button" className="job-action-button" style={{ marginTop: "0.75rem" }} onClick={connect}>
-                Connect Wallet
+          <div className="wallet-status-card">
+            <div className="wallet-status-copy-block">
+              <div className="wallet-status-heading-row">
+                <span className={`wallet-status-pill wallet-source-${wallet.source}`}>
+                  {wallet.source === "connected"
+                    ? "Connected wallet"
+                    : wallet.source === "env"
+                    ? "Fallback site wallet"
+                    : "No wallet"}
+                </span>
+                {wallet.providerName && <span className="wallet-status-provider">{wallet.providerName}</span>}
+                {wallet.chainName && (
+                  <span className={`wallet-status-provider${wallet.chainAllowed ? "" : " is-warning"}`}>
+                    {wallet.chainName}
+                  </span>
+                )}
+              </div>
+              <div className="wallet-status-address">{wallet.activeWallet || "No wallet connected"}</div>
+              <p className="wallet-status-note">
+                {wallet.error?.message ||
+                  wallet.message ||
+                  (wallet.source === "connected"
+                    ? "Wallet dashboard is using your connected MetaMask wallet."
+                    : wallet.source === "env"
+                    ? "Wallet dashboard is using NEXT_PUBLIC_HAVNAI_WALLET as a fallback site wallet."
+                    : "Connect MetaMask or configure NEXT_PUBLIC_HAVNAI_WALLET to load wallet data.")}
+              </p>
+            </div>
+            <div className="wallet-status-actions">
+              <button
+                type="button"
+                className="job-action-button secondary"
+                onClick={() => void wallet.connect()}
+                disabled={wallet.connecting}
+              >
+                {connectLabel}
               </button>
             </div>
-          )}
-
-          {/* Wallet address */}
-          {address && (
-            <div className="wallet-card">
-              <div className="stat-label">Connected Wallet</div>
-              <div className="wallet-address">{address}</div>
-            </div>
-          )}
+          </div>
 
           {loading && <p className="library-loading">Loading wallet data...</p>}
 

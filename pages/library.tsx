@@ -1,6 +1,7 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useWallet } from "../components/WalletProvider";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
 import { WalletButton } from "../components/WalletButton";
 import { downloadAsset } from "../lib/download";
@@ -20,6 +21,7 @@ import {
   LibraryItemType,
 } from "../lib/libraryStore";
 import { normalizeJobStatus } from "../lib/jobStatus";
+import { getConnectButtonLabel } from "../lib/wallet";
 
 type StatusFilter = "all" | "ready" | "running" | "failed";
 type TypeFilter = "all" | "image" | "video";
@@ -136,6 +138,7 @@ async function fetchLibraryDetails(
 }
 
 const LibraryPage: NextPage = () => {
+  const wallet = useWallet();
   const [navOpen, setNavOpen] = useState(false);
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
   const [items, setItems] = useState<LibraryViewItem[]>([]);
@@ -159,6 +162,7 @@ const LibraryPage: NextPage = () => {
   const [drawerSummary, setDrawerSummary] = useState<JobSummary | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerError, setDrawerError] = useState<string | undefined>();
+  const connectLabel = getConnectButtonLabel(wallet);
 
   // Sell listing state
   const [sellItem, setSellItem] = useState<LibraryViewItem | null>(null);
@@ -312,6 +316,7 @@ const LibraryPage: NextPage = () => {
     const summary: JobSummary = {
       job_id: item.entry.job_id,
       model: item.job?.model,
+      wallet: item.job?.wallet,
       status: item.job?.status,
       task_type: item.job?.task_type,
       submitted_at: item.entry.created_at,
@@ -413,6 +418,41 @@ const LibraryPage: NextPage = () => {
               Your completed jobs are stored locally in this browser. Nothing is
               saved on the server.
             </p>
+          </div>
+        </section>
+
+        <section className="page-container">
+          <div className="wallet-status-card wallet-status-card-inline">
+            <div className="wallet-status-copy-block">
+              <div className="wallet-status-heading-row">
+                <span className={`wallet-status-pill wallet-source-${wallet.source}`}>
+                  {wallet.source === "connected"
+                    ? "Connected wallet"
+                    : wallet.source === "env"
+                    ? "Fallback site wallet"
+                    : "No wallet"}
+                </span>
+                {wallet.providerName && <span className="wallet-status-provider">{wallet.providerName}</span>}
+              </div>
+              <div className="wallet-status-address">
+                {wallet.activeWallet || "No wallet connected"}
+              </div>
+              <p className="wallet-status-note">
+                {wallet.error?.message ||
+                  wallet.message ||
+                  "Listing from library requires a MetaMask-connected wallet that matches the job owner. Generator submissions may still belong to NEXT_PUBLIC_HAVNAI_WALLET."}
+              </p>
+            </div>
+            <div className="wallet-status-actions">
+              <button
+                type="button"
+                className="job-action-button secondary"
+                onClick={() => void wallet.connect()}
+                disabled={wallet.connecting}
+              >
+                {connectLabel}
+              </button>
+            </div>
           </div>
         </section>
 
@@ -719,6 +759,11 @@ const LibraryPage: NextPage = () => {
         result={drawerResult}
         loading={drawerLoading}
         error={drawerError}
+        marketplace={{
+          wallet: wallet.activeWallet,
+          canSign: Boolean(wallet.connectedWallet),
+          source: wallet.source,
+        }}
         onClose={() => setDrawerOpen(false)}
       />
 

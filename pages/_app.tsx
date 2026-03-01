@@ -1,7 +1,7 @@
 import type { AppProps } from "next/app";
 import React from "react";
+import { WalletProvider } from "../components/WalletProvider";
 import "../style.css";
-import { WalletProvider } from "../lib/WalletContext";
 
 interface ErrorBoundaryState {
   hasError: boolean;
