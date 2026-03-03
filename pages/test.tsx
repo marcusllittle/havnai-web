@@ -10,6 +10,9 @@ import {
   submitAutoJob,
   submitFaceSwapJob,
   submitVideoJob,
+  fetchIdentityAnchors,
+  createIdentityAnchor,
+  deleteIdentityAnchor,
   fetchJob,
   fetchResult,
   fetchJobWithResult,
@@ -17,6 +20,7 @@ import {
   fetchCredits,
   stitchVideos,
   HavnaiApiError,
+  IdentityAnchor,
   JobDetailResponse,
   ResultResponse,
   FaceSwapRequest,
@@ -36,6 +40,10 @@ const HISTORY_KEY = "havnai_test_history_v1";
 const FALLBACK_IMAGE_MODELS: { id: string; label: string }[] = [
   { id: "auto", label: "Auto (let grid choose best)" },
 ];
+
+const IDENTITY_ANCHOR_TAG_RE = /^\[\s*identity\s+anchor\s*:\s*([A-Za-z0-9_-]+)\s*\]$/i;
+const IDENTITY_ANCHOR_BARE_RE = /^\[\s*identity\s+anchor\s*\]$/i;
+const IDENTITY_ANCHOR_OPEN_RE = /\[\s*identity\s+anchor\b/i;
 
 type LoraDraft = {
   name: string;
@@ -93,6 +101,84 @@ const pickPreferredVideoModel = (models: { id: string; label: string }[]): strin
   return models.length > 0 ? models[0].id : "";
 };
 
+const slugifyIdentityAnchor = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const inspectPromptIdentityAnchor = (promptText: string): {
+  hasAnchorTag: boolean;
+  slug?: string;
+  promptWithoutTag: string;
+  error?: string;
+} => {
+  const matches: Array<{ value: string; index: number }> = [];
+  const regex = /\[\s*identity\s+anchor(?:[^\]]*)\]/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(promptText)) !== null) {
+    matches.push({ value: match[0], index: match.index });
+  }
+  if (matches.length === 0) {
+    if (IDENTITY_ANCHOR_OPEN_RE.test(promptText)) {
+      return {
+        hasAnchorTag: false,
+        promptWithoutTag: promptText.trim(),
+        error: "Use [IDENTITY ANCHOR: your_anchor_slug].",
+      };
+    }
+    return { hasAnchorTag: false, promptWithoutTag: promptText.trim() };
+  }
+  if (matches.length > 1) {
+    return {
+      hasAnchorTag: true,
+      promptWithoutTag: promptText.trim(),
+      error: "Only one identity anchor can be used per prompt.",
+    };
+  }
+  const [{ value, index }] = matches;
+  if (IDENTITY_ANCHOR_BARE_RE.test(value)) {
+    return {
+      hasAnchorTag: true,
+      promptWithoutTag: promptText.trim(),
+      error: "Use [IDENTITY ANCHOR: your_anchor_slug].",
+    };
+  }
+  const parsed = value.match(IDENTITY_ANCHOR_TAG_RE);
+  if (!parsed?.[1]) {
+    return {
+      hasAnchorTag: true,
+      promptWithoutTag: promptText.trim(),
+      error: "Use [IDENTITY ANCHOR: your_anchor_slug].",
+    };
+  }
+  const promptWithoutTag = `${promptText.slice(0, index)}${promptText.slice(index + value.length)}`
+    .trim()
+    .replace(/\n{3,}/g, "\n\n");
+  if (!promptWithoutTag) {
+    return {
+      hasAnchorTag: true,
+      slug: parsed[1].toLowerCase(),
+      promptWithoutTag,
+      error: "Prompt is required after removing the identity anchor tag.",
+    };
+  }
+  return {
+    hasAnchorTag: true,
+    slug: parsed[1].toLowerCase(),
+    promptWithoutTag,
+  };
+};
+
+const upsertIdentityAnchorTag = (promptText: string, slug: string): string => {
+  const nextTag = `[IDENTITY ANCHOR: ${slug}]`;
+  const trimmedPrompt = promptText.trim();
+  const existing = inspectPromptIdentityAnchor(promptText);
+  const body = existing.hasAnchorTag ? existing.promptWithoutTag : trimmedPrompt;
+  return body ? `${nextTag}\n${body}` : nextTag;
+};
+
 const TestPage: React.FC = () => {
   const wallet = useWallet();
   const [mode, setMode] = useState<GeneratorMode>("image");
@@ -137,10 +223,16 @@ const TestPage: React.FC = () => {
   const [baseImageUrl, setBaseImageUrl] = useState("");
   const [baseImageData, setBaseImageData] = useState<string | undefined>();
   const [baseImageName, setBaseImageName] = useState<string | undefined>();
-  const [referenceFaceEnabled, setReferenceFaceEnabled] = useState(false);
-  const [referenceFaceUrl, setReferenceFaceUrl] = useState("");
-  const [referenceFaceData, setReferenceFaceData] = useState<string | undefined>();
-  const [referenceFaceName, setReferenceFaceName] = useState<string | undefined>();
+  const [identityAnchors, setIdentityAnchors] = useState<IdentityAnchor[]>([]);
+  const [identityAnchorsLoading, setIdentityAnchorsLoading] = useState(false);
+  const [identityAnchorsError, setIdentityAnchorsError] = useState<string | undefined>();
+  const [anchorDisplayName, setAnchorDisplayName] = useState("");
+  const [anchorSlug, setAnchorSlug] = useState("");
+  const [anchorSlugDirty, setAnchorSlugDirty] = useState(false);
+  const [anchorImageData, setAnchorImageData] = useState<string | undefined>();
+  const [anchorImageName, setAnchorImageName] = useState<string | undefined>();
+  const [anchorSaving, setAnchorSaving] = useState(false);
+  const [anchorDeletingId, setAnchorDeletingId] = useState<number | null>(null);
   const [videoInitUrl, setVideoInitUrl] = useState("");
   const [videoInitData, setVideoInitData] = useState<string | undefined>();
   const [videoInitName, setVideoInitName] = useState<string | undefined>();
@@ -170,6 +262,9 @@ const TestPage: React.FC = () => {
   const faceSwapPrefillKeyRef = useRef<string>("");
 
   const apiBase = getApiBase();
+  const activeWallet = wallet.activeWallet || undefined;
+  const canListAnchors = Boolean(activeWallet);
+  const canManageAnchors = Boolean(wallet.connectedWallet && activeWallet);
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -529,13 +624,13 @@ const TestPage: React.FC = () => {
   // Fetch credit balance on mount and after each job completes
   useEffect(() => {
     let cancelled = false;
-    if (!wallet.envWallet) {
+    if (!activeWallet) {
       setCredits(null);
       return () => {
         cancelled = true;
       };
     }
-    fetchCredits(wallet.envWallet)
+    fetchCredits(activeWallet)
       .then((data) => {
         if (!cancelled) setCredits(data);
       })
@@ -544,7 +639,37 @@ const TestPage: React.FC = () => {
         if (!cancelled) setCredits(null);
       });
     return () => { cancelled = true; };
-  }, [loading, wallet.envWallet]); // re-fetch when loading toggles (i.e. after a job finishes)
+  }, [activeWallet, loading]); // re-fetch when loading toggles (i.e. after a job finishes)
+
+  useEffect(() => {
+    let cancelled = false;
+    if (mode !== "image" || !activeWallet) {
+      setIdentityAnchors([]);
+      setIdentityAnchorsError(undefined);
+      setIdentityAnchorsLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+    setIdentityAnchorsLoading(true);
+    fetchIdentityAnchors(activeWallet)
+      .then((anchors) => {
+        if (cancelled) return;
+        setIdentityAnchors(anchors);
+        setIdentityAnchorsError(undefined);
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        setIdentityAnchors([]);
+        setIdentityAnchorsError(err?.message || "Failed to load saved anchors.");
+      })
+      .finally(() => {
+        if (!cancelled) setIdentityAnchorsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWallet, mode]);
 
   const saveHistory = (items: HistoryItem[]) => {
     setHistory(items);
@@ -653,6 +778,37 @@ const TestPage: React.FC = () => {
     });
   };
 
+  const resetAnchorForm = () => {
+    setAnchorDisplayName("");
+    setAnchorSlug("");
+    setAnchorSlugDirty(false);
+    setAnchorImageData(undefined);
+    setAnchorImageName(undefined);
+  };
+
+  const handleAnchorUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await readFileAsDataUrl(file);
+      setAnchorImageData(data);
+      setAnchorImageName(file.name);
+      setIdentityAnchorsError(undefined);
+    } catch (err: any) {
+      setIdentityAnchorsError(err?.message || "Failed to read identity anchor image.");
+    }
+  };
+
+  const refreshIdentityAnchors = async () => {
+    if (!activeWallet) {
+      setIdentityAnchors([]);
+      return;
+    }
+    const anchors = await fetchIdentityAnchors(activeWallet);
+    setIdentityAnchors(anchors);
+    setIdentityAnchorsError(undefined);
+  };
+
   const captureLastFrameFromVideoUrl = async (url: string): Promise<string> => {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`download failed: ${res.status}`);
@@ -701,13 +857,10 @@ const TestPage: React.FC = () => {
     const options: SubmitJobOptions = {};
     const stepsValue = parseOptionalInt(steps);
     const seedValue = parseOptionalInt(seed);
-    const referenceFaceValue = referenceFaceEnabled
-      ? (referenceFaceData || referenceFaceUrl.trim())
-      : "";
 
+    if (activeWallet) options.wallet = activeWallet;
     if (stepsValue !== undefined) options.steps = stepsValue;
     if (seedValue !== undefined) options.seed = seedValue;
-    if (referenceFaceValue) options.referenceFaceUrl = referenceFaceValue;
     if (sfwMode) options.sfwMode = true;
 
     return Object.keys(options).length > 0 ? options : undefined;
@@ -727,6 +880,7 @@ const TestPage: React.FC = () => {
     initOverride?: string | null
   ) => {
     const request: Record<string, any> = { prompt: promptText };
+    if (activeWallet) request.wallet = activeWallet;
     const trimmedNegative = negativePrompt.trim();
     if (trimmedNegative) request.negativePrompt = trimmedNegative;
     const seedValue = parseOptionalInt(seed);
@@ -863,17 +1017,64 @@ const TestPage: React.FC = () => {
     }
   };
 
-  const handleReferenceFaceUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleInsertIdentityAnchor = (slug: string) => {
+    setPrompt((prev) => upsertIdentityAnchorTag(prev, slug));
+    setStatusMessage(`Inserted [IDENTITY ANCHOR: ${slug}] into the prompt.`);
+  };
+
+  const handleCreateIdentityAnchor = async () => {
+    if (!activeWallet) {
+      setIdentityAnchorsError("Connect a wallet before creating saved anchors.");
+      return;
+    }
+    const displayName = anchorDisplayName.trim();
+    const slug = slugifyIdentityAnchor(anchorSlug);
+    if (!displayName) {
+      setIdentityAnchorsError("Display name is required.");
+      return;
+    }
+    if (!slug) {
+      setIdentityAnchorsError("Anchor slug is required.");
+      return;
+    }
+    if (!anchorImageData) {
+      setIdentityAnchorsError("Upload an image for the saved anchor.");
+      return;
+    }
+    setAnchorSaving(true);
+    setIdentityAnchorsError(undefined);
     try {
-      const data = await readFileAsDataUrl(file);
-      setReferenceFaceData(data);
-      setReferenceFaceName(file.name);
-      setReferenceFaceUrl("");
-      setReferenceFaceEnabled(true);
+      const created = await createIdentityAnchor({
+        wallet: activeWallet,
+        displayName,
+        slug,
+        imageDataUrl: anchorImageData,
+      });
+      await refreshIdentityAnchors();
+      resetAnchorForm();
+      setStatusMessage(`Saved anchor "${created.slug}" created.`);
     } catch (err: any) {
-      setStatusMessage(err?.message || "Failed to read reference face image.");
+      setIdentityAnchorsError(err?.message || "Failed to create saved anchor.");
+    } finally {
+      setAnchorSaving(false);
+    }
+  };
+
+  const handleDeleteIdentityAnchor = async (anchorId: number) => {
+    if (!activeWallet) {
+      setIdentityAnchorsError("Connect a wallet before deleting saved anchors.");
+      return;
+    }
+    setAnchorDeletingId(anchorId);
+    setIdentityAnchorsError(undefined);
+    try {
+      await deleteIdentityAnchor(anchorId, activeWallet);
+      await refreshIdentityAnchors();
+      setStatusMessage("Saved anchor deleted.");
+    } catch (err: any) {
+      setIdentityAnchorsError(err?.message || "Failed to delete saved anchor.");
+    } finally {
+      setAnchorDeletingId(null);
     }
   };
 
@@ -881,15 +1082,23 @@ const TestPage: React.FC = () => {
     const trimmed = prompt.trim();
     const selectedVideoModelAvailable =
       mode === "video" && videoModels.some((candidate) => candidate.id === selectedModel);
-    const referenceFaceValue = referenceFaceEnabled
-      ? (referenceFaceData || referenceFaceUrl.trim())
-      : "";
+    const promptAnchor = inspectPromptIdentityAnchor(prompt);
+    const cleanedPrompt = promptAnchor.promptWithoutTag.trim();
+    const effectivePrompt = mode === "face_swap" ? trimmed : cleanedPrompt || trimmed;
+    if (!activeWallet) {
+      setStatusMessage("Connect a wallet or configure NEXT_PUBLIC_HAVNAI_WALLET before submitting.");
+      return;
+    }
     if (mode !== "face_swap" && !trimmed) {
       setStatusMessage("Prompt is required.");
       return;
     }
-    if (mode === "image" && referenceFaceEnabled && !referenceFaceValue) {
-      setStatusMessage("Reference face image is required when Reference face is enabled.");
+    if (mode !== "image" && promptAnchor.hasAnchorTag) {
+      setStatusMessage("Identity anchor tags are only supported for image generation.");
+      return;
+    }
+    if (promptAnchor.error) {
+      setStatusMessage(promptAnchor.error);
       return;
     }
     if (mode === "video" && videoModels.length === 0) {
@@ -916,7 +1125,7 @@ const TestPage: React.FC = () => {
     setModel(undefined);
     setJobId(undefined);
     setPollTimedOut(false);
-    setLastUsedPrompt(trimmed || "Face swap");
+    setLastUsedPrompt(effectivePrompt || "Face swap");
 
     const extendValue = parseOptionalInt(extendChunks) ?? 0;
 
@@ -931,7 +1140,7 @@ const TestPage: React.FC = () => {
         );
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
-        await pollJob(id, trimmed, 1800);
+        await pollJob(id, effectivePrompt, 1800);
       } else if (mode === "face_swap") {
         const baseUrl = baseImageData || baseImageUrl.trim();
         const faceUrl = faceSourceData || faceSourceUrl.trim();
@@ -950,6 +1159,7 @@ const TestPage: React.FC = () => {
           faceSourceUrl: faceUrl,
           seed: seedValue,
           sfwMode,
+          wallet: activeWallet,
         };
         if (strengthValue !== undefined) request.strength = strengthValue;
         if (stepsValue !== undefined) request.numSteps = stepsValue;
@@ -957,16 +1167,16 @@ const TestPage: React.FC = () => {
         const id = await submitFaceSwapJob(request);
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
-        await pollJob(id, trimmed || "Face swap", 1800);
+        await pollJob(id, effectivePrompt || "Face swap", 1800);
       } else if (mode === "video") {
         if (extendValue > 0) {
-          await runVideoChain(trimmed, extendValue);
+          await runVideoChain(effectivePrompt, extendValue);
         } else {
-          const request = buildVideoRequest(trimmed);
+          const request = buildVideoRequest(effectivePrompt);
           const id = await submitVideoJob(request);
           setJobId(id);
           setStatusMessage("Waiting for GPU node…");
-          await pollJob(id, trimmed, 2400);
+          await pollJob(id, effectivePrompt, 2400);
         }
       }
     } catch (err: any) {
@@ -1421,12 +1631,12 @@ const TestPage: React.FC = () => {
                       </span>
                       <p className="generator-help" style={{ marginTop: "0.5rem" }}>
                         Submission wallet:{" "}
-                        <strong>{wallet.envWallet || "Not configured"}</strong>
+                        <strong>{activeWallet || "Not configured"}</strong>
                       </p>
                       <p className="generator-help">
                         {wallet.error?.message ||
                           wallet.message ||
-                          "Generator jobs still submit under NEXT_PUBLIC_HAVNAI_WALLET in this alpha. A connected MetaMask wallet does not change job ownership yet."}
+                          "Generator jobs submit under the active wallet shown here. Connect MetaMask to use saved anchors."}
                       </p>
                     </div>
                     <button
@@ -1510,6 +1720,148 @@ const TestPage: React.FC = () => {
                   onSubmit={handleSubmit}
                   disabled={loading}
                 />
+                {mode === "image" && (
+                  <>
+                    <p className="generator-help">
+                      Use <code>[IDENTITY ANCHOR: slug]</code> to apply a saved face anchor.
+                    </p>
+                    <div className="generator-advanced" style={{ marginTop: "1rem" }}>
+                      <span className="generator-label">Saved anchors</span>
+                      <p className="generator-help">
+                        Save a face once, then reuse it in prompts with an identity-anchor tag.
+                      </p>
+                      <div style={{ display: "grid", gap: "0.75rem" }}>
+                        <label>
+                          <span className="generator-label" style={{ display: "block" }}>Display name</span>
+                          <input
+                            type="text"
+                            className="generator-input"
+                            value={anchorDisplayName}
+                            placeholder="Pilot Name"
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setAnchorDisplayName(value);
+                              if (!anchorSlugDirty) {
+                                setAnchorSlug(slugifyIdentityAnchor(value));
+                              }
+                            }}
+                          />
+                        </label>
+                        <label>
+                          <span className="generator-label" style={{ display: "block" }}>Anchor slug</span>
+                          <input
+                            type="text"
+                            className="generator-input"
+                            value={anchorSlug}
+                            placeholder="pilot_name"
+                            onChange={(e) => {
+                              setAnchorSlug(e.target.value);
+                              setAnchorSlugDirty(true);
+                            }}
+                          />
+                        </label>
+                        <label>
+                          <span className="generator-label" style={{ display: "block" }}>Upload image</span>
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            className="generator-input"
+                            onChange={handleAnchorUpload}
+                            disabled={!canManageAnchors || anchorSaving}
+                          />
+                        </label>
+                        {anchorImageName && (
+                          <p className="generator-help">Using uploaded file: {anchorImageName}</p>
+                        )}
+                        {anchorImageData && (
+                          <div className="generator-face-preview">
+                            <img src={anchorImageData} alt="Identity anchor preview" />
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            className="generator-mini-button"
+                            onClick={() => void handleCreateIdentityAnchor()}
+                            disabled={!canManageAnchors || anchorSaving}
+                          >
+                            {anchorSaving ? "Saving..." : "Create anchor"}
+                          </button>
+                          <button
+                            type="button"
+                            className="generator-mini-button"
+                            onClick={resetAnchorForm}
+                            disabled={anchorSaving}
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        {!canManageAnchors && (
+                          <p className="generator-help">
+                            Connect MetaMask to create or delete saved anchors. Listing saved anchors only needs the active wallet address.
+                          </p>
+                        )}
+                        {identityAnchorsError && <p className="job-hint error">{identityAnchorsError}</p>}
+                        {identityAnchorsLoading && <p className="generator-help">Loading saved anchors...</p>}
+                        {!identityAnchorsLoading && canListAnchors && identityAnchors.length === 0 && (
+                          <p className="generator-help">No saved anchors yet.</p>
+                        )}
+                        {!identityAnchorsLoading && !canListAnchors && (
+                          <p className="generator-help">Connect a wallet or configure the fallback site wallet to load saved anchors.</p>
+                        )}
+                        {!identityAnchorsLoading && identityAnchors.length > 0 && (
+                          <div style={{ display: "grid", gap: "0.75rem" }}>
+                            {identityAnchors.map((anchor) => (
+                              <div
+                                key={anchor.id}
+                                style={{
+                                  display: "grid",
+                                  gap: "0.35rem",
+                                  padding: "0.85rem",
+                                  border: "1px solid rgba(255,255,255,0.08)",
+                                  borderRadius: "14px",
+                                  background: "rgba(255,255,255,0.03)",
+                                }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
+                                  <div>
+                                    <strong>{anchor.display_name}</strong>
+                                    <p className="generator-help" style={{ marginTop: "0.25rem" }}>
+                                      slug: <code>{anchor.slug}</code>
+                                    </p>
+                                  </div>
+                                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                                    <button
+                                      type="button"
+                                      className="generator-mini-button"
+                                      onClick={() => handleInsertIdentityAnchor(anchor.slug)}
+                                    >
+                                      Insert tag
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="generator-mini-button"
+                                      onClick={() => void handleDeleteIdentityAnchor(anchor.id)}
+                                      disabled={!canManageAnchors || anchorDeletingId === anchor.id}
+                                    >
+                                      {anchorDeletingId === anchor.id ? "Deleting..." : "Delete"}
+                                    </button>
+                                  </div>
+                                </div>
+                                <p className="generator-help">
+                                  Created {new Date(anchor.created_at * 1000).toLocaleString()}
+                                  {anchor.last_used_at
+                                    ? ` • Last used ${new Date(anchor.last_used_at * 1000).toLocaleString()}`
+                                    : ""}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {mode === "face_swap" && (
                   <div className="generator-advanced">
@@ -1756,54 +2108,6 @@ const TestPage: React.FC = () => {
                       <p className="generator-help">
                         Leave blank for random seed each run.
                       </p>
-                      <label className="generator-checkbox" style={{ marginTop: "0.75rem" }}>
-                        <input
-                          type="checkbox"
-                          checked={referenceFaceEnabled}
-                          onChange={(e) => setReferenceFaceEnabled(e.target.checked)}
-                        />
-                        <span>Use reference face</span>
-                      </label>
-                      {referenceFaceEnabled && (
-                        <>
-                          <label className="generator-label" htmlFor="reference-face-url">
-                            Reference face URL
-                          </label>
-                          <input
-                            id="reference-face-url"
-                            type="text"
-                            className="generator-input"
-                            placeholder="https://example.com/face.png"
-                            value={referenceFaceUrl}
-                            onChange={(e) => {
-                              setReferenceFaceUrl(e.target.value);
-                              setReferenceFaceData(undefined);
-                              setReferenceFaceName(undefined);
-                            }}
-                          />
-                          <label className="generator-label" htmlFor="reference-face-upload">
-                            Or upload reference face
-                          </label>
-                          <input
-                            id="reference-face-upload"
-                            type="file"
-                            accept="image/*"
-                            className="generator-input"
-                            onChange={handleReferenceFaceUpload}
-                          />
-                          {referenceFaceName && (
-                            <p className="generator-help">Using uploaded file: {referenceFaceName}</p>
-                          )}
-                          {referenceFaceData && (
-                            <div className="generator-face-preview">
-                              <img src={referenceFaceData} alt="Reference face preview" />
-                            </div>
-                          )}
-                          <p className="generator-help">
-                            Keeps facial identity closer to the supplied face when compatible SDXL capacity is online.
-                          </p>
-                        </>
-                      )}
                     </div>
                   </div>
                 )}
