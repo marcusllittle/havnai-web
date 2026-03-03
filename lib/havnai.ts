@@ -1,5 +1,16 @@
 import type { NextPage } from "next";
 import { getInviteCode } from "./invite";
+import { BrowserProvider, getAddress } from "ethers";
+import {
+  getInjectedProvider,
+  isUsableWallet,
+  normalizeWalletError,
+  readConnectedAccounts,
+  requestAccounts,
+  WALLET,
+  WalletError,
+  ZERO_WALLET,
+} from "./wallet";
 
 // Simple API helper for talking to the HavnAI coordinator.
 // Uses relative URLs so it works behind whatever proxy is fronting the core.
@@ -20,8 +31,13 @@ export interface JobDetail {
   node_id?: string;
   timestamp?: number;
   completed_at?: number | null;
+  retry_count?: number;
   reward?: number;
   reward_factors?: Record<string, unknown>;
+  requested_loras?: JobLoraEntry[];
+  applied_loras?: JobLoraEntry[];
+  status_reason?: string;
+  lora_summary?: string | null;
   data?: any;
 }
 
@@ -39,18 +55,31 @@ export interface LoraConfig {
   weight?: number;
 }
 
+export interface JobLoraEntry {
+  name: string;
+  weight?: number;
+  requested_weight?: number;
+  applied_weight?: number;
+  path?: string;
+  filename?: string;
+}
+
 export interface FaceSwapRequest {
+  wallet?: string;
   baseImageUrl: string;
   faceSourceUrl: string;
   prompt?: string;
   model?: string;
   strength?: number;
   numSteps?: number;
+  guidance?: number;
   loras?: LoraConfig[];
   seed?: number;
+  sfwMode?: boolean;
 }
 
 export interface WanVideoRequest {
+  wallet?: string;
   prompt: string;
   negativePrompt?: string;
   motionType?: string;
@@ -60,9 +89,11 @@ export interface WanVideoRequest {
   fps?: number;
   width?: number;
   height?: number;
+  sfwMode?: boolean;
 }
 
 export interface VideoJobRequest {
+  wallet?: string;
   prompt: string;
   negativePrompt?: string;
   model?: string;
@@ -76,6 +107,7 @@ export interface VideoJobRequest {
   initImage?: string;
   extendChunks?: number;
   strength?: number;
+  sfwMode?: boolean;
 }
 
 export interface WanVideoStatus {
@@ -116,6 +148,17 @@ export interface CreditCost {
   credits_enabled: boolean;
 }
 
+export interface CreditReferenceRow {
+  id: string;
+  label: string;
+  credits_per_job: number;
+}
+
+export interface CreditReferenceResponse {
+  credits_enabled: boolean;
+  reference: CreditReferenceRow[];
+}
+
 export class HavnaiApiError extends Error {
   code?: string;
   data?: Record<string, any>;
@@ -129,14 +172,17 @@ export class HavnaiApiError extends Error {
 }
 
 export interface SubmitJobOptions {
+  wallet?: string;
   steps?: number;
   guidance?: number;
   width?: number;
   height?: number;
   sampler?: string;
   seed?: number;
+  referenceFaceUrl?: string;
   loras?: LoraConfig[];
-  autoAnatomy?: boolean;
+  hardcoreMode?: boolean;
+  sfwMode?: boolean;
 }
 
 function getApiBase(): string {
@@ -158,13 +204,6 @@ function getApiBase(): string {
 
   return envBase || "/api";
 }
-
-// Wallet used when submitting jobs from the /test page.
-// Configure NEXT_PUBLIC_HAVNAI_WALLET in .env.local to point to your real EVM address.
-const WALLET =
-  process.env.NEXT_PUBLIC_HAVNAI_WALLET && process.env.NEXT_PUBLIC_HAVNAI_WALLET.length > 0
-    ? process.env.NEXT_PUBLIC_HAVNAI_WALLET
-    : "0x0000000000000000000000000000000000000000";
 
 function apiUrl(path: string): string {
   return `${getApiBase()}${path}`;
@@ -221,7 +260,7 @@ export async function submitAutoJob(
       : "auto";
 
   const body: Record<string, any> = {
-    wallet: WALLET,
+    wallet: options?.wallet?.trim() || WALLET,
     model,
     prompt,
   };
@@ -235,14 +274,20 @@ export async function submitAutoJob(
     if (options.width != null) body.width = options.width;
     if (options.height != null) body.height = options.height;
     if (options.seed != null) body.seed = options.seed;
+    if (options.referenceFaceUrl && options.referenceFaceUrl.trim().length > 0) {
+      body.reference_face_url = options.referenceFaceUrl.trim();
+    }
     if (options.sampler && options.sampler.trim().length > 0) {
       body.sampler = options.sampler;
     }
     if (options.loras && options.loras.length > 0) {
       body.loras = options.loras;
     }
-    if (options.autoAnatomy != null) {
-      body.auto_anatomy = options.autoAnatomy;
+    if (options.hardcoreMode === true) {
+      body.hardcore_mode = true;
+    }
+    if (options.sfwMode === true) {
+      body.sfw_mode = true;
     }
   }
 
@@ -268,7 +313,7 @@ export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<strin
     request.model && request.model.trim().length > 0 ? request.model.trim() : "epicrealismXL_vxviiCrystalclear";
 
   const body: Record<string, any> = {
-    wallet: WALLET,
+    wallet: request.wallet?.trim() || WALLET,
     model,
     prompt: request.prompt || "",
     base_image_url: request.baseImageUrl,
@@ -276,10 +321,12 @@ export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<strin
   };
   if (request.strength != null) body.strength = request.strength;
   if (request.numSteps != null) body.num_steps = request.numSteps;
+  if (request.guidance != null) body.guidance = request.guidance;
   if (request.seed != null) body.seed = request.seed;
   if (request.loras && request.loras.length > 0) {
     body.loras = request.loras;
   }
+  if (request.sfwMode === true) body.sfw_mode = true;
 
   const res = await fetch(apiUrl("/submit-faceswap-job"), {
     method: "POST",
@@ -301,7 +348,7 @@ export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<strin
 export async function submitWanVideoJob(request: WanVideoRequest): Promise<string> {
   const body: Record<string, any> = {
     prompt: request.prompt,
-    wallet: WALLET,
+    wallet: request.wallet?.trim() || WALLET,
   };
   if (request.negativePrompt) body.negative_prompt = request.negativePrompt;
   if (request.motionType) body.motion_type = request.motionType;
@@ -311,6 +358,7 @@ export async function submitWanVideoJob(request: WanVideoRequest): Promise<strin
   if (request.fps != null) body.fps = request.fps;
   if (request.width != null) body.width = request.width;
   if (request.height != null) body.height = request.height;
+  if (request.sfwMode === true) body.sfw_mode = true;
 
   const res = await fetch(apiUrl("/generate-video"), {
     method: "POST",
@@ -330,11 +378,17 @@ export async function submitWanVideoJob(request: WanVideoRequest): Promise<strin
 }
 
 export async function submitVideoJob(request: VideoJobRequest): Promise<string> {
-  const model =
-    request.model && request.model.trim().length > 0 ? request.model.trim() : "ltx2";
+  const model = request.model?.trim();
+  if (!model) {
+    throw new HavnaiApiError(
+      "No online video capacity right now. Select an available video model and try again.",
+      "no_capacity",
+      { error: "no_capacity", task_type: "VIDEO_GEN", model: "auto" }
+    );
+  }
 
   const body: Record<string, any> = {
-    wallet: WALLET,
+    wallet: request.wallet?.trim() || WALLET,
     model,
     prompt: request.prompt,
   };
@@ -349,6 +403,7 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   if (request.initImage) body.init_image = request.initImage;
   if (request.extendChunks != null) body.extend_chunks = request.extendChunks;
   if (request.strength != null) body.strength = request.strength;
+  if (request.sfwMode === true) body.sfw_mode = true;
 
   const res = await fetch(apiUrl("/submit-job"), {
     method: "POST",
@@ -427,6 +482,35 @@ export async function fetchJobWithResult(
   }
 }
 
+export async function cancelJob(jobId: string): Promise<{ status: string; job_id: string }> {
+  const res = await fetch(apiUrl(`/jobs/${encodeURIComponent(jobId)}/cancel`), {
+    method: "POST",
+    headers: buildHeaders(true),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return await res.json();
+}
+
+/**
+ * Returns a human-readable warning if the job appears stuck, or null if it
+ * looks normal.  Thresholds: queued > 2 min, running > 5 min.
+ */
+export function getJobStuckWarning(job: JobDetail): string | null {
+  if (!job.timestamp) return null;
+  const status = (job.status || "").toLowerCase();
+  if (status !== "queued" && status !== "running") return null;
+  const elapsedSec = (Date.now() / 1000) - job.timestamp;
+  if (status === "queued" && elapsedSec > 120) {
+    return "This job has been waiting in the queue for over 2 minutes. The system will automatically retry if needed.";
+  }
+  if (status === "running" && elapsedSec > 300) {
+    return "This job has been processing for over 5 minutes. If the worker is unresponsive, it will be automatically requeued.";
+  }
+  return null;
+}
+
 export async function fetchWanVideoJob(jobId: string): Promise<WanVideoStatus> {
   const res = await fetch(apiUrl(`/generate-video/${encodeURIComponent(jobId)}`), {
     headers: buildHeaders(true),
@@ -453,11 +537,13 @@ export async function fetchQuota(): Promise<QuotaStatus> {
   return (await res.json()) as QuotaStatus;
 }
 
-export async function fetchCredits(): Promise<CreditBalance> {
-  const res = await fetch(apiUrl(`/credits/balance?wallet=${encodeURIComponent(WALLET)}`), {
+export async function fetchCredits(wallet: string = WALLET): Promise<CreditBalance> {
+  const res = await fetch(apiUrl(`/credits/balance?wallet=${encodeURIComponent(wallet)}`), {
     headers: buildHeaders(false),
   });
   if (!res.ok) {
+
+    
     throw await parseErrorResponse(res);
   }
   return (await res.json()) as CreditBalance;
@@ -474,6 +560,186 @@ export async function fetchCreditCost(model: string, taskType?: string): Promise
   }
   return (await res.json()) as CreditCost;
 }
+
+export async function fetchCreditReference(): Promise<CreditReferenceResponse> {
+  const res = await fetch(apiUrl("/credits/reference"), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  const data = await res.json();
+  return {
+    credits_enabled: Boolean(data?.credits_enabled),
+    reference: Array.isArray(data?.reference)
+      ? data.reference.map((row: any) => ({
+          id: String(row?.id || ""),
+          label: String(row?.label || ""),
+          credits_per_job: Number(row?.credits_per_job || 0),
+        }))
+      : [],
+  };
+}
+export interface CreditConversion {
+  wallet: string;
+  converted: number;
+  balance: number;
+  remaining?: number;
+  message: string;
+  credits_enabled: boolean;
+}
+
+export interface WalletNonceChallenge {
+  nonce: string;
+  message: string;
+  issued_at: string;
+  expires_at: string;
+}
+
+export interface ConvertCreditsPayload {
+  wallet: string;
+  amount: number;
+  nonce: string;
+  signature: string;
+}
+
+function requireEthereumProvider(): any {
+  if (typeof window === "undefined") {
+    throw new HavnaiApiError("Wallet connection is only available in the browser.", "wallet_unavailable");
+  }
+  const selection = getInjectedProvider();
+  if (!selection.provider) {
+    const issue =
+      selection.error || new WalletError("wallet_unavailable", "MetaMask not found. Install MetaMask and try again.");
+    throw new HavnaiApiError(issue.message, issue.code);
+  }
+  return selection.provider;
+}
+
+export async function getConnectedWallet(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  try {
+    const accounts = await readConnectedAccounts();
+    return accounts[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function connectWallet(): Promise<string> {
+  try {
+    const accounts = await requestAccounts();
+    if (!accounts || accounts.length === 0) {
+      throw new HavnaiApiError("No wallet account returned by MetaMask.", "wallet_unavailable");
+    }
+    return getAddress(accounts[0]);
+  } catch (error) {
+    const issue = normalizeWalletError(error);
+    throw new HavnaiApiError(issue.message, issue.code);
+  }
+}
+
+export async function requestConversionNonce(wallet: string, amount: number): Promise<WalletNonceChallenge> {
+  return requestWalletNonce({
+    wallet,
+    amount,
+    purpose: "convert_credits_to_hai",
+  });
+}
+
+type WalletNoncePurpose =
+  | "convert_credits_to_hai"
+  | "gallery_purchase"
+  | "gallery_list"
+  | "identity_anchor_create"
+  | "identity_anchor_delete";
+
+interface WalletNonceRequest {
+  wallet: string;
+  amount?: number;
+  purpose: WalletNoncePurpose;
+  listing_id?: number;
+  job_id?: string;
+  slug?: string;
+  anchor_id?: number;
+}
+
+async function requestWalletNonce(payload: WalletNonceRequest): Promise<WalletNonceChallenge> {
+  const res = await fetch(apiUrl("/wallet/nonce"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return (await res.json()) as WalletNonceChallenge;
+}
+
+async function signWalletNonce(payload: WalletNonceRequest): Promise<{
+  wallet: string;
+  nonce: string;
+  signature: string;
+}> {
+  const provider = new BrowserProvider(requireEthereumProvider());
+  const signer = await provider.getSigner();
+  const signerWallet = getAddress(await signer.getAddress());
+  if (payload.wallet && signerWallet.toLowerCase() !== payload.wallet.toLowerCase()) {
+    throw new HavnaiApiError(
+      `Connected wallet ${signerWallet} does not match ${payload.wallet}.`,
+      "wallet_mismatch"
+    );
+  }
+  const challenge = await requestWalletNonce({
+    ...payload,
+    wallet: signerWallet,
+  });
+  const signature = await signer.signMessage(challenge.message);
+  return {
+    wallet: signerWallet,
+    nonce: challenge.nonce,
+    signature,
+  };
+}
+
+export async function convertCredits(payload: ConvertCreditsPayload): Promise<CreditConversion> {
+  const res = await fetch(apiUrl("/credits/convert"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  const json = (await res.json()) as Partial<CreditConversion>;
+  const balance = Number(json.balance ?? json.remaining ?? 0);
+  return {
+    wallet: String(json.wallet || payload.wallet),
+    converted: Number(json.converted ?? payload.amount),
+    balance,
+    remaining:
+      json.remaining != null
+        ? Number(json.remaining)
+        : balance,
+    message: String(json.message || "Credits converted to HAI"),
+    credits_enabled: Boolean(json.credits_enabled),
+  };
+}
+
+export async function convertCreditsWithMetaMask(amount: number, wallet?: string): Promise<CreditConversion> {
+  const provider = new BrowserProvider(requireEthereumProvider());
+  const signer = await provider.getSigner();
+  const signerWallet = getAddress(wallet || (await signer.getAddress()));
+  const challenge = await requestConversionNonce(signerWallet, amount);
+  const signature = await signer.signMessage(challenge.message);
+  return convertCredits({
+    wallet: signerWallet,
+    amount,
+    nonce: challenge.nonce,
+    signature,
+  });
+}
+
 
 // ---------------------------------------------------------------------------
 // Stripe payments
@@ -517,7 +783,7 @@ export async function fetchPackages(): Promise<PackagesResponse> {
   return (await res.json()) as PackagesResponse;
 }
 
-export async function createCheckout(packageId: string): Promise<CheckoutResponse> {
+export async function createCheckout(packageId: string, wallet: string = WALLET): Promise<CheckoutResponse> {
   const successUrl = `${window.location.origin}/pricing?payment=success`;
   const cancelUrl = `${window.location.origin}/pricing?payment=cancelled`;
 
@@ -525,7 +791,7 @@ export async function createCheckout(packageId: string): Promise<CheckoutRespons
     method: "POST",
     headers: buildHeaders(false),
     body: JSON.stringify({
-      wallet: WALLET,
+      wallet,
       package_id: packageId,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -537,9 +803,9 @@ export async function createCheckout(packageId: string): Promise<CheckoutRespons
   return (await res.json()) as CheckoutResponse;
 }
 
-export async function fetchPaymentHistory(): Promise<PaymentRecord[]> {
+export async function fetchPaymentHistory(wallet: string = WALLET): Promise<PaymentRecord[]> {
   const res = await fetch(
-    apiUrl(`/payments/history?wallet=${encodeURIComponent(WALLET)}`),
+    apiUrl(`/payments/history?wallet=${encodeURIComponent(wallet)}`),
     { headers: buildHeaders(false) }
   );
   if (!res.ok) {
@@ -762,6 +1028,275 @@ export interface WorkflowListResponse {
   limit: number;
 }
 
+export interface IdentityAnchor {
+  id: number;
+  wallet: string;
+  slug: string;
+  display_name: string;
+  created_at: number;
+  updated_at: number;
+  last_used_at?: number | null;
+}
+
+function normalizeIdentityAnchor(raw: any): IdentityAnchor {
+  return {
+    id: Number(raw?.id || 0),
+    wallet: String(raw?.wallet || ""),
+    slug: String(raw?.slug || ""),
+    display_name: String(raw?.display_name || ""),
+    created_at: Number(raw?.created_at || 0),
+    updated_at: Number(raw?.updated_at || 0),
+    last_used_at:
+      raw?.last_used_at == null
+        ? null
+        : Number(raw.last_used_at),
+  };
+}
+
+export type GalleryListingStatus = "active" | "sold" | "delisted";
+
+export interface GalleryListing {
+  id: number;
+  job_id: string;
+  seller_wallet: string;
+  title: string;
+  description: string;
+  price_credits: number;
+  category?: string;
+  asset_type: "image" | "video" | string;
+  model?: string;
+  prompt?: string;
+  listed: boolean;
+  sold: boolean;
+  status: GalleryListingStatus;
+  image_url?: string;
+  video_url?: string;
+  preview_url?: string;
+  already_listed?: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface GalleryBrowseResponse {
+  listings: GalleryListing[];
+  total: number;
+  limit: number;
+  offset: number;
+  sort: string;
+}
+
+export interface GalleryPurchaseResponse {
+  ok: boolean;
+  sale: {
+    listing_id: number;
+    buyer_wallet: string;
+    seller_wallet: string;
+    price_paid: number;
+    job_id: string;
+  };
+  remaining_credits: number;
+}
+
+export interface GalleryPurchaseRecord {
+  id: number;
+  listing_id: number;
+  buyer_wallet: string;
+  seller_wallet: string;
+  price_paid: number;
+  created_at: number;
+  job_id: string;
+  title: string;
+  asset_type: "image" | "video" | string;
+  model?: string;
+  prompt?: string;
+  image_url?: string;
+  video_url?: string;
+  preview_url?: string;
+}
+
+export interface CreateGalleryListingInput {
+  wallet?: string;
+  job_id: string;
+  title: string;
+  description?: string;
+  price_credits: number;
+  category?: string;
+}
+
+function normalizeGalleryListing(raw: any): GalleryListing {
+  const imageUrl = resolveAssetUrl(raw?.image_url);
+  const videoUrl = resolveAssetUrl(raw?.video_url);
+  const previewUrl = resolveAssetUrl(raw?.preview_url) || videoUrl || imageUrl;
+  return {
+    id: Number(raw?.id || 0),
+    job_id: String(raw?.job_id || ""),
+    seller_wallet: String(raw?.seller_wallet || ""),
+    title: String(raw?.title || ""),
+    description: String(raw?.description || ""),
+    price_credits: Number(raw?.price_credits || 0),
+    category: raw?.category ? String(raw.category) : undefined,
+    asset_type: String(raw?.asset_type || "image"),
+    model: raw?.model ? String(raw.model) : undefined,
+    prompt: raw?.prompt ? String(raw.prompt) : undefined,
+    listed: Boolean(raw?.listed),
+    sold: Boolean(raw?.sold),
+    status:
+      raw?.status === "sold" || raw?.status === "delisted" || raw?.status === "active"
+        ? raw.status
+        : raw?.sold
+        ? "sold"
+        : raw?.listed
+        ? "active"
+        : "delisted",
+    image_url: imageUrl,
+    video_url: videoUrl,
+    preview_url: previewUrl,
+    already_listed: raw?.already_listed === true,
+    created_at: Number(raw?.created_at || 0),
+    updated_at: Number(raw?.updated_at || 0),
+  };
+}
+
+function normalizeGalleryPurchase(raw: any): GalleryPurchaseRecord {
+  return {
+    id: Number(raw?.id || 0),
+    listing_id: Number(raw?.listing_id || 0),
+    buyer_wallet: String(raw?.buyer_wallet || ""),
+    seller_wallet: String(raw?.seller_wallet || ""),
+    price_paid: Number(raw?.price_paid || 0),
+    created_at: Number(raw?.created_at || 0),
+    job_id: String(raw?.job_id || ""),
+    title: String(raw?.title || ""),
+    asset_type: String(raw?.asset_type || "image"),
+    model: raw?.model ? String(raw.model) : undefined,
+    prompt: raw?.prompt ? String(raw.prompt) : undefined,
+    image_url: resolveAssetUrl(raw?.image_url),
+    video_url: resolveAssetUrl(raw?.video_url),
+    preview_url: resolveAssetUrl(raw?.preview_url) || resolveAssetUrl(raw?.video_url) || resolveAssetUrl(raw?.image_url),
+  };
+}
+
+export async function fetchGalleryBrowse(
+  opts: {
+    search?: string;
+    asset_type?: string;
+    sort?: string;
+    offset?: number;
+    limit?: number;
+  } = {}
+): Promise<GalleryBrowseResponse> {
+  const params = new URLSearchParams();
+  if (opts.search) params.set("search", opts.search);
+  if (opts.asset_type) params.set("asset_type", opts.asset_type);
+  if (opts.sort) params.set("sort", opts.sort);
+  if (opts.offset != null) params.set("offset", String(opts.offset));
+  if (opts.limit != null) params.set("limit", String(opts.limit));
+  const qs = params.toString();
+  const res = await fetch(apiUrl(`/gallery/browse${qs ? `?${qs}` : ""}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return {
+    listings: Array.isArray(data?.listings) ? data.listings.map(normalizeGalleryListing) : [],
+    total: Number(data?.total || 0),
+    limit: Number(data?.limit || 0),
+    offset: Number(data?.offset || 0),
+    sort: String(data?.sort || opts.sort || "newest"),
+  };
+}
+
+export async function fetchMyGalleryListings(wallet: string = WALLET): Promise<GalleryListing[]> {
+  const res = await fetch(
+    apiUrl(`/gallery/my-listings?wallet=${encodeURIComponent(wallet)}&include_sold=true`),
+    { headers: buildHeaders(false) }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.listings) ? data.listings.map(normalizeGalleryListing) : [];
+}
+
+export async function fetchGalleryPurchases(wallet: string = WALLET): Promise<GalleryPurchaseRecord[]> {
+  const res = await fetch(
+    apiUrl(`/gallery/purchases?wallet=${encodeURIComponent(wallet)}`),
+    { headers: buildHeaders(false) }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.purchases) ? data.purchases.map(normalizeGalleryPurchase) : [];
+}
+
+export async function createGalleryListing(input: CreateGalleryListingInput): Promise<GalleryListing> {
+  const signed = await signWalletNonce({
+    wallet: input.wallet || WALLET,
+    amount: input.price_credits,
+    purpose: "gallery_list",
+    job_id: input.job_id,
+  });
+  const res = await fetch(apiUrl("/gallery/listings"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      ...input,
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return normalizeGalleryListing(data);
+}
+
+export async function createGalleryListingWithMetaMask(
+  input: Omit<CreateGalleryListingInput, "wallet"> & { wallet?: string }
+): Promise<GalleryListing> {
+  return createGalleryListing(input);
+}
+
+export async function purchaseGalleryListing(
+  listingId: number,
+  wallet: string = WALLET,
+  priceCredits?: number
+): Promise<GalleryPurchaseResponse> {
+  let price = priceCredits;
+  if (!(typeof price === "number" && Number.isFinite(price) && price > 0)) {
+    const detailRes = await fetch(apiUrl(`/gallery/listings/${listingId}`), {
+      headers: buildHeaders(false),
+    });
+    if (!detailRes.ok) throw await parseErrorResponse(detailRes);
+    const detail = await detailRes.json();
+    price = Number(detail?.price_credits || 0);
+  }
+  const signed = await signWalletNonce({
+    wallet,
+    amount: price,
+    purpose: "gallery_purchase",
+    listing_id: listingId,
+  });
+  const res = await fetch(apiUrl(`/gallery/listings/${listingId}/purchase`), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as GalleryPurchaseResponse;
+}
+
+export async function delistGalleryListing(listingId: number, wallet: string = WALLET): Promise<{ ok: boolean }> {
+  const res = await fetch(apiUrl(`/gallery/listings/${listingId}`), {
+    method: "DELETE",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ wallet }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as { ok: boolean };
+}
+
 export async function fetchMarketplace(
   opts: { search?: string; category?: string; offset?: number; limit?: number } = {}
 ): Promise<WorkflowListResponse> {
@@ -791,24 +1326,80 @@ export async function createWorkflow(data: {
   description: string;
   category?: string;
   config: Record<string, any>;
+  wallet?: string;
 }): Promise<Workflow> {
   const res = await fetch(apiUrl("/workflows"), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ ...data, wallet: WALLET }),
+    body: JSON.stringify({ ...data, wallet: data.wallet || WALLET }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as Workflow;
 }
 
-export async function publishWorkflow(id: string): Promise<Workflow> {
+export async function publishWorkflow(id: string, wallet: string = WALLET): Promise<Workflow> {
   const res = await fetch(apiUrl(`/workflows/${encodeURIComponent(id)}/publish`), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet: WALLET }),
+    body: JSON.stringify({ wallet }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as Workflow;
+}
+
+export async function fetchIdentityAnchors(wallet: string = WALLET): Promise<IdentityAnchor[]> {
+  const res = await fetch(apiUrl(`/identity-anchors?wallet=${encodeURIComponent(wallet)}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.anchors) ? data.anchors.map(normalizeIdentityAnchor) : [];
+}
+
+export async function createIdentityAnchor(input: {
+  displayName: string;
+  slug: string;
+  imageDataUrl: string;
+  wallet?: string;
+}): Promise<IdentityAnchor> {
+  const signed = await signWalletNonce({
+    wallet: input.wallet || WALLET,
+    purpose: "identity_anchor_create",
+    slug: input.slug,
+  });
+  const res = await fetch(apiUrl("/identity-anchors"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      display_name: input.displayName,
+      slug: input.slug,
+      image_data_url: input.imageDataUrl,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return normalizeIdentityAnchor(await res.json());
+}
+
+export async function deleteIdentityAnchor(anchorId: number, wallet: string = WALLET): Promise<{ ok: boolean }> {
+  const signed = await signWalletNonce({
+    wallet,
+    purpose: "identity_anchor_delete",
+    anchor_id: anchorId,
+  });
+  const res = await fetch(apiUrl(`/identity-anchors/${anchorId}`), {
+    method: "DELETE",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as { ok: boolean };
 }
 
 // ---------------------------------------------------------------------------
@@ -822,22 +1413,22 @@ export interface WalletRewards {
   claimed: number;
 }
 
-export async function fetchWalletRewards(): Promise<WalletRewards> {
-  const res = await fetch(apiUrl(`/rewards/claimable?wallet=${encodeURIComponent(WALLET)}`), {
+export async function fetchWalletRewards(wallet: string = WALLET): Promise<WalletRewards> {
+  const res = await fetch(apiUrl(`/rewards/claimable?wallet=${encodeURIComponent(wallet)}`), {
     headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as WalletRewards;
 }
 
-export async function claimRewards(): Promise<{ claimed: number; tx_hash?: string }> {
+export async function claimRewards(wallet: string = WALLET): Promise<{ claimed: number; tx_hash?: string }> {
   const res = await fetch(apiUrl("/rewards/claim"), {
     method: "POST",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet: WALLET }),
+    body: JSON.stringify({ wallet }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return await res.json();
 }
 
-export { WALLET };
+export { WALLET, ZERO_WALLET, isUsableWallet };

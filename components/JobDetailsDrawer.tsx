@@ -1,5 +1,14 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { JobDetailResponse, ResultResponse, resolveAssetUrl } from "../lib/havnai";
+import {
+  JobDetailResponse,
+  JobLoraEntry,
+  ResultResponse,
+  createGalleryListing,
+  resolveAssetUrl,
+  cancelJob,
+  getJobStuckWarning,
+  isUsableWallet,
+} from "../lib/havnai";
 import { downloadAsset } from "../lib/download";
 import { getTimelineSteps, normalizeJobStatus, shortJobId } from "../lib/jobStatus";
 import { addToLibrary, isInLibrary, removeFromLibrary, LibraryItemType } from "../lib/libraryStore";
@@ -8,6 +17,7 @@ export interface JobSummary {
   job_id?: string;
   id?: string;
   model?: string;
+  wallet?: string;
   status?: string;
   task_type?: string;
   submitted_at?: string;
@@ -25,6 +35,12 @@ interface JobDetailsDrawerProps {
   result?: ResultResponse | null;
   loading?: boolean;
   error?: string;
+  marketplace?: {
+    wallet?: string | null;
+    canSign?: boolean;
+    source?: "connected" | "env" | "none";
+    onListingCreated?: (listingId: number) => void;
+  };
   onClose: () => void;
 }
 
@@ -42,6 +58,53 @@ function parseJobData(raw: any): Record<string, any> {
     return raw as Record<string, any>;
   }
   return {};
+}
+
+function normalizeLoraEntries(raw: any): JobLoraEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const normalized: JobLoraEntry[] = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      const trimmed = item.trim();
+      if (!trimmed) continue;
+      const parsed: JobLoraEntry = { name: trimmed };
+      if (trimmed.includes(":")) {
+        const pieces = trimmed.split(":");
+        const maybeWeight = pieces[pieces.length - 1];
+        const maybeName = pieces.slice(0, pieces.length - 1).join(":").trim();
+        const numeric = Number.parseFloat(maybeWeight);
+        if (Number.isFinite(numeric)) parsed.applied_weight = numeric;
+        if (maybeName) parsed.name = maybeName;
+      }
+      normalized.push(parsed);
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const name = String((item as any).name || (item as any).adapter || (item as any).filename || "").trim();
+    if (!name) continue;
+    const entry: JobLoraEntry = { name };
+    const weight = Number.parseFloat((item as any).weight);
+    const requested = Number.parseFloat((item as any).requested_weight);
+    const applied = Number.parseFloat((item as any).applied_weight);
+    if (Number.isFinite(weight)) entry.weight = weight;
+    if (Number.isFinite(requested)) entry.requested_weight = requested;
+    if (Number.isFinite(applied)) entry.applied_weight = applied;
+    if ((item as any).path) entry.path = String((item as any).path);
+    if ((item as any).filename) entry.filename = String((item as any).filename);
+    normalized.push(entry);
+  }
+  return normalized;
+}
+
+function formatLoraWeight(entry: JobLoraEntry): string {
+  const requested = entry.requested_weight ?? entry.weight;
+  const applied = entry.applied_weight;
+  if (requested != null && applied != null) {
+    return `${requested.toFixed(2)} → ${applied.toFixed(2)}`;
+  }
+  if (requested != null) return requested.toFixed(2);
+  if (applied != null) return applied.toFixed(2);
+  return "--";
 }
 
 function truncateText(value: string | undefined, limit = 500): string | undefined {
@@ -86,6 +149,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
   result,
   loading,
   error,
+  marketplace,
   onClose,
 }) => {
   const resolvedId = job?.id || summary?.job_id || summary?.id || jobId;
@@ -101,6 +165,14 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     resolveAssetUrl(result?.video_url) ||
     resolveAssetUrl(summary?.video_url);
   const [isSaved, setIsSaved] = useState(false);
+  const [listingOpen, setListingOpen] = useState(false);
+  const [listingTitle, setListingTitle] = useState("");
+  const [listingDescription, setListingDescription] = useState("");
+  const [listingCategory, setListingCategory] = useState("");
+  const [listingPrice, setListingPrice] = useState("10");
+  const [listingSubmitting, setListingSubmitting] = useState(false);
+  const [listingError, setListingError] = useState<string | undefined>();
+  const [listingSuccess, setListingSuccess] = useState<string | undefined>();
 
   useEffect(() => {
     if (!resolvedId || !open) {
@@ -109,6 +181,23 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     }
     setIsSaved(isInLibrary(resolvedId));
   }, [resolvedId, open]);
+
+  useEffect(() => {
+    if (!open) {
+      setListingOpen(false);
+      setListingError(undefined);
+      setListingSuccess(undefined);
+      return;
+    }
+    const defaultTitle = resolvedId ? `Generation #${resolvedId.slice(0, 8)}` : "Generation";
+    setListingTitle(defaultTitle);
+    setListingDescription("");
+    setListingCategory("");
+    setListingPrice("10");
+    setListingError(undefined);
+    setListingSuccess(undefined);
+    setListingOpen(false);
+  }, [open, resolvedId]);
 
   const createdAt =
     formatUnixSeconds(job?.timestamp) ||
@@ -120,6 +209,19 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
 
   const promptText = truncateText(jobData.prompt, 500);
   const negativePrompt = truncateText(jobData.negative_prompt, 500);
+  const requestedLoras = useMemo(
+    () => normalizeLoraEntries(job?.requested_loras || jobData.requested_loras || jobData.loras),
+    [job?.requested_loras, jobData.requested_loras, jobData.loras]
+  );
+  const appliedLoras = useMemo(
+    () => normalizeLoraEntries(job?.applied_loras || jobData.applied_loras),
+    [job?.applied_loras, jobData.applied_loras]
+  );
+  const statusReason =
+    (typeof job?.status_reason === "string" && job.status_reason.trim()) ||
+    (typeof jobData.status_reason === "string" && jobData.status_reason.trim()) ||
+    (typeof jobData.error === "string" && jobData.error.trim()) ||
+    undefined;
 
   const params = {
     seed: jobData.seed ?? jobData.overrides?.seed,
@@ -152,6 +254,9 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
         video_url: previewVideo,
       },
       preview_url: previewImage || previewVideo,
+      status_reason: statusReason,
+      requested_loras: requestedLoras,
+      applied_loras: appliedLoras,
       error_message:
         jobData.error_message || jobData.error || jobData.failure_reason || undefined,
     };
@@ -168,6 +273,9 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     negativePrompt,
     previewImage,
     previewVideo,
+    statusReason,
+    requestedLoras,
+    appliedLoras,
   ]);
 
   const handleCopy = async (text: string) => {
@@ -205,6 +313,72 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     if (!resolvedId) return;
     removeFromLibrary(resolvedId);
     setIsSaved(false);
+  };
+
+  const canListInMarketplace = Boolean(
+    resolvedId &&
+      (previewImage || previewVideo)
+  );
+  const jobOwnerWallet =
+    typeof job?.wallet === "string" && job.wallet.trim()
+      ? job.wallet.trim()
+      : typeof summary?.wallet === "string" && summary.wallet.trim()
+      ? summary.wallet.trim()
+      : undefined;
+  const marketplaceWalletMatchesJob =
+    isUsableWallet(marketplace?.wallet) &&
+    typeof jobOwnerWallet === "string" &&
+    marketplace.wallet.toLowerCase() === jobOwnerWallet.toLowerCase();
+  const showListingAction =
+    canListInMarketplace &&
+    marketplaceWalletMatchesJob &&
+    marketplace?.canSign === true;
+  const listingBlockedReason = !canListInMarketplace
+    ? undefined
+    : !jobOwnerWallet
+    ? "Loading job owner wallet before enabling marketplace listing."
+    : !marketplaceWalletMatchesJob
+    ? `This job belongs to ${jobOwnerWallet}. Connect that wallet to list it on the marketplace.`
+    : marketplace?.canSign !== true
+    ? "MetaMask must be connected with the job owner wallet to sign a marketplace listing."
+    : undefined;
+
+  const handleCreateListing = async () => {
+    if (!resolvedId || !isUsableWallet(marketplace?.wallet) || !showListingAction) return;
+    if (!listingTitle.trim()) {
+      setListingError("Title is required.");
+      return;
+    }
+    const parsedPrice = Number.parseFloat(listingPrice);
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+      setListingError("Price must be greater than 0.");
+      return;
+    }
+
+    setListingSubmitting(true);
+    setListingError(undefined);
+    setListingSuccess(undefined);
+    try {
+      const listing = await createGalleryListing({
+        wallet: marketplace.wallet,
+        job_id: resolvedId,
+        title: listingTitle.trim(),
+        description: listingDescription.trim(),
+        category: listingCategory.trim(),
+        price_credits: parsedPrice,
+      });
+      setListingSuccess(
+        listing.already_listed
+          ? "Already listed. View it in My Listings."
+          : "Listed successfully. View it in My Listings."
+      );
+      setListingOpen(false);
+      marketplace?.onListingCreated?.(listing.id);
+    } catch (err: any) {
+      setListingError(err?.message || "Failed to create listing.");
+    } finally {
+      setListingSubmitting(false);
+    }
   };
 
   if (!open) return null;
@@ -266,6 +440,46 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                 );
               })}
             </div>
+            {job && (() => {
+              const warning = getJobStuckWarning(job);
+              if (!warning) return null;
+              return (
+                <div className="job-stuck-warning" style={{
+                  marginTop: "0.75rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "8px",
+                  background: "rgba(255, 180, 50, 0.12)",
+                  border: "1px solid rgba(255, 180, 50, 0.3)",
+                  fontSize: "0.85rem",
+                  color: "#ffb432",
+                }}>
+                  <p style={{ margin: "0 0 0.5rem 0" }}>{warning}</p>
+                  <button
+                    type="button"
+                    style={{
+                      background: "rgba(255, 80, 80, 0.15)",
+                      border: "1px solid rgba(255, 80, 80, 0.4)",
+                      color: "#ff6b6b",
+                      padding: "0.35rem 0.75rem",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "0.8rem",
+                    }}
+                    onClick={async () => {
+                      if (!resolvedId) return;
+                      try {
+                        await cancelJob(resolvedId);
+                        onClose();
+                      } catch {
+                        // ignore — job may already be completed
+                      }
+                    }}
+                  >
+                    Cancel job
+                  </button>
+                </div>
+              );
+            })()}
           </section>
 
           <section className="job-section">
@@ -322,9 +536,86 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   </button>
                 </div>
               )}
+              {showListingAction && (
+                <button
+                  type="button"
+                  className="job-action-button secondary"
+                  onClick={() => setListingOpen((value) => !value)}
+                >
+                  {listingOpen ? "Close listing form" : "List on Marketplace"}
+                </button>
+              )}
             </div>
             {loading && <p className="job-hint">Loading job details...</p>}
             {error && <p className="job-hint error">{error}</p>}
+            {listingSuccess && (
+              <p className="job-hint" style={{ color: "#8ff0b6" }}>
+                {listingSuccess}{" "}
+                <a href="/marketplace?tab=gallery&galleryView=my-listings">My Listings</a>
+              </p>
+            )}
+            {canListInMarketplace && !showListingAction && listingBlockedReason && (
+              <p className="job-hint">{listingBlockedReason}</p>
+            )}
+            {showListingAction && listingOpen && (
+              <div className="marketplace-listing-form">
+                <label>
+                  <span className="job-label">title</span>
+                  <input
+                    type="text"
+                    className="library-search"
+                    value={listingTitle}
+                    onChange={(event) => setListingTitle(event.target.value)}
+                    placeholder="Generation title"
+                  />
+                </label>
+                <label>
+                  <span className="job-label">description</span>
+                  <textarea
+                    className="library-search"
+                    value={listingDescription}
+                    onChange={(event) => setListingDescription(event.target.value)}
+                    placeholder="Optional description"
+                    rows={3}
+                    style={{ resize: "vertical" }}
+                  />
+                </label>
+                <div className="marketplace-listing-form-grid">
+                  <label>
+                    <span className="job-label">price_credits</span>
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      className="library-search"
+                      value={listingPrice}
+                      onChange={(event) => setListingPrice(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span className="job-label">category</span>
+                    <input
+                      type="text"
+                      className="library-search"
+                      value={listingCategory}
+                      onChange={(event) => setListingCategory(event.target.value)}
+                      placeholder="Optional category"
+                    />
+                  </label>
+                </div>
+                {listingError && <p className="job-hint error">{listingError}</p>}
+                <div className="job-actions">
+                  <button
+                    type="button"
+                    className="job-action-button"
+                    disabled={listingSubmitting}
+                    onClick={handleCreateListing}
+                  >
+                    {listingSubmitting ? "Listing..." : "Create Listing"}
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="job-section">
@@ -387,6 +678,46 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   <span className="job-label">model</span>
                   <span>{job?.model || summary?.model || "--"}</span>
                 </div>
+                <div>
+                  <span className="job-label">status_reason</span>
+                  <span>{statusReason || "--"}</span>
+                </div>
+              </div>
+            </details>
+          </section>
+
+          <section className="job-section">
+            <details>
+              <summary>LoRA trace</summary>
+              <div className="job-details-stack">
+                <div>
+                  <span className="job-label">requested_loras</span>
+                  {requestedLoras.length > 0 ? (
+                    <ul>
+                      {requestedLoras.map((entry, index) => (
+                        <li key={`requested-lora-${index}`}>
+                          <code>{entry.name}</code> · {formatLoraWeight(entry)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>--</p>
+                  )}
+                </div>
+                <div>
+                  <span className="job-label">applied_loras</span>
+                  {appliedLoras.length > 0 ? (
+                    <ul>
+                      {appliedLoras.map((entry, index) => (
+                        <li key={`applied-lora-${index}`}>
+                          <code>{entry.name}</code> · {formatLoraWeight(entry)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>--</p>
+                  )}
+                </div>
               </div>
             </details>
           </section>
@@ -410,7 +741,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
           </section>
 
           {normalized.isFailed && (() => {
-            const errText = jobData.error_message || jobData.error || "Unknown error";
+            const errText = statusReason || jobData.error_message || jobData.error || "Unknown error";
             const isOOM = /out of memory/i.test(errText);
             return (
               <section className="job-section job-failure">

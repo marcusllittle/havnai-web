@@ -2,6 +2,7 @@ import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
+import { WalletButton } from "../components/WalletButton";
 import { fetchJobWithResult, JobDetailResponse, ResultResponse, resolveAssetUrl } from "../lib/havnai";
 import { getApiBase } from "../lib/apiBase";
 
@@ -151,12 +152,12 @@ const HomePage: NextPage = () => {
         <title>HavnAI Network — Own Your Intelligence</title>
         <meta
           name="description"
-          content="HavnAI is a decentralized GPU network for AI image and video generation. Node operators earn $HAI running 20 tiered models."
+          content="HavnAI is a decentralized GPU network for AI image generation, face swap, and video jobs when video-capable nodes are online."
         />
         <meta property="og:title" content="HavnAI Network — Own Your Intelligence" />
         <meta
           property="og:description"
-          content="A decentralized GPU network for AI image and video generation. 20 tiered models, weighted routing, and dynamic $HAI rewards."
+          content="A decentralized GPU network for AI image generation, face swap, and video jobs when video-capable nodes are online."
         />
         <meta property="og:type" content="website" />
       </Head>
@@ -166,7 +167,7 @@ const HomePage: NextPage = () => {
           <a href="#home" className="brand">
             <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
             <div className="brand-text">
-              <span className="brand-stage">Stage 6 → 7 Alpha</span>
+              <span className="brand-stage">Public Beta</span>
               <span className="brand-name">HavnAI Network</span>
             </div>
           </a>
@@ -184,12 +185,10 @@ const HomePage: NextPage = () => {
             className={`nav-links ${navOpen ? "nav-open" : ""}`}
             id="primaryNav"
             aria-label="Primary navigation"
+            onClick={() => setNavOpen(false)}
           >
             <a href="#home">Home</a>
-            <a href="#how">How It Works</a>
-            <a href="#smart-routing">Models</a>
-            <a href="#rewards">Rewards</a>
-            <a href="/test">Generator</a>
+            <a href="/generator">Generator</a>
             <a href="/library">My Library</a>
             <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">
               Dashboard
@@ -198,7 +197,8 @@ const HomePage: NextPage = () => {
             <a href="/analytics">Analytics</a>
             <a href="/nodes">Nodes</a>
             <a href="/marketplace">Marketplace</a>
-            <a href="#join">Join Alpha</a>
+            <a href="/join" className="nav-primary">Join</a>
+            <WalletButton />
           </nav>
         </div>
       </header>
@@ -211,9 +211,9 @@ const HomePage: NextPage = () => {
               <p className="hero-kicker">Decentralized GPU Intelligence</p>
               <h1 className="hero-title">OWN YOUR INTELLIGENCE</h1>
               <p className="hero-subtitle">
-                A decentralized GPU network for AI image and video generation. Node operators earn{" "}
-                <strong>$HAI</strong> running 20 models across realism, anime, cartoon, and video
-                — all weighted and rewarded by quality tier.
+                A decentralized GPU network for AI creation. Node operators earn{" "}
+                <strong>$HAI</strong> by serving SDXL image jobs, SDXL face-swap jobs, and video jobs
+                whenever video-capable nodes are online.
               </p>
               <div className="hero-install-note">
                 <h3>Join the HavnAI GPU Grid</h3>
@@ -226,9 +226,7 @@ const HomePage: NextPage = () => {
                   coordinator’s install guide.
                 </p>
                 <a
-                  href={`${apiBase}/join`}
-                  target="_blank"
-                  rel="noreferrer"
+                  href="/join"
                   className="btn tertiary wide"
                 >
                   Open full node install guide
@@ -296,8 +294,9 @@ const HomePage: NextPage = () => {
               <div className="step-icon">3</div>
               <h3>Your GPU Generates</h3>
               <p>
-                Your node runs the model — 18 image models (SD 1.5 and SDXL) plus LTX2 video and
-                AnimateDiff — and returns the result.
+                Your node runs available models from the live registry and returns outputs. The
+                current MVP focuses on SDXL image + face swap, with video jobs routed when LTX2
+                capacity is online.
               </p>
             </article>
             <article className="step-card">
@@ -316,38 +315,46 @@ const HomePage: NextPage = () => {
           <div className="section-header">
             <h2>Smart Routing · Weighted Models</h2>
             <p>
-              20 models across image and video generation, each assigned a weight from our benchmark
-              registry. Higher-weight models get picked more often and earn bigger rewards.
+              Every generation job goes through the coordinator, which picks the best available node
+              and model in real time.
             </p>
           </div>
           <div className="routing-layout">
             <div className="routing-copy">
               <p>
-                When you generate with <strong>auto mode</strong>, the coordinator picks a model using
-                weighted random selection. Weights come from our benchmark and scoring pipeline:
+                When a user submits a prompt, the coordinator checks which GPU nodes are online,
+                what models they have loaded, and routes the job accordingly:
               </p>
               <ul>
-                <li>Each model is scored on realism, detail, and consistency.</li>
-                <li>Scores map to tiers (S, A, B, C, D) with assigned weights.</li>
-                <li>Higher-tier models are selected more often and earn more $HAI per job.</li>
+                <li>
+                  <strong>Image jobs</strong> — routed to nodes running SDXL models. The coordinator
+                  uses weighted random selection so higher-quality models get picked more often.
+                </li>
+                <li>
+                  <strong>Face swap jobs</strong> — sent to nodes with the face-swap pipeline ready,
+                  combining SDXL generation with InsightFace.
+                </li>
+                <li>
+                  <strong>Video jobs</strong> — routed to nodes with LTX-Video loaded. These require
+                  more VRAM and earn a 2× reward bonus.
+                </li>
               </ul>
               <p>
-                The result: the best models get used the most and node operators running them earn the
-                highest rewards.
+                Models are tiered (S through D) based on output quality. Higher-tier models get
+                selected more often and node operators running them earn bigger $HAI rewards per job.
               </p>
             </div>
             <div className="json-card">
-              <div className="json-card-label">Live routing weights (from registry)</div>
+              <div className="json-card-label">How routing works</div>
               <pre>
                 <code>
-                  {`{
-  "juggernautXL_ragnarokBy":       20,  // Tier S
-  "epicrealismXL_vxviiCrystalclear": 20,  // Tier S
-  "perfectdeliberate_v5SD15":      10,  // Tier A
-  "cyberrealisticPony_v160":        8,  // Tier B
-  "disneyPixarCartoon_v10":         5,  // Tier C
-  "ltx2 (video)":                  20   // Video
-}`}
+                  {`User submits prompt
+  → Coordinator checks online nodes
+  → Matches job type to capable nodes
+  → Picks model by weighted selection
+  → Routes job to healthiest node
+  → Node generates, returns result
+  → Node earns $HAI reward`}
                 </code>
               </pre>
             </div>
@@ -378,31 +385,31 @@ const HomePage: NextPage = () => {
                   <td>S</td>
                   <td>20</td>
                   <td>2.0×</td>
-                  <td>JuggernautXL, EpicRealismXL</td>
+                  <td>Top SDXL production models</td>
                 </tr>
                 <tr>
                   <td>A</td>
                   <td>10</td>
                   <td>1.0×</td>
-                  <td>Deliberate v5</td>
+                  <td>Strong general-purpose models</td>
                 </tr>
                 <tr>
                   <td>B</td>
                   <td>8</td>
                   <td>0.8×</td>
-                  <td>CyberRealistic, Lyriel, RealisticVision</td>
+                  <td>Balanced speed/quality models</td>
                 </tr>
                 <tr>
                   <td>C</td>
                   <td>5</td>
                   <td>0.5×</td>
-                  <td>Disney Pixar Cartoon, Kizuki Anime</td>
+                  <td>Specialized or stylized models</td>
                 </tr>
                 <tr>
                   <td>D</td>
                   <td>3</td>
                   <td>0.3×</td>
-                  <td>ZavyChroma, DivineElegance (experimental)</td>
+                  <td>Experimental/low-priority models</td>
                 </tr>
               </tbody>
             </table>
@@ -539,10 +546,10 @@ const HomePage: NextPage = () => {
         <section id="join" className="section join-section">
           <div className="join-inner">
             <div className="join-copy">
-              <h2>Join Stage 6 → 7 Alpha</h2>
+              <h2>Join Public Beta</h2>
               <p>
-                We're running 20 image and video models across a growing set of GPU nodes. If you have a
-                capable NVIDIA GPU and want to earn $HAI by powering AI generation, join the alpha.
+                We are running SDXL image + face-swap workloads and video when compatible nodes are online.
+                If you have a capable NVIDIA GPU and want to earn $HAI by powering generation, join the alpha.
               </p>
               <ul>
                 <li>12&nbsp;GB+ NVIDIA GPU (3060 / 3080 / 4090 class).</li>
@@ -551,14 +558,14 @@ const HomePage: NextPage = () => {
               </ul>
             </div>
             <div className="join-actions">
-              <a href="https://joinhavn.io/alpha" className="btn primary wide">
-                Join Alpha (Typeform)
+              <a href="/join" className="btn primary wide">
+                Join the Grid
               </a>
               <a href={`${apiBase}/dashboard`} className="btn tertiary wide">
                 View Live Dashboard
               </a>
               <p className="join-note">
-                After joining, you’ll receive updated install + config steps tailored to your GPU and OS.
+                The install guide covers prerequisites, GPU setup, WAN I2V configuration, and systemd steps.
               </p>
             </div>
           </div>
