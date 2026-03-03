@@ -137,6 +137,10 @@ const TestPage: React.FC = () => {
   const [baseImageUrl, setBaseImageUrl] = useState("");
   const [baseImageData, setBaseImageData] = useState<string | undefined>();
   const [baseImageName, setBaseImageName] = useState<string | undefined>();
+  const [referenceFaceEnabled, setReferenceFaceEnabled] = useState(false);
+  const [referenceFaceUrl, setReferenceFaceUrl] = useState("");
+  const [referenceFaceData, setReferenceFaceData] = useState<string | undefined>();
+  const [referenceFaceName, setReferenceFaceName] = useState<string | undefined>();
   const [videoInitUrl, setVideoInitUrl] = useState("");
   const [videoInitData, setVideoInitData] = useState<string | undefined>();
   const [videoInitName, setVideoInitName] = useState<string | undefined>();
@@ -697,9 +701,13 @@ const TestPage: React.FC = () => {
     const options: SubmitJobOptions = {};
     const stepsValue = parseOptionalInt(steps);
     const seedValue = parseOptionalInt(seed);
+    const referenceFaceValue = referenceFaceEnabled
+      ? (referenceFaceData || referenceFaceUrl.trim())
+      : "";
 
     if (stepsValue !== undefined) options.steps = stepsValue;
     if (seedValue !== undefined) options.seed = seedValue;
+    if (referenceFaceValue) options.referenceFaceUrl = referenceFaceValue;
     if (sfwMode) options.sfwMode = true;
 
     return Object.keys(options).length > 0 ? options : undefined;
@@ -855,12 +863,33 @@ const TestPage: React.FC = () => {
     }
   };
 
+  const handleReferenceFaceUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await readFileAsDataUrl(file);
+      setReferenceFaceData(data);
+      setReferenceFaceName(file.name);
+      setReferenceFaceUrl("");
+      setReferenceFaceEnabled(true);
+    } catch (err: any) {
+      setStatusMessage(err?.message || "Failed to read reference face image.");
+    }
+  };
+
   const handleSubmit = async () => {
     const trimmed = prompt.trim();
     const selectedVideoModelAvailable =
       mode === "video" && videoModels.some((candidate) => candidate.id === selectedModel);
+    const referenceFaceValue = referenceFaceEnabled
+      ? (referenceFaceData || referenceFaceUrl.trim())
+      : "";
     if (mode !== "face_swap" && !trimmed) {
       setStatusMessage("Prompt is required.");
+      return;
+    }
+    if (mode === "image" && referenceFaceEnabled && !referenceFaceValue) {
+      setStatusMessage("Reference face image is required when Reference face is enabled.");
       return;
     }
     if (mode === "video" && videoModels.length === 0) {
@@ -1727,6 +1756,54 @@ const TestPage: React.FC = () => {
                       <p className="generator-help">
                         Leave blank for random seed each run.
                       </p>
+                      <label className="generator-checkbox" style={{ marginTop: "0.75rem" }}>
+                        <input
+                          type="checkbox"
+                          checked={referenceFaceEnabled}
+                          onChange={(e) => setReferenceFaceEnabled(e.target.checked)}
+                        />
+                        <span>Use reference face</span>
+                      </label>
+                      {referenceFaceEnabled && (
+                        <>
+                          <label className="generator-label" htmlFor="reference-face-url">
+                            Reference face URL
+                          </label>
+                          <input
+                            id="reference-face-url"
+                            type="text"
+                            className="generator-input"
+                            placeholder="https://example.com/face.png"
+                            value={referenceFaceUrl}
+                            onChange={(e) => {
+                              setReferenceFaceUrl(e.target.value);
+                              setReferenceFaceData(undefined);
+                              setReferenceFaceName(undefined);
+                            }}
+                          />
+                          <label className="generator-label" htmlFor="reference-face-upload">
+                            Or upload reference face
+                          </label>
+                          <input
+                            id="reference-face-upload"
+                            type="file"
+                            accept="image/*"
+                            className="generator-input"
+                            onChange={handleReferenceFaceUpload}
+                          />
+                          {referenceFaceName && (
+                            <p className="generator-help">Using uploaded file: {referenceFaceName}</p>
+                          )}
+                          {referenceFaceData && (
+                            <div className="generator-face-preview">
+                              <img src={referenceFaceData} alt="Reference face preview" />
+                            </div>
+                          )}
+                          <p className="generator-help">
+                            Keeps facial identity closer to the supplied face when compatible SDXL capacity is online.
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

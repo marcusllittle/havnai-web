@@ -175,6 +175,7 @@ export interface SubmitJobOptions {
   height?: number;
   sampler?: string;
   seed?: number;
+  referenceFaceUrl?: string;
   loras?: LoraConfig[];
   hardcoreMode?: boolean;
   sfwMode?: boolean;
@@ -269,6 +270,9 @@ export async function submitAutoJob(
     if (options.width != null) body.width = options.width;
     if (options.height != null) body.height = options.height;
     if (options.seed != null) body.seed = options.seed;
+    if (options.referenceFaceUrl && options.referenceFaceUrl.trim().length > 0) {
+      body.reference_face_url = options.referenceFaceUrl.trim();
+    }
     if (options.sampler && options.sampler.trim().length > 0) {
       body.sampler = options.sampler;
     }
