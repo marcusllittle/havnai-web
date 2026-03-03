@@ -189,6 +189,7 @@ export function detectProviderConflict(): {
     };
   }
 
+  // Reuse the preferred-provider selector so multi-wallet installs stay on one code path.
   const preferred = choosePreferredProvider(root, providers);
   if (preferred.provider) {
     return {
