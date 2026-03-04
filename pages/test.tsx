@@ -820,7 +820,7 @@ const TestPage: React.FC = () => {
     if (sfwMode) {
       request.sfwMode = true;
     }
-    return request;
+    return request as import("../lib/havnai").VideoJobRequest;
   };
 
   const runVideoChain = async (promptText: string, extraChunks: number) => {
