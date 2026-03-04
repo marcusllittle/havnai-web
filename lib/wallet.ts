@@ -189,6 +189,7 @@ export function detectProviderConflict(): {
     };
   }
 
+  // Reuse the preferred-provider selector so multi-wallet installs stay on one code path.
   const preferred = choosePreferredProvider(root, providers);
   if (preferred.provider) {
     return {
@@ -224,8 +225,11 @@ export function detectProviderConflict(): {
     providers: [providers[0]],
     provider: providers[0],
     hasConflict: true,
-    providerName: providers[0].isMetaMask ? "MetaMask" : "Injected wallet",
-    error: null,
+    providerName: "Multiple wallets",
+    error: new WalletError(
+      "wallet_conflict",
+      "Multiple wallet extensions were detected, and no usable browser wallet provider could be selected."
+    ),
   };
 }
 

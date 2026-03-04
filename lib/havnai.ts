@@ -65,6 +65,7 @@ export interface JobLoraEntry {
 }
 
 export interface FaceSwapRequest {
+  wallet?: string;
   baseImageUrl: string;
   faceSourceUrl: string;
   prompt?: string;
@@ -78,6 +79,7 @@ export interface FaceSwapRequest {
 }
 
 export interface WanVideoRequest {
+  wallet?: string;
   prompt: string;
   negativePrompt?: string;
   motionType?: string;
@@ -91,6 +93,7 @@ export interface WanVideoRequest {
 }
 
 export interface VideoJobRequest {
+  wallet?: string;
   prompt: string;
   negativePrompt?: string;
   model?: string;
@@ -169,12 +172,14 @@ export class HavnaiApiError extends Error {
 }
 
 export interface SubmitJobOptions {
+  wallet?: string;
   steps?: number;
   guidance?: number;
   width?: number;
   height?: number;
   sampler?: string;
   seed?: number;
+  referenceFaceUrl?: string;
   loras?: LoraConfig[];
   hardcoreMode?: boolean;
   sfwMode?: boolean;
@@ -255,7 +260,7 @@ export async function submitAutoJob(
       : "auto";
 
   const body: Record<string, any> = {
-    wallet: WALLET,
+    wallet: options?.wallet?.trim() || WALLET,
     model,
     prompt,
   };
@@ -269,6 +274,9 @@ export async function submitAutoJob(
     if (options.width != null) body.width = options.width;
     if (options.height != null) body.height = options.height;
     if (options.seed != null) body.seed = options.seed;
+    if (options.referenceFaceUrl && options.referenceFaceUrl.trim().length > 0) {
+      body.reference_face_url = options.referenceFaceUrl.trim();
+    }
     if (options.sampler && options.sampler.trim().length > 0) {
       body.sampler = options.sampler;
     }
@@ -305,7 +313,7 @@ export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<strin
     request.model && request.model.trim().length > 0 ? request.model.trim() : "epicrealismXL_vxviiCrystalclear";
 
   const body: Record<string, any> = {
-    wallet: WALLET,
+    wallet: request.wallet?.trim() || WALLET,
     model,
     prompt: request.prompt || "",
     base_image_url: request.baseImageUrl,
@@ -340,7 +348,7 @@ export async function submitFaceSwapJob(request: FaceSwapRequest): Promise<strin
 export async function submitWanVideoJob(request: WanVideoRequest): Promise<string> {
   const body: Record<string, any> = {
     prompt: request.prompt,
-    wallet: WALLET,
+    wallet: request.wallet?.trim() || WALLET,
   };
   if (request.negativePrompt) body.negative_prompt = request.negativePrompt;
   if (request.motionType) body.motion_type = request.motionType;
@@ -380,7 +388,7 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   }
 
   const body: Record<string, any> = {
-    wallet: WALLET,
+    wallet: request.wallet?.trim() || WALLET,
     model,
     prompt: request.prompt,
   };
@@ -639,14 +647,21 @@ export async function requestConversionNonce(wallet: string, amount: number): Pr
   });
 }
 
-type WalletNoncePurpose = "convert_credits_to_hai" | "gallery_purchase" | "gallery_list";
+type WalletNoncePurpose =
+  | "convert_credits_to_hai"
+  | "gallery_purchase"
+  | "gallery_list"
+  | "identity_anchor_create"
+  | "identity_anchor_delete";
 
 interface WalletNonceRequest {
   wallet: string;
-  amount: number;
+  amount?: number;
   purpose: WalletNoncePurpose;
   listing_id?: number;
   job_id?: string;
+  slug?: string;
+  anchor_id?: number;
 }
 
 async function requestWalletNonce(payload: WalletNonceRequest): Promise<WalletNonceChallenge> {
@@ -1013,6 +1028,31 @@ export interface WorkflowListResponse {
   limit: number;
 }
 
+export interface IdentityAnchor {
+  id: number;
+  wallet: string;
+  slug: string;
+  display_name: string;
+  created_at: number;
+  updated_at: number;
+  last_used_at?: number | null;
+}
+
+function normalizeIdentityAnchor(raw: any): IdentityAnchor {
+  return {
+    id: Number(raw?.id || 0),
+    wallet: String(raw?.wallet || ""),
+    slug: String(raw?.slug || ""),
+    display_name: String(raw?.display_name || ""),
+    created_at: Number(raw?.created_at || 0),
+    updated_at: Number(raw?.updated_at || 0),
+    last_used_at:
+      raw?.last_used_at == null
+        ? null
+        : Number(raw.last_used_at),
+  };
+}
+
 export type GalleryListingStatus = "active" | "sold" | "delisted";
 
 export interface GalleryListing {
@@ -1305,6 +1345,61 @@ export async function publishWorkflow(id: string, wallet: string = WALLET): Prom
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as Workflow;
+}
+
+export async function fetchIdentityAnchors(wallet: string = WALLET): Promise<IdentityAnchor[]> {
+  const res = await fetch(apiUrl(`/identity-anchors?wallet=${encodeURIComponent(wallet)}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.anchors) ? data.anchors.map(normalizeIdentityAnchor) : [];
+}
+
+export async function createIdentityAnchor(input: {
+  displayName: string;
+  slug: string;
+  imageDataUrl: string;
+  wallet?: string;
+}): Promise<IdentityAnchor> {
+  const signed = await signWalletNonce({
+    wallet: input.wallet || WALLET,
+    purpose: "identity_anchor_create",
+    slug: input.slug,
+  });
+  const res = await fetch(apiUrl("/identity-anchors"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      display_name: input.displayName,
+      slug: input.slug,
+      image_data_url: input.imageDataUrl,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return normalizeIdentityAnchor(await res.json());
+}
+
+export async function deleteIdentityAnchor(anchorId: number, wallet: string = WALLET): Promise<{ ok: boolean }> {
+  const signed = await signWalletNonce({
+    wallet,
+    purpose: "identity_anchor_delete",
+    anchor_id: anchorId,
+  });
+  const res = await fetch(apiUrl(`/identity-anchors/${anchorId}`), {
+    method: "DELETE",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as { ok: boolean };
 }
 
 // ---------------------------------------------------------------------------

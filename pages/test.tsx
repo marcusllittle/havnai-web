@@ -37,6 +37,10 @@ const FALLBACK_IMAGE_MODELS: { id: string; label: string }[] = [
   { id: "auto", label: "Auto (let grid choose best)" },
 ];
 
+const IDENTITY_ANCHOR_TAG_RE = /^\[\s*identity\s+anchor\s*:\s*([A-Za-z0-9_-]+)\s*\]$/i;
+const IDENTITY_ANCHOR_BARE_RE = /^\[\s*identity\s+anchor\s*\]$/i;
+const IDENTITY_ANCHOR_OPEN_RE = /\[\s*identity\s+anchor\b/i;
+
 type LoraDraft = {
   name: string;
   weight: string;
@@ -93,6 +97,69 @@ const pickPreferredVideoModel = (models: { id: string; label: string }[]): strin
   return models.length > 0 ? models[0].id : "";
 };
 
+const inspectPromptIdentityAnchor = (promptText: string): {
+  hasAnchorTag: boolean;
+  slug?: string;
+  promptWithoutTag: string;
+  error?: string;
+} => {
+  const matches: Array<{ value: string; index: number }> = [];
+  const regex = /\[\s*identity\s+anchor(?:[^\]]*)\]/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(promptText)) !== null) {
+    matches.push({ value: match[0], index: match.index });
+  }
+  if (matches.length === 0) {
+    if (IDENTITY_ANCHOR_OPEN_RE.test(promptText)) {
+      return {
+        hasAnchorTag: false,
+        promptWithoutTag: promptText.trim(),
+        error: "Use [IDENTITY ANCHOR: your_anchor_slug].",
+      };
+    }
+    return { hasAnchorTag: false, promptWithoutTag: promptText.trim() };
+  }
+  if (matches.length > 1) {
+    return {
+      hasAnchorTag: true,
+      promptWithoutTag: promptText.trim(),
+      error: "Only one identity anchor can be used per prompt.",
+    };
+  }
+  const [{ value, index }] = matches;
+  if (IDENTITY_ANCHOR_BARE_RE.test(value)) {
+    return {
+      hasAnchorTag: true,
+      promptWithoutTag: promptText.trim(),
+      error: "Use [IDENTITY ANCHOR: your_anchor_slug].",
+    };
+  }
+  const parsed = value.match(IDENTITY_ANCHOR_TAG_RE);
+  if (!parsed?.[1]) {
+    return {
+      hasAnchorTag: true,
+      promptWithoutTag: promptText.trim(),
+      error: "Use [IDENTITY ANCHOR: your_anchor_slug].",
+    };
+  }
+  const promptWithoutTag = `${promptText.slice(0, index)}${promptText.slice(index + value.length)}`
+    .trim()
+    .replace(/\n{3,}/g, "\n\n");
+  if (!promptWithoutTag) {
+    return {
+      hasAnchorTag: true,
+      slug: parsed[1].toLowerCase(),
+      promptWithoutTag,
+      error: "Prompt is required after removing the identity anchor tag.",
+    };
+  }
+  return {
+    hasAnchorTag: true,
+    slug: parsed[1].toLowerCase(),
+    promptWithoutTag,
+  };
+};
+
 const TestPage: React.FC = () => {
   const wallet = useWallet();
   const [mode, setMode] = useState<GeneratorMode>("image");
@@ -109,7 +176,7 @@ const TestPage: React.FC = () => {
   const [model, setModel] = useState<string | undefined>();
   const [runtimeSeconds, setRuntimeSeconds] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(true);
   const [selectedModel, setSelectedModel] = useState<string>("auto");
   const [imageModels, setImageModels] = useState<{ id: string; label: string }[]>(FALLBACK_IMAGE_MODELS);
   const [videoModels, setVideoModels] = useState<{ id: string; label: string }[]>([]);
@@ -166,6 +233,7 @@ const TestPage: React.FC = () => {
   const faceSwapPrefillKeyRef = useRef<string>("");
 
   const apiBase = getApiBase();
+  const activeWallet = wallet.activeWallet || undefined;
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -525,13 +593,13 @@ const TestPage: React.FC = () => {
   // Fetch credit balance on mount and after each job completes
   useEffect(() => {
     let cancelled = false;
-    if (!wallet.envWallet) {
+    if (!activeWallet) {
       setCredits(null);
       return () => {
         cancelled = true;
       };
     }
-    fetchCredits(wallet.envWallet)
+    fetchCredits(activeWallet)
       .then((data) => {
         if (!cancelled) setCredits(data);
       })
@@ -540,7 +608,7 @@ const TestPage: React.FC = () => {
         if (!cancelled) setCredits(null);
       });
     return () => { cancelled = true; };
-  }, [loading, wallet.envWallet]); // re-fetch when loading toggles (i.e. after a job finishes)
+  }, [activeWallet, loading]); // re-fetch when loading toggles (i.e. after a job finishes)
 
   const saveHistory = (items: HistoryItem[]) => {
     setHistory(items);
@@ -698,6 +766,7 @@ const TestPage: React.FC = () => {
     const stepsValue = parseOptionalInt(steps);
     const seedValue = parseOptionalInt(seed);
 
+    if (activeWallet) options.wallet = activeWallet;
     if (stepsValue !== undefined) options.steps = stepsValue;
     if (seedValue !== undefined) options.seed = seedValue;
     if (sfwMode) options.sfwMode = true;
@@ -719,6 +788,7 @@ const TestPage: React.FC = () => {
     initOverride?: string | null
   ) => {
     const request: Record<string, any> = { prompt: promptText };
+    if (activeWallet) request.wallet = activeWallet;
     const trimmedNegative = negativePrompt.trim();
     if (trimmedNegative) request.negativePrompt = trimmedNegative;
     const seedValue = parseOptionalInt(seed);
@@ -859,8 +929,23 @@ const TestPage: React.FC = () => {
     const trimmed = prompt.trim();
     const selectedVideoModelAvailable =
       mode === "video" && videoModels.some((candidate) => candidate.id === selectedModel);
+    const promptAnchor = inspectPromptIdentityAnchor(prompt);
+    const cleanedPrompt = promptAnchor.promptWithoutTag.trim();
+    const effectivePrompt = mode === "face_swap" ? trimmed : cleanedPrompt || trimmed;
+    if (!activeWallet) {
+      setStatusMessage("Connect a wallet or configure NEXT_PUBLIC_HAVNAI_WALLET before submitting.");
+      return;
+    }
     if (mode !== "face_swap" && !trimmed) {
       setStatusMessage("Prompt is required.");
+      return;
+    }
+    if (mode !== "image" && promptAnchor.hasAnchorTag) {
+      setStatusMessage("Identity anchor tags are only supported for image generation.");
+      return;
+    }
+    if (promptAnchor.error) {
+      setStatusMessage(promptAnchor.error);
       return;
     }
     if (mode === "video" && videoModels.length === 0) {
@@ -887,7 +972,7 @@ const TestPage: React.FC = () => {
     setModel(undefined);
     setJobId(undefined);
     setPollTimedOut(false);
-    setLastUsedPrompt(trimmed || "Face swap");
+    setLastUsedPrompt(effectivePrompt || "Face swap");
 
     const extendValue = parseOptionalInt(extendChunks) ?? 0;
 
@@ -902,7 +987,7 @@ const TestPage: React.FC = () => {
         );
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
-        await pollJob(id, trimmed, 1800);
+        await pollJob(id, effectivePrompt, 1800);
       } else if (mode === "face_swap") {
         const baseUrl = baseImageData || baseImageUrl.trim();
         const faceUrl = faceSourceData || faceSourceUrl.trim();
@@ -921,6 +1006,7 @@ const TestPage: React.FC = () => {
           faceSourceUrl: faceUrl,
           seed: seedValue,
           sfwMode,
+          wallet: activeWallet,
         };
         if (strengthValue !== undefined) request.strength = strengthValue;
         if (stepsValue !== undefined) request.numSteps = stepsValue;
@@ -928,16 +1014,16 @@ const TestPage: React.FC = () => {
         const id = await submitFaceSwapJob(request);
         setJobId(id);
         setStatusMessage("Waiting for GPU node…");
-        await pollJob(id, trimmed || "Face swap", 1800);
+        await pollJob(id, effectivePrompt || "Face swap", 1800);
       } else if (mode === "video") {
         if (extendValue > 0) {
-          await runVideoChain(trimmed, extendValue);
+          await runVideoChain(effectivePrompt, extendValue);
         } else {
-          const request = buildVideoRequest(trimmed);
+          const request = buildVideoRequest(effectivePrompt);
           const id = await submitVideoJob(request);
           setJobId(id);
           setStatusMessage("Waiting for GPU node…");
-          await pollJob(id, trimmed, 2400);
+          await pollJob(id, effectivePrompt, 2400);
         }
       }
     } catch (err: any) {
@@ -1392,12 +1478,12 @@ const TestPage: React.FC = () => {
                       </span>
                       <p className="generator-help" style={{ marginTop: "0.5rem" }}>
                         Submission wallet:{" "}
-                        <strong>{wallet.envWallet || "Not configured"}</strong>
+                        <strong>{activeWallet || "Not configured"}</strong>
                       </p>
                       <p className="generator-help">
                         {wallet.error?.message ||
                           wallet.message ||
-                          "Generator jobs still submit under NEXT_PUBLIC_HAVNAI_WALLET in this alpha. A connected MetaMask wallet does not change job ownership yet."}
+                          "Generator jobs submit under the active wallet shown here."}
                       </p>
                     </div>
                     <button
@@ -1481,6 +1567,11 @@ const TestPage: React.FC = () => {
                   onSubmit={handleSubmit}
                   disabled={loading}
                 />
+                {mode === "image" && (
+                  <p className="generator-help">
+                    Add <code>[IDENTITY ANCHOR: slug]</code> directly in the prompt when you want face anchoring.
+                  </p>
+                )}
 
                 {mode === "face_swap" && (
                   <div className="generator-advanced">
