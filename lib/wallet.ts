@@ -128,6 +128,15 @@ function isProviderUsable(provider: InjectedProvider | undefined | null): provid
   return Boolean(provider && typeof provider.request === "function");
 }
 
+function isProviderHealthy(provider: InjectedProvider): boolean {
+  try {
+    // Verify request is a callable function, not a throwing proxy trap
+    return typeof provider.request === "function" && typeof provider.request.bind === "function";
+  } catch {
+    return false;
+  }
+}
+
 function choosePreferredProvider(
   root: InjectedProvider | undefined,
   providers: InjectedProvider[]
@@ -256,10 +265,36 @@ export function getInjectedProvider(): InjectedProviderSelection {
     };
   }
 
-  const provider = conflict.provider || conflict.providers[0] || ethereum;
+  const preferred = conflict.provider || conflict.providers[0] || ethereum;
+
+  // If the preferred provider fails a health check (e.g. a proxy extension wrapping
+  // window.ethereum), try alternatives before giving up.
+  if (!isProviderHealthy(preferred)) {
+    const healthy = conflict.providers.find((p) => p !== preferred && isProviderHealthy(p));
+    if (healthy) {
+      return {
+        provider: healthy,
+        providerName: healthy.isMetaMask ? "MetaMask" : "Injected wallet",
+        hasProvider: true,
+        hasConflict: true,
+        error: null,
+      };
+    }
+    // Last resort: try raw window.ethereum if it's different from preferred
+    if (ethereum && ethereum !== preferred && isProviderHealthy(ethereum)) {
+      return {
+        provider: ethereum,
+        providerName: ethereum.isMetaMask ? "MetaMask" : "Browser wallet",
+        hasProvider: true,
+        hasConflict: true,
+        error: null,
+      };
+    }
+  }
+
   return {
-    provider,
-    providerName: conflict.providerName || (provider.isMetaMask ? "MetaMask" : "Injected wallet"),
+    provider: preferred,
+    providerName: conflict.providerName || (preferred.isMetaMask ? "MetaMask" : "Injected wallet"),
     hasProvider: true,
     hasConflict: conflict.hasConflict,
     error: null,

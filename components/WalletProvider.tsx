@@ -3,6 +3,7 @@ import {
   getConfiguredWallet,
   getInjectedProvider,
   InjectedProvider,
+  InjectedProviderSelection,
   normalizeWalletError,
   readChainInfo,
   readConnectedAccounts,
@@ -10,6 +11,17 @@ import {
   WalletError,
   WalletSnapshot,
 } from "../lib/wallet";
+
+const CONNECT_TIMEOUT_MS = 30_000;
+const SAFETY_TIMEOUT_MS = 35_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new WalletError("wallet_unknown", message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 interface WalletContextValue extends WalletSnapshot {
   connect: () => Promise<string | null>;
@@ -79,6 +91,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const connectPromiseRef = useRef<Promise<string | null> | null>(null);
   const promptTimerRef = useRef<number | null>(null);
   const attentionTimerRef = useRef<number | null>(null);
+  const safetyTimerRef = useRef<number | null>(null);
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
 
@@ -91,6 +104,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       window.clearTimeout(attentionTimerRef.current);
       attentionTimerRef.current = null;
     }
+    if (safetyTimerRef.current != null) {
+      window.clearTimeout(safetyTimerRef.current);
+      safetyTimerRef.current = null;
+    }
   }, []);
 
   const patchSnapshot = useCallback((patch: Partial<WalletSnapshot>) => {
@@ -98,7 +115,21 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [envWallet]);
 
   const refresh = useCallback(async () => {
-    const selection = getInjectedProvider();
+    let selection: InjectedProviderSelection;
+    try {
+      selection = getInjectedProvider();
+    } catch {
+      patchSnapshot({
+        connectedWallet: null,
+        hasProvider: false,
+        hasConflict: false,
+        error: new WalletError("wallet_unknown", "Failed to detect wallet provider."),
+        message: "Failed to detect wallet provider. Try disabling other wallet extensions.",
+        connecting: false,
+        status: envWallet ? "fallback" : "error",
+      });
+      return;
+    }
     setProvider(selection.provider);
 
     if (!connectPromiseRef.current) {
@@ -188,7 +219,21 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [clearConnectTimers, envWallet, patchSnapshot]);
 
   const connect = useCallback(async () => {
-    const selection = getInjectedProvider();
+    let selection: InjectedProviderSelection;
+    try {
+      selection = getInjectedProvider();
+    } catch (err) {
+      const issue = new WalletError("wallet_unknown", "Failed to detect wallet provider. Try disabling other wallet extensions.");
+      patchSnapshot({
+        error: issue,
+        message: issue.message,
+        hasProvider: false,
+        hasConflict: false,
+        connecting: false,
+        status: envWallet ? "fallback" : "error",
+      });
+      throw issue;
+    }
     setProvider(selection.provider);
 
     if (!selection.provider) {
@@ -255,7 +300,11 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
     }, 15000);
 
-    const promise = requestAccounts(selection.provider)
+    const promise = withTimeout(
+      requestAccounts(selection.provider),
+      CONNECT_TIMEOUT_MS,
+      "Wallet did not respond. Check your wallet extension or try disabling other wallet extensions."
+    )
       .then(async (accounts) => {
         const wallet = accounts[0] || null;
         if (!wallet) {
@@ -311,6 +360,21 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
     connectPromiseRef.current = promise;
+
+    // Safety net: forcefully reset if the promise chain somehow never settles
+    safetyTimerRef.current = window.setTimeout(() => {
+      if (connectPromiseRef.current) {
+        connectPromiseRef.current = null;
+        clearConnectTimers();
+        patchSnapshot({
+          connecting: false,
+          error: new WalletError("wallet_unknown", "Connection timed out. Try again."),
+          message: "Connection timed out. Try again.",
+          status: envWallet ? "fallback" : "error",
+        });
+      }
+    }, SAFETY_TIMEOUT_MS);
+
     return promise;
   }, [clearConnectTimers, envWallet, patchSnapshot]);
 
