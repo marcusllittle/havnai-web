@@ -403,6 +403,39 @@ export function normalizeWalletError(error: unknown): WalletError {
   return new WalletError("wallet_unknown", message || "Wallet connection failed.");
 }
 
+/**
+ * Returns all available providers ordered by preference (MetaMask first).
+ * Used by connect() to retry with fallback providers when the preferred one fails.
+ */
+export function getAllProviders(): InjectedProvider[] {
+  const ethereum = getWindowEthereum();
+  if (!ethereum) return [];
+  const conflict = detectProviderConflict();
+  const seen = new Set<InjectedProvider>();
+  const result: InjectedProvider[] = [];
+
+  // Preferred provider first
+  if (conflict.provider && isProviderUsable(conflict.provider)) {
+    seen.add(conflict.provider);
+    result.push(conflict.provider);
+  }
+
+  // Then remaining providers from the array
+  for (const p of conflict.providers) {
+    if (!seen.has(p) && isProviderUsable(p)) {
+      seen.add(p);
+      result.push(p);
+    }
+  }
+
+  // Root ethereum as last resort if not already included
+  if (!seen.has(ethereum) && isProviderUsable(ethereum)) {
+    result.push(ethereum);
+  }
+
+  return result;
+}
+
 export function formatWalletShort(wallet: string | null | undefined): string {
   if (!wallet) return "No wallet";
   return `${wallet.slice(0, 6)}...${wallet.slice(-4)}`;
