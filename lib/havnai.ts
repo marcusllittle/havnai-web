@@ -816,6 +816,71 @@ export async function fetchPaymentHistory(wallet: string = WALLET): Promise<Paym
 }
 
 // ---------------------------------------------------------------------------
+// HAI Token Funding
+// ---------------------------------------------------------------------------
+
+export interface HaiFundingResponse {
+  status: string;
+  tx_hash: string;
+  credits_granted?: number;
+  balance?: number;
+  message?: string;
+  error?: string;
+}
+
+export interface HaiFundingRecord {
+  id: number;
+  wallet: string;
+  amount: number;
+  tx_hash: string;
+  status: string;
+  credits_granted: number;
+  verified_at: number | null;
+  created_at: number;
+  error: string | null;
+}
+
+export interface HaiFundingsResponse {
+  wallet: string;
+  fundings: HaiFundingRecord[];
+  hai_funding_enabled: boolean;
+}
+
+/**
+ * Submit a HAI funding request to the backend after an on-chain transfer.
+ * The backend verifies the tx on Sepolia and deposits credits.
+ */
+export async function fundCreditsWithHai(
+  wallet: string,
+  amount: number,
+  txHash: string
+): Promise<HaiFundingResponse> {
+  const res = await fetch(apiUrl("/credits/fund-hai"), {
+    method: "POST",
+    headers: buildHeaders(false),
+    body: JSON.stringify({ wallet, amount, tx_hash: txHash }),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return (await res.json()) as HaiFundingResponse;
+}
+
+/**
+ * Fetch HAI funding history for a wallet.
+ */
+export async function fetchHaiFundings(wallet: string): Promise<HaiFundingsResponse> {
+  const res = await fetch(
+    apiUrl(`/credits/hai-fundings?wallet=${encodeURIComponent(wallet)}`),
+    { headers: buildHeaders(false) }
+  );
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return (await res.json()) as HaiFundingsResponse;
+}
+
+// ---------------------------------------------------------------------------
 // Analytics
 // ---------------------------------------------------------------------------
 
