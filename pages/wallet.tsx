@@ -9,7 +9,8 @@ import {
   CreditBalance,
   WalletRewards,
 } from "../lib/havnai";
-import { getConnectButtonLabel } from "../lib/wallet";
+import { getConnectButtonLabel, getInjectedProvider } from "../lib/wallet";
+import { isHaiFundingConfigured, readHaiBalance, getBrowserProvider } from "../lib/hai-token";
 
 const WalletPage: NextPage = () => {
   const wallet = useWallet();
@@ -19,6 +20,8 @@ const WalletPage: NextPage = () => {
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
   const [claimResult, setClaimResult] = useState<string | null>(null);
+  const [onChainHai, setOnChainHai] = useState<string | null>(null);
+  const haiFundingConfigured = isHaiFundingConfigured();
   const connectLabel = getConnectButtonLabel(wallet);
 
   useEffect(() => {
@@ -41,6 +44,18 @@ const WalletPage: NextPage = () => {
       setRewards(rw);
       setLoading(false);
     });
+    // Load on-chain HAI balance
+    if (haiFundingConfigured && wallet.connectedWallet) {
+      const selection = getInjectedProvider();
+      if (selection.provider) {
+        const provider = getBrowserProvider(selection.provider);
+        readHaiBalance(wallet.connectedWallet, provider)
+          .then((result) => { if (active) setOnChainHai(result.formatted); })
+          .catch(() => { if (active) setOnChainHai(null); });
+      }
+    } else {
+      setOnChainHai(null);
+    }
     return () => { active = false; };
   }, [wallet.activeWallet]);
 
@@ -149,6 +164,17 @@ const WalletPage: NextPage = () => {
                   {credits ? `${credits.total_deposited.toFixed(1)} deposited / ${credits.total_spent.toFixed(1)} spent` : "Credits not enabled"}
                 </div>
               </div>
+
+              {/* On-chain HAI balance */}
+              {haiFundingConfigured && (
+                <div className="stat-card">
+                  <div className="stat-label">On-Chain HAI</div>
+                  <div className="stat-value" style={{ color: "#ffd700" }}>
+                    {onChainHai !== null ? Number(onChainHai).toFixed(2) : "--"}
+                  </div>
+                  <div className="stat-sub">Sepolia ERC-20 balance</div>
+                </div>
+              )}
 
               {/* HAI rewards */}
               <div className="stat-card">

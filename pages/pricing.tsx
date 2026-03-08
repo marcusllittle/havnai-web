@@ -10,13 +10,21 @@ import {
   createCheckout,
   convertCreditsWithMetaMask,
   fetchCreditReference,
+  fundCreditsWithHai,
   CreditPackage,
   CreditBalance,
   PaymentRecord,
   CreditReferenceRow,
   HavnaiApiError,
 } from "../lib/havnai";
-import { formatWalletShort, getConnectButtonLabel } from "../lib/wallet";
+import {
+  isHaiFundingConfigured,
+  readHaiBalance,
+  transferHaiToTreasury,
+  ensureSepoliaNetwork,
+  getBrowserProvider,
+} from "../lib/hai-token";
+import { formatWalletShort, getConnectButtonLabel, getInjectedProvider } from "../lib/wallet";
 
 const FALLBACK_PACKAGES: CreditPackage[] = [
   { id: "starter", name: "Starter Pack", credits: 50, price_cents: 500, description: "50 credits" },
@@ -75,6 +83,15 @@ const PricingPage: NextPage = () => {
   const [convertMessage, setConvertMessage] = useState<string | null>(null);
   const [convertError, setConvertError] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
+
+  // HAI token funding state
+  const [haiBalance, setHaiBalance] = useState<string | null>(null);
+  const [haiAmount, setHaiAmount] = useState("100");
+  const [haiFunding, setHaiFunding] = useState(false);
+  const [haiFundingStep, setHaiFundingStep] = useState<string | null>(null);
+  const [haiFundingError, setHaiFundingError] = useState<string | null>(null);
+  const [haiFundingSuccess, setHaiFundingSuccess] = useState<string | null>(null);
+  const haiFundingConfigured = isHaiFundingConfigured();
 
   const activeWallet = wallet.activeWallet;
   const connectedWallet = wallet.connectedWallet;
@@ -271,6 +288,72 @@ const PricingPage: NextPage = () => {
     }
   };
 
+  // Load HAI balance when wallet connects
+  useEffect(() => {
+    if (!connectedWallet || !haiFundingConfigured) {
+      setHaiBalance(null);
+      return;
+    }
+    let active = true;
+    const selection = getInjectedProvider();
+    if (selection.provider) {
+      const provider = getBrowserProvider(selection.provider);
+      readHaiBalance(connectedWallet, provider)
+        .then((result) => { if (active) setHaiBalance(result.formatted); })
+        .catch(() => { if (active) setHaiBalance(null); });
+    }
+    return () => { active = false; };
+  }, [connectedWallet, haiFundingConfigured, haiFundingSuccess]);
+
+  const handleBuyWithHai = async () => {
+    const amount = Number.parseFloat(haiAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setHaiFundingError("Enter a valid HAI amount.");
+      return;
+    }
+    if (!connectedWallet) {
+      setHaiFundingError("Connect MetaMask first.");
+      return;
+    }
+    setHaiFunding(true);
+    setHaiFundingError(null);
+    setHaiFundingSuccess(null);
+    try {
+      const selection = getInjectedProvider();
+      if (!selection.provider) throw new Error("No wallet provider found");
+
+      setHaiFundingStep("Switching to Sepolia...");
+      await ensureSepoliaNetwork(selection.provider);
+
+      const provider = getBrowserProvider(selection.provider);
+      const signer = await provider.getSigner();
+
+      setHaiFundingStep("Confirm transfer in MetaMask...");
+      const { txHash, wait } = await transferHaiToTreasury(signer, amount.toString());
+
+      setHaiFundingStep(`Waiting for confirmations (tx: ${txHash.slice(0, 10)}...)...`);
+      await wait(2);
+
+      setHaiFundingStep("Verifying with backend...");
+      const result = await fundCreditsWithHai(connectedWallet, amount, txHash);
+      setHaiFundingSuccess(
+        `Funded ${result.credits_granted ?? amount} credits. New balance: ${result.balance?.toFixed(1) ?? "?"}`
+      );
+      // Refresh credit balance
+      const updated = await fetchCredits(connectedWallet);
+      setBalance(updated);
+    } catch (err: any) {
+      if (err?.code === 4001 || /user rejected/i.test(String(err?.message || ""))) {
+        setHaiFundingError("Transaction was rejected in MetaMask.");
+      } else {
+        setHaiFundingError(err?.message || "HAI funding failed.");
+      }
+    } finally {
+      setHaiFunding(false);
+      setHaiFundingStep(null);
+    }
+  };
+
   const packageDestination = activeWallet || "No active wallet configured";
 
   const referenceRows = useMemo(() => {
@@ -430,6 +513,40 @@ const PricingPage: NextPage = () => {
                   </button>
                 </article>
               ))}
+            </div>
+          )}
+
+          {haiFundingConfigured && (
+            <div className="pricing-convert">
+              <h3>Buy Credits with $HAI</h3>
+              <p>Transfer HAI tokens from your wallet to purchase credits at a 1:1 rate.</p>
+              {haiBalance !== null && (
+                <p className="convert-note">
+                  Your HAI balance: <strong>{Number(haiBalance).toFixed(2)} HAI</strong>
+                </p>
+              )}
+              <div className="convert-controls">
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={haiAmount}
+                  onChange={(e) => setHaiAmount(e.target.value)}
+                  disabled={!connectedWallet || haiFunding}
+                />
+                <button
+                  type="button"
+                  onClick={handleBuyWithHai}
+                  disabled={haiFunding || !connectedWallet}
+                >
+                  {haiFunding ? haiFundingStep || "Processing..." : `Buy ${haiAmount} Credits`}
+                </button>
+              </div>
+              {!connectedWallet && (
+                <p className="convert-note">Connect MetaMask to buy credits with HAI.</p>
+              )}
+              {haiFundingSuccess && <p className="convert-message">{haiFundingSuccess}</p>}
+              {haiFundingError && <p className="convert-error">{haiFundingError}</p>}
             </div>
           )}
 
