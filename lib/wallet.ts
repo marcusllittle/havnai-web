@@ -234,11 +234,8 @@ export function detectProviderConflict(): {
     providers: [providers[0]],
     provider: providers[0],
     hasConflict: true,
-    providerName: "Multiple wallets",
-    error: new WalletError(
-      "wallet_conflict",
-      "Multiple wallet extensions were detected, and no usable browser wallet provider could be selected."
-    ),
+    providerName: providers[0].isMetaMask ? "MetaMask" : "Injected wallet",
+    error: null,
   };
 }
 
@@ -255,17 +252,22 @@ export function getInjectedProvider(): InjectedProviderSelection {
   }
 
   const conflict = detectProviderConflict();
-  if (conflict.error) {
+
+  // Even when conflict detection reports an error, still try to find a usable
+  // provider rather than giving up — the user should be able to attempt a
+  // connection with whatever wallet is available.
+  const preferred = conflict.provider || conflict.providers[0] || ethereum;
+
+  if (!preferred || !isProviderUsable(preferred)) {
+    // Genuinely no usable provider found.
     return {
       provider: null,
       providerName: conflict.providerName,
-      hasProvider: true,
-      hasConflict: true,
-      error: conflict.error,
+      hasProvider: Boolean(ethereum),
+      hasConflict: conflict.hasConflict,
+      error: conflict.error || null,
     };
   }
-
-  const preferred = conflict.provider || conflict.providers[0] || ethereum;
 
   // If the preferred provider fails a health check (e.g. a proxy extension wrapping
   // window.ethereum), try alternatives before giving up.
@@ -399,6 +401,39 @@ export function normalizeWalletError(error: unknown): WalletError {
     );
   }
   return new WalletError("wallet_unknown", message || "Wallet connection failed.");
+}
+
+/**
+ * Returns all available providers ordered by preference (MetaMask first).
+ * Used by connect() to retry with fallback providers when the preferred one fails.
+ */
+export function getAllProviders(): InjectedProvider[] {
+  const ethereum = getWindowEthereum();
+  if (!ethereum) return [];
+  const conflict = detectProviderConflict();
+  const seen = new Set<InjectedProvider>();
+  const result: InjectedProvider[] = [];
+
+  // Preferred provider first
+  if (conflict.provider && isProviderUsable(conflict.provider)) {
+    seen.add(conflict.provider);
+    result.push(conflict.provider);
+  }
+
+  // Then remaining providers from the array
+  for (const p of conflict.providers) {
+    if (!seen.has(p) && isProviderUsable(p)) {
+      seen.add(p);
+      result.push(p);
+    }
+  }
+
+  // Root ethereum as last resort if not already included
+  if (!seen.has(ethereum) && isProviderUsable(ethereum)) {
+    result.push(ethereum);
+  }
+
+  return result;
 }
 
 export function formatWalletShort(wallet: string | null | undefined): string {

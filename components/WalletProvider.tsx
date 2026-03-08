@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
+  getAllProviders,
   getConfiguredWallet,
   getInjectedProvider,
   InjectedProvider,
@@ -300,60 +301,81 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
     }, 15000);
 
-    const promise = withTimeout(
-      requestAccounts(selection.provider),
-      CONNECT_TIMEOUT_MS,
-      "Wallet did not respond. Check your wallet extension or try disabling other wallet extensions."
-    )
-      .then(async (accounts) => {
-        const wallet = accounts[0] || null;
-        if (!wallet) {
-          throw new WalletError("wallet_unknown", "No wallet account returned by MetaMask.");
+    // Try multiple providers — if the preferred one fails (proxy intercept, timeout),
+    // automatically try the next one. Stop on user rejection.
+    const PER_PROVIDER_TIMEOUT_MS = 10_000;
+    const allProviders = getAllProviders();
+    // Ensure preferred provider is first, then others
+    const providerOrder = [selection.provider];
+    for (const p of allProviders) {
+      if (p !== selection.provider) providerOrder.push(p);
+    }
+
+    const tryProviders = async (): Promise<string | null> => {
+      let lastError: WalletError | null = null;
+      for (let i = 0; i < providerOrder.length; i++) {
+        const currentProvider = providerOrder[i];
+        const isLast = i === providerOrder.length - 1;
+        // Give last provider the full remaining timeout
+        const timeout = isLast ? CONNECT_TIMEOUT_MS : PER_PROVIDER_TIMEOUT_MS;
+
+        try {
+          const accounts = await withTimeout(
+            requestAccounts(currentProvider),
+            timeout,
+            "Wallet did not respond. Trying next provider..."
+          );
+          const wallet = accounts[0] || null;
+          if (!wallet) {
+            throw new WalletError("wallet_unknown", "No wallet account returned.");
+          }
+          // Success — use this provider
+          setProvider(currentProvider);
+          const chain = await readChainInfo(currentProvider);
+          const hasConflict = providerOrder.length > 1;
+          const providerName = currentProvider.isMetaMask ? "MetaMask" : "Browser wallet";
+          patchSnapshot({
+            connectedWallet: wallet,
+            hasProvider: true,
+            hasConflict,
+            providerName,
+            chainId: chain.chainId,
+            chainName: chain.chainName,
+            chainAllowed: chain.chainAllowed,
+            error: null,
+            message: hasConflict ? getConflictMessage(providerName) : undefined,
+            connecting: false,
+            status: "connected",
+          });
+          return wallet;
+        } catch (err) {
+          lastError = normalizeWalletError(err);
+          // User explicitly rejected — don't try other providers
+          if (lastError.code === "wallet_rejected") break;
+          // Request already pending in this provider — don't try others
+          if (lastError.code === "wallet_request_pending") break;
+          // Otherwise (timeout, unknown error) — try next provider
+          if (!isLast) {
+            console.warn(
+              `[WalletProvider] Provider ${i} failed (${lastError.message}), trying next...`
+            );
+          }
         }
-        const chain = await readChainInfo(selection.provider);
-        patchSnapshot({
-          connectedWallet: wallet,
-          hasProvider: true,
-          hasConflict: selection.hasConflict,
-          providerName: selection.providerName,
-          chainId: chain.chainId,
-          chainName: chain.chainName,
-          chainAllowed: chain.chainAllowed,
-          error: null,
-          message: selection.hasConflict
-            ? getConflictMessage(selection.providerName)
-            : undefined,
-          connecting: false,
-          status: "connected",
-        });
-        return wallet;
-      })
-      .catch((error) => {
-        const issue = normalizeWalletError(error);
-        if (issue.code === "wallet_request_pending") {
-          patchSnapshot({
-            error: issue,
-            message: issue.message,
-            connecting: false,
-            status: "attention",
-          });
-        } else if (issue.code === "wallet_rejected") {
-          patchSnapshot({
-            error: issue,
-            message: issue.message,
-            connecting: false,
-            status: envWallet ? "fallback" : "idle",
-          });
-        } else {
-          patchSnapshot({
-            error: issue,
-            message: issue.message,
-            connecting: false,
-            status: envWallet ? "fallback" : "error",
-          });
-        }
-        throw issue;
-      })
+      }
+
+      // All providers failed
+      const issue = lastError || new WalletError("wallet_unknown", "Wallet connection failed.");
+      if (issue.code === "wallet_request_pending") {
+        patchSnapshot({ error: issue, message: issue.message, connecting: false, status: "attention" });
+      } else if (issue.code === "wallet_rejected") {
+        patchSnapshot({ error: issue, message: issue.message, connecting: false, status: envWallet ? "fallback" : "idle" });
+      } else {
+        patchSnapshot({ error: issue, message: issue.message, connecting: false, status: envWallet ? "fallback" : "error" });
+      }
+      throw issue;
+    };
+
+    const promise = tryProviders()
       .finally(() => {
         clearConnectTimers();
         connectPromiseRef.current = null;
