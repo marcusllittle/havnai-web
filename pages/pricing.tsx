@@ -24,7 +24,7 @@ import {
   ensureSepoliaNetwork,
   getBrowserProvider,
 } from "../lib/hai-token";
-import { WALLET, formatWalletShort, getConnectButtonLabel, getInjectedProvider } from "../lib/wallet";
+import { WALLET, formatWalletShort, getConnectButtonLabel, getInjectedProvider, getAllProviders } from "../lib/wallet";
 
 const FALLBACK_PACKAGES: CreditPackage[] = [
   { id: "starter", name: "Starter Pack", credits: 50, price_cents: 500, description: "50 credits" },
@@ -319,12 +319,41 @@ const PricingPage: NextPage = () => {
     try {
       const selection = getInjectedProvider();
       if (!selection.provider) throw new Error("No wallet provider found");
+      const candidates = getAllProviders();
+      if (candidates.length === 0) {
+        candidates.push(selection.provider);
+      } else if (!candidates.includes(selection.provider)) {
+        candidates.unshift(selection.provider);
+      }
 
-      setHaiFundingStep("Switching to Sepolia...");
-      await ensureSepoliaNetwork(selection.provider);
+      let signer: any = null;
+      let lastProviderError: any = null;
+      for (const candidate of candidates) {
+        try {
+          setHaiFundingStep("Switching to Sepolia...");
+          await ensureSepoliaNetwork(candidate);
+          const provider = getBrowserProvider(candidate);
+          const candidateSigner = await provider.getSigner();
+          const candidateWallet = String(await candidateSigner.getAddress()).toLowerCase();
+          if (connectedWallet && candidateWallet !== connectedWallet.toLowerCase()) {
+            throw new Error(
+              `Wallet mismatch while switching providers. Connected ${connectedWallet}, signer ${candidateWallet}.`
+            );
+          }
+          signer = candidateSigner;
+          lastProviderError = null;
+          break;
+        } catch (providerErr: any) {
+          lastProviderError = providerErr;
+        }
+      }
 
-      const provider = getBrowserProvider(selection.provider);
-      const signer = await provider.getSigner();
+      if (!signer) {
+        const detail = lastProviderError?.message || "No usable wallet provider could complete network checks.";
+        throw new Error(
+          `${detail} If multiple wallet extensions are installed, disable extras and keep only MetaMask enabled.`
+        );
+      }
 
       setHaiFundingStep("Confirm transfer in MetaMask...");
       const { txHash, wait } = await transferHaiToTreasury(signer, amount.toString());
