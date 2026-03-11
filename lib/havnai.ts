@@ -232,6 +232,14 @@ function buildHeaders(includeInvite = false): HeadersInit {
   return headers;
 }
 
+const API_TIMEOUT_MS = 30_000;
+
+function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 async function parseErrorResponse(res: Response): Promise<HavnaiApiError> {
   const contentType = res.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
@@ -665,7 +673,7 @@ interface WalletNonceRequest {
 }
 
 async function requestWalletNonce(payload: WalletNonceRequest): Promise<WalletNonceChallenge> {
-  const res = await fetch(apiUrl("/wallet/nonce"), {
+  const res = await fetchWithTimeout(apiUrl("/wallet/nonce"), {
     method: "POST",
     headers: buildHeaders(true),
     body: JSON.stringify(payload),
@@ -1298,7 +1306,7 @@ export async function createGalleryListing(input: CreateGalleryListingInput): Pr
     purpose: "gallery_list",
     job_id: input.job_id,
   });
-  const res = await fetch(apiUrl("/gallery/listings"), {
+  const res = await fetchWithTimeout(apiUrl("/gallery/listings"), {
     method: "POST",
     headers: buildHeaders(true),
     body: JSON.stringify({
@@ -1339,7 +1347,7 @@ export async function purchaseGalleryListing(
     purpose: "gallery_purchase",
     listing_id: listingId,
   });
-  const res = await fetch(apiUrl(`/gallery/listings/${listingId}/purchase`), {
+  const res = await fetchWithTimeout(apiUrl(`/gallery/listings/${listingId}/purchase`), {
     method: "POST",
     headers: buildHeaders(true),
     body: JSON.stringify({
@@ -1353,7 +1361,7 @@ export async function purchaseGalleryListing(
 }
 
 export async function delistGalleryListing(listingId: number, wallet: string = WALLET): Promise<{ ok: boolean }> {
-  const res = await fetch(apiUrl(`/gallery/listings/${listingId}`), {
+  const res = await fetchWithTimeout(apiUrl(`/gallery/listings/${listingId}`), {
     method: "DELETE",
     headers: buildHeaders(true),
     body: JSON.stringify({ wallet }),
