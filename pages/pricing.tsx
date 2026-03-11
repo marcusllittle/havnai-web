@@ -24,7 +24,7 @@ import {
   ensureSepoliaNetwork,
   getBrowserProvider,
 } from "../lib/hai-token";
-import { formatWalletShort, getConnectButtonLabel, getInjectedProvider } from "../lib/wallet";
+import { WALLET, formatWalletShort, getConnectButtonLabel, getInjectedProvider } from "../lib/wallet";
 
 const FALLBACK_PACKAGES: CreditPackage[] = [
   { id: "starter", name: "Starter Pack", credits: 50, price_cents: 500, description: "50 credits" },
@@ -102,8 +102,8 @@ const PricingPage: NextPage = () => {
     wallet.source === "connected"
       ? "Credit purchases and balance/history use your connected MetaMask wallet."
       : wallet.source === "env"
-      ? "The site is currently using NEXT_PUBLIC_HAVNAI_WALLET as a fallback identity for purchases and balance/history."
-      : "Connect MetaMask or configure NEXT_PUBLIC_HAVNAI_WALLET to enable wallet-aware actions.";
+      ? `The site is using the configured wallet (${formatWalletShort(WALLET || "")}) as a fallback identity for purchases and balance/history.`
+      : "Connect MetaMask to enable wallet-aware actions.";
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -474,7 +474,7 @@ const PricingPage: NextPage = () => {
             </p>
             <p className="pricing-wallet-note">
               {walletStatusCopy} Generator submissions still use{" "}
-              <code>NEXT_PUBLIC_HAVNAI_WALLET</code>.
+              <code>{formatWalletShort(WALLET || "")}</code>.
             </p>
           </div>
 
@@ -525,17 +525,21 @@ const PricingPage: NextPage = () => {
                   Your HAI balance: <strong>{Number(haiBalance).toFixed(2)} HAI</strong>
                 </p>
               )}
-              <div className="convert-controls">
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={haiAmount}
-                  onChange={(e) => setHaiAmount(e.target.value)}
-                  disabled={!connectedWallet || haiFunding}
-                />
+              <div className="convert-row">
+                <div className="convert-input-group">
+                  <input
+                    className="convert-input"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={haiAmount}
+                    onChange={(e) => setHaiAmount(e.target.value)}
+                    disabled={!connectedWallet || haiFunding}
+                  />
+                </div>
                 <button
                   type="button"
+                  className="convert-submit-btn"
                   onClick={handleBuyWithHai}
                   disabled={haiFunding || !connectedWallet}
                 >
@@ -626,21 +630,34 @@ const PricingPage: NextPage = () => {
           <div className="pricing-convert">
             <h3>Convert credits to $HAI</h3>
             <p>Convert your unused credits into $HAI tokens.</p>
-            <div className="convert-wallet-row">
-              <button type="button" onClick={handleConnectWallet} disabled={wallet.connecting || converting}>
+            <div className="convert-row">
+              <button
+                type="button"
+                className="convert-wallet-btn"
+                onClick={handleConnectWallet}
+                disabled={wallet.connecting || converting}
+              >
                 {connectedWallet ? `Connected: ${formatWalletShort(connectedWallet)}` : connectLabel}
               </button>
             </div>
-            <div className="convert-controls">
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={convertAmount}
-                onChange={(event) => setConvertAmount(event.target.value)}
-                disabled={!connectedWallet || converting}
-              />
-              <button type="button" onClick={handleConvert} disabled={converting || !connectedWallet}>
+            <div className="convert-row">
+              <div className="convert-input-group">
+                <input
+                  className="convert-input"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={convertAmount}
+                  onChange={(event) => setConvertAmount(event.target.value)}
+                  disabled={!connectedWallet || converting}
+                />
+              </div>
+              <button
+                type="button"
+                className="convert-submit-btn"
+                onClick={handleConvert}
+                disabled={converting || !connectedWallet}
+              >
                 {converting ? "Converting..." : "Convert"}
               </button>
             </div>
