@@ -209,6 +209,33 @@ function apiUrl(path: string): string {
   return `${getApiBase()}${path}`;
 }
 
+const API_REQUEST_TIMEOUT_MS = Number.parseInt(
+  String(process.env.NEXT_PUBLIC_API_TIMEOUT_MS || "25000"),
+  10
+);
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  timeoutMs = API_REQUEST_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Math.max(1000, timeoutMs));
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: init?.signal ?? controller.signal,
+    });
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      throw new HavnaiApiError("Request timed out. Please try again.", "request_timeout");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function resolveAssetUrl(path: string | undefined | null): string | undefined {
   if (!path) return undefined;
   // If already absolute (http/https), return as-is.
@@ -665,7 +692,7 @@ interface WalletNonceRequest {
 }
 
 async function requestWalletNonce(payload: WalletNonceRequest): Promise<WalletNonceChallenge> {
-  const res = await fetch(apiUrl("/wallet/nonce"), {
+  const res = await fetchWithTimeout(apiUrl("/wallet/nonce"), {
     method: "POST",
     headers: buildHeaders(true),
     body: JSON.stringify(payload),
@@ -703,7 +730,7 @@ async function signWalletNonce(payload: WalletNonceRequest): Promise<{
 }
 
 export async function convertCredits(payload: ConvertCreditsPayload): Promise<CreditConversion> {
-  const res = await fetch(apiUrl("/credits/convert"), {
+  const res = await fetchWithTimeout(apiUrl("/credits/convert"), {
     method: "POST",
     headers: buildHeaders(true),
     body: JSON.stringify(payload),

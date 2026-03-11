@@ -123,6 +123,56 @@ export interface HaiTransferResult {
   wait: (confirmations?: number) => Promise<any>;
 }
 
+class WalletRequestTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WalletRequestTimeoutError";
+  }
+}
+
+const WALLET_REQUEST_TIMEOUT_MS = Number.parseInt(
+  String(process.env.NEXT_PUBLIC_WALLET_REQUEST_TIMEOUT_MS || "25000"),
+  10
+);
+const CHAIN_SWITCH_VERIFY_TIMEOUT_MS = Number.parseInt(
+  String(process.env.NEXT_PUBLIC_CHAIN_SWITCH_VERIFY_TIMEOUT_MS || "12000"),
+  10
+);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return new Promise<T>((resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new WalletRequestTimeoutError(message));
+    }, Math.max(1000, timeoutMs));
+    promise
+      .then((value) => resolve(value))
+      .catch((error) => reject(error))
+      .finally(() => {
+        if (timer) clearTimeout(timer);
+      });
+  });
+}
+
+async function providerRequest(
+  injectedProvider: any,
+  method: string,
+  params?: unknown,
+  timeoutMs = WALLET_REQUEST_TIMEOUT_MS
+): Promise<any> {
+  const payload: Record<string, unknown> = { method };
+  if (params !== undefined) payload.params = params;
+  return withTimeout(
+    injectedProvider.request(payload),
+    timeoutMs,
+    `Wallet request timed out for ${method}. Open MetaMask and complete or cancel pending requests.`
+  );
+}
+
 /**
  * Transfer HAI tokens from the connected wallet to the treasury.
  *
@@ -146,7 +196,11 @@ export async function transferHaiToTreasury(
 
   const rawAmount = parseUnits(amountHuman, decimals);
 
-  const tx: ContractTransactionResponse = await contract.transfer(HAI_TREASURY_WALLET, rawAmount);
+  const tx: ContractTransactionResponse = await withTimeout(
+    contract.transfer(HAI_TREASURY_WALLET, rawAmount),
+    WALLET_REQUEST_TIMEOUT_MS,
+    "Transaction request timed out. Open MetaMask and confirm or cancel the transfer."
+  );
 
   return {
     txHash: tx.hash,
@@ -177,13 +231,10 @@ const SEPOLIA_CHAIN_ID = normalizeChainId(process.env.NEXT_PUBLIC_SEPOLIA_CHAIN_
  */
 export async function ensureSepoliaNetwork(injectedProvider: any): Promise<void> {
   if (!injectedProvider) throw new Error("No wallet provider found");
-  const chainId = normalizeChainId(await injectedProvider.request({ method: "eth_chainId" }));
+  const chainId = normalizeChainId(await providerRequest(injectedProvider, "eth_chainId", undefined, 8000));
   if (chainId !== SEPOLIA_CHAIN_ID) {
     try {
-      await injectedProvider.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: SEPOLIA_CHAIN_ID }],
-      });
+      await providerRequest(injectedProvider, "wallet_switchEthereumChain", [{ chainId: SEPOLIA_CHAIN_ID }]);
     } catch (error: any) {
       const code = Number(error?.code);
       if (code === 4001) {
@@ -194,26 +245,33 @@ export async function ensureSepoliaNetwork(injectedProvider: any): Promise<void>
       }
       if (code === 4902) {
         // Chain not found in wallet; try adding Sepolia then switch again.
-        await injectedProvider.request({
-          method: "wallet_addEthereumChain",
-          params: [
-            {
-              chainId: "0xaa36a7",
-              chainName: "Sepolia",
-              nativeCurrency: { name: "Sepolia ETH", symbol: "ETH", decimals: 18 },
-              rpcUrls: ["https://rpc.sepolia.org"],
-              blockExplorerUrls: ["https://sepolia.etherscan.io"],
-            },
-          ],
-        });
-        await injectedProvider.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: "0xaa36a7" }],
-        });
-        return;
+        await providerRequest(injectedProvider, "wallet_addEthereumChain", [
+          {
+            chainId: "0xaa36a7",
+            chainName: "Sepolia",
+            nativeCurrency: { name: "Sepolia ETH", symbol: "ETH", decimals: 18 },
+            rpcUrls: ["https://rpc.sepolia.org"],
+            blockExplorerUrls: ["https://sepolia.etherscan.io"],
+          },
+        ]);
+        await providerRequest(injectedProvider, "wallet_switchEthereumChain", [{ chainId: "0xaa36a7" }]);
+      } else {
+        throw error;
       }
-      throw error;
     }
+
+    // Verify actual chain after switch so the UI does not sit in "Switching..."
+    // when the wallet never finalized the change.
+    const started = Date.now();
+    while (Date.now() - started < Math.max(3000, CHAIN_SWITCH_VERIFY_TIMEOUT_MS)) {
+      const current = normalizeChainId(await providerRequest(injectedProvider, "eth_chainId", undefined, 8000));
+      if (current === SEPOLIA_CHAIN_ID) return;
+      await sleep(700);
+    }
+
+    throw new Error(
+      "Wallet did not switch to Sepolia in time. Open MetaMask and complete any pending network request."
+    );
   }
 }
 
