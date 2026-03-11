@@ -291,14 +291,6 @@ function buildHeaders(includeInvite = false): HeadersInit {
   return headers;
 }
 
-const API_TIMEOUT_MS = 30_000;
-
-function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
-  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
-}
-
 async function parseErrorResponse(res: Response): Promise<HavnaiApiError> {
   const contentType = res.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
