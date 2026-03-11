@@ -2,6 +2,7 @@ import type { NextPage } from "next";
 import { getInviteCode } from "./invite";
 import { BrowserProvider, getAddress } from "ethers";
 import {
+  getAllProviders,
   getInjectedProvider,
   isUsableWallet,
   normalizeWalletError,
@@ -810,36 +811,68 @@ async function signWalletNonce(
   nonce: string;
   signature: string;
 }> {
-  const provider = new BrowserProvider(requireEthereumProvider());
-  onProgress?.("resolving_wallet");
-  const signer = await withWalletTimeout(
-    provider.getSigner(),
-    "Wallet request timed out while accessing signer. Open MetaMask and complete or cancel pending requests."
-  );
-  const signerWallet = getAddress(
-    await withWalletTimeout(
-      signer.getAddress(),
-      "Wallet request timed out while reading wallet address. Open MetaMask and complete or cancel pending requests."
-    )
-  );
-  if (payload.wallet && signerWallet.toLowerCase() !== payload.wallet.toLowerCase()) {
-    throw new HavnaiApiError(
-      `Connected wallet ${signerWallet} does not match ${payload.wallet}.`,
-      "wallet_mismatch"
-    );
+  const preferred = getInjectedProvider();
+  const candidates = getAllProviders();
+  if (preferred.provider && !candidates.includes(preferred.provider)) {
+    candidates.unshift(preferred.provider);
   }
-  onProgress?.("requesting_nonce");
-  const challenge = await requestWalletNonce({
-    ...payload,
-    wallet: signerWallet,
-  });
-  onProgress?.("awaiting_signature");
-  const signature = await signMessageWithTimeout(signer, challenge.message);
-  return {
-    wallet: signerWallet,
-    nonce: challenge.nonce,
-    signature,
-  };
+  if (candidates.length === 0) {
+    requireEthereumProvider();
+  }
+
+  onProgress?.("resolving_wallet");
+  let lastError: unknown = null;
+  for (const candidate of candidates) {
+    try {
+      const provider = new BrowserProvider(candidate as any);
+      const signer = await withWalletTimeout(
+        provider.getSigner(),
+        "Wallet request timed out while accessing signer. Open MetaMask and complete or cancel pending requests."
+      );
+      const signerWallet = getAddress(
+        await withWalletTimeout(
+          signer.getAddress(),
+          "Wallet request timed out while reading wallet address. Open MetaMask and complete or cancel pending requests."
+        )
+      );
+
+      if (payload.wallet && signerWallet.toLowerCase() !== payload.wallet.toLowerCase()) {
+        lastError = new HavnaiApiError(
+          `Connected wallet ${signerWallet} does not match ${payload.wallet}.`,
+          "wallet_mismatch"
+        );
+        continue;
+      }
+
+      onProgress?.("requesting_nonce");
+      const challenge = await requestWalletNonce({
+        ...payload,
+        wallet: signerWallet,
+      });
+      onProgress?.("awaiting_signature");
+      const signature = await signMessageWithTimeout(signer, challenge.message);
+      return {
+        wallet: signerWallet,
+        nonce: challenge.nonce,
+        signature,
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError instanceof HavnaiApiError) {
+    const hint =
+      lastError.code === "wallet_request_timeout"
+        ? "Open MetaMask, complete/cancel pending requests, and disable extra wallet extensions."
+        : "If multiple wallet extensions are installed, disable extras and keep only MetaMask enabled.";
+    throw new HavnaiApiError(`${lastError.message} ${hint}`, lastError.code, lastError.data, lastError.status);
+  }
+
+  throw new HavnaiApiError(
+    "Unable to resolve a wallet signer. Open MetaMask and make sure the correct account is unlocked.",
+    "wallet_unavailable"
+  );
 }
 
 export async function convertCredits(payload: ConvertCreditsPayload): Promise<CreditConversion> {
@@ -1457,8 +1490,12 @@ export async function createGalleryListing(
       (step) => options.onProgress?.(step)
     );
   } catch (error: unknown) {
+    const detail =
+      error instanceof HavnaiApiError
+        ? (error.message || "Wallet signature was not completed.")
+        : formatApiError(error, "Wallet signature was not completed.");
     throw new HavnaiApiError(
-      `Listing signature step failed. ${formatApiError(error, "Wallet signature was not completed.")}`,
+      `Listing signature step failed: ${detail}`,
       error instanceof HavnaiApiError ? error.code : undefined,
       error instanceof HavnaiApiError ? error.data : undefined,
       error instanceof HavnaiApiError ? error.status : undefined
@@ -1479,7 +1516,7 @@ export async function createGalleryListing(
   if (!res.ok) {
     const apiError = await parseErrorResponse(res);
     throw new HavnaiApiError(
-      `Listing request failed. ${formatApiError(apiError, "Backend rejected listing.")}`,
+      `Listing request failed: ${apiError.message || "Backend rejected listing."}`,
       apiError.code,
       apiError.data,
       apiError.status
