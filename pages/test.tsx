@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
 import { HavnAIPrompt } from "../components/HavnAIPrompt";
 import { HavnAIButton } from "../components/HavnAIButton";
@@ -1362,35 +1363,7 @@ const TestPage: React.FC = () => {
 
   return (
     <>
-      <header className="site-header">
-        <div className="header-inner">
-          <a href="#home" className="brand">
-            <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
-            <div className="brand-text">
-              <span className="brand-stage">Stage 6 → 7 Alpha</span>
-              <span className="brand-name">HavnAI Network</span>
-            </div>
-          </a>
-          <button className="nav-toggle" id="navToggle" aria-label="Toggle navigation">
-            <span />
-            <span />
-          </button>
-          <nav className="nav-links" id="primaryNav">
-            <a href="/">Home</a>
-            <a href="/#how">How It Works</a>
-            <a href="/#models">Models</a>
-            <a href="/generator" className="nav-active">Generator</a>
-            <a href="/library">My Library</a>
-            <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">
-              Dashboard
-            </a>
-            <a href="/pricing">Buy Credits</a>
-            <a href="/analytics">Analytics</a>
-            <a href="/nodes">Nodes</a>
-            <a href="/marketplace">Marketplace</a>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main>
         <section className="generator-hero" id="home">

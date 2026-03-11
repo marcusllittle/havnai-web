@@ -3,12 +3,11 @@ import Head from "next/head";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { fetchNodes, fetchLeaderboard, NodeInfo, LeaderboardEntry } from "../lib/havnai";
 import { getNodeSSE, SSEEvent } from "../lib/sse";
-import { WalletButton } from "../components/WalletButton";
+import { SiteHeader } from "../components/SiteHeader";
 
 type ViewMode = "grid" | "leaderboard";
 
 const NodesPage: NextPage = () => {
-  const [navOpen, setNavOpen] = useState(false);
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,31 +90,7 @@ const NodesPage: NextPage = () => {
   return (
     <>
       <Head><title>HavnAI Nodes</title></Head>
-      <header className="site-header">
-        <div className="header-inner">
-          <a href="/#home" className="brand">
-            <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
-            <div className="brand-text">
-              <span className="brand-stage">Public Beta</span>
-              <span className="brand-name">HavnAI Network</span>
-            </div>
-          </a>
-          <button type="button" className={`nav-toggle ${navOpen ? "nav-open" : ""}`} aria-label="Toggle navigation" onClick={() => setNavOpen((o) => !o)}>
-            <span /><span />
-          </button>
-          <nav className={`nav-links ${navOpen ? "nav-open" : ""}`} onClick={() => setNavOpen(false)}>
-            <a href="/#home">Home</a>
-            <a href="/generator">Generator</a>
-            <a href="/library">My Library</a>
-            <a href="/pricing">Buy Credits</a>
-            <a href="/analytics">Analytics</a>
-            <a href="/nodes" className="nav-active">Nodes</a>
-            <a href="/marketplace">Marketplace</a>
-            <a href="/join" className="nav-primary">Join</a>
-            <WalletButton />
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="library-page">
         <section className="page-hero">

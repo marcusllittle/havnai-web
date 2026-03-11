@@ -1,10 +1,10 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useState } from "react";
+import { SiteHeader } from "../components/SiteHeader";
 import { getApiBase } from "../lib/apiBase";
 
 const JoinPage: NextPage = () => {
-  const [navOpen, setNavOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const apiBase = getApiBase();
 
@@ -30,30 +30,7 @@ const JoinPage: NextPage = () => {
         <meta name="description" content="Full install guide for joining the HavnAI decentralized GPU network. Prerequisites, setup, and troubleshooting." />
       </Head>
 
-      <header className="site-header">
-        <div className="header-inner">
-          <a href="/#home" className="brand">
-            <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
-            <div className="brand-text">
-              <span className="brand-stage">Public Beta</span>
-              <span className="brand-name">HavnAI Network</span>
-            </div>
-          </a>
-          <button type="button" className={`nav-toggle ${navOpen ? "nav-open" : ""}`} aria-label="Toggle navigation" onClick={() => setNavOpen((o) => !o)}>
-            <span /><span />
-          </button>
-          <nav className={`nav-links ${navOpen ? "nav-open" : ""}`} onClick={() => setNavOpen(false)}>
-            <a href="/#home">Home</a>
-            <a href="/generator">Generator</a>
-            <a href="/library">My Library</a>
-            <a href="/pricing">Buy Credits</a>
-            <a href="/analytics">Analytics</a>
-            <a href="/nodes">Nodes</a>
-            <a href="/marketplace">Marketplace</a>
-            <a href="/join" className="nav-active">Join</a>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="library-page">
         <section className="page-hero">

@@ -1,8 +1,8 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useMemo, useState } from "react";
+import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
-import { getApiBase } from "../lib/apiBase";
 import {
   fetchPackages,
   fetchCredits,
@@ -62,8 +62,6 @@ function describeWalletSource(source: "connected" | "env" | "none"): string {
 
 const PricingPage: NextPage = () => {
   const wallet = useWallet();
-  const [navOpen, setNavOpen] = useState(false);
-  const apiBase = getApiBase();
   const [packages, setPackages] = useState<CreditPackage[]>([]);
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const [packagesLoading, setPackagesLoading] = useState(true);
@@ -377,44 +375,7 @@ const PricingPage: NextPage = () => {
         />
       </Head>
 
-      <header className="site-header">
-        <div className="header-inner">
-          <a href="/#home" className="brand">
-            <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
-            <div className="brand-text">
-              <span className="brand-stage">Stage 6 → 7 Alpha</span>
-              <span className="brand-name">HavnAI Network</span>
-            </div>
-          </a>
-          <button
-            type="button"
-            className={`nav-toggle ${navOpen ? "nav-open" : ""}`}
-            id="navToggle"
-            aria-label="Toggle navigation"
-            onClick={() => setNavOpen((open) => !open)}
-          >
-            <span />
-            <span />
-          </button>
-          <nav
-            className={`nav-links ${navOpen ? "nav-open" : ""}`}
-            id="primaryNav"
-            aria-label="Primary navigation"
-          >
-            <a href="/#home">Home</a>
-            <a href="/generator">Generator</a>
-            <a href="/library">My Library</a>
-            <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">
-              Dashboard
-            </a>
-            <a href="/pricing" className="nav-active">Buy Credits</a>
-            <a href="/analytics">Analytics</a>
-            <a href="/nodes">Nodes</a>
-            <a href="/marketplace">Marketplace</a>
-            <a href="/join">Join Alpha</a>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main>
         <section className="section pricing-section">

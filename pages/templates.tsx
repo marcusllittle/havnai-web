@@ -1,7 +1,7 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { WalletButton } from "../components/WalletButton";
+import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../lib/WalletContext";
 import {
   fetchMarketplace,
@@ -16,7 +16,6 @@ const CATEGORIES = ["All", "Image Generation", "Video Generation", "Face Swap", 
 
 const MarketplacePage: NextPage = () => {
   const { address } = useWallet();
-  const [navOpen, setNavOpen] = useState(false);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -91,32 +90,7 @@ const MarketplacePage: NextPage = () => {
   return (
     <>
       <Head><title>HavnAI Templates</title></Head>
-      <header className="site-header">
-        <div className="header-inner">
-          <a href="/#home" className="brand">
-            <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
-            <div className="brand-text">
-              <span className="brand-stage">Public Beta</span>
-              <span className="brand-name">HavnAI Network</span>
-            </div>
-          </a>
-          <button type="button" className={`nav-toggle ${navOpen ? "nav-open" : ""}`} aria-label="Toggle navigation" onClick={() => setNavOpen((o) => !o)}>
-            <span /><span />
-          </button>
-          <nav className={`nav-links ${navOpen ? "nav-open" : ""}`} onClick={() => setNavOpen(false)}>
-            <a href="/#home">Home</a>
-            <a href="/generator">Generator</a>
-            <a href="/library">My Library</a>
-            <a href="/pricing">Buy Credits</a>
-            <a href="/analytics">Analytics</a>
-            <a href="/nodes">Nodes</a>
-            <a href="/marketplace">Marketplace</a>
-            <a href="/templates" className="nav-active">Templates</a>
-            <a href="/join" className="nav-primary">Join</a>
-            <WalletButton />
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="library-page">
         <section className="page-hero">
