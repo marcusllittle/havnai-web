@@ -882,7 +882,7 @@ export async function fundCreditsWithHai(
   amount: number,
   txHash: string
 ): Promise<HaiFundingResponse> {
-  const res = await fetch(apiUrl("/credits/fund-hai"), {
+  const res = await fetchWithTimeout(apiUrl("/credits/fund-hai"), {
     method: "POST",
     headers: buildHeaders(false),
     body: JSON.stringify({ wallet, amount, tx_hash: txHash }),
@@ -897,7 +897,7 @@ export async function fundCreditsWithHai(
  * Fetch HAI funding history for a wallet.
  */
 export async function fetchHaiFundings(wallet: string): Promise<HaiFundingsResponse> {
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     apiUrl(`/credits/hai-fundings?wallet=${encodeURIComponent(wallet)}`),
     { headers: buildHeaders(false) }
   );

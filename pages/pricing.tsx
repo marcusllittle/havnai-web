@@ -362,9 +362,24 @@ const PricingPage: NextPage = () => {
       await wait(2);
 
       setHaiFundingStep("Verifying with backend...");
-      const result = await fundCreditsWithHai(connectedWallet, amount, txHash);
+      let result = await fundCreditsWithHai(connectedWallet, amount, txHash);
+      for (let attempt = 0; result.status === "pending" && attempt < 4; attempt += 1) {
+        setHaiFundingStep(`Finalizing credits (${attempt + 1}/4)...`);
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        result = await fundCreditsWithHai(connectedWallet, amount, txHash);
+      }
+
+      const granted = Number(result.credits_granted ?? 0);
+      const completed = result.status === "completed" || (result.status === "already_processed" && granted > 0);
+      if (!completed) {
+        throw new Error(
+          result.error ||
+          result.message ||
+          "Transfer is recorded but credits are still pending backend verification."
+        );
+      }
       setHaiFundingSuccess(
-        `Funded ${result.credits_granted ?? amount} credits. New balance: ${result.balance?.toFixed(1) ?? "?"}`
+        `Funded ${granted || amount} credits. New balance: ${result.balance?.toFixed(1) ?? "?"}`
       );
       // Refresh credit balance
       const updated = await fetchCredits(connectedWallet);
