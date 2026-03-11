@@ -10,7 +10,7 @@ import {
   CreditBalance,
   WalletRewards,
 } from "../lib/havnai";
-import { getConnectButtonLabel, getInjectedProvider } from "../lib/wallet";
+import { ensureInjectedProvider, getConnectButtonLabel } from "../lib/wallet";
 import { isHaiFundingConfigured, readHaiBalance, getBrowserProvider } from "../lib/hai-token";
 
 const WalletPage: NextPage = () => {
@@ -46,13 +46,21 @@ const WalletPage: NextPage = () => {
     });
     // Load on-chain HAI balance
     if (haiFundingConfigured && wallet.connectedWallet) {
-      const selection = getInjectedProvider();
-      if (selection.provider) {
+      void (async () => {
+        const selection = await ensureInjectedProvider();
+        if (!active || !selection.provider) {
+          if (active) setOnChainHai(null);
+          return;
+        }
         const provider = getBrowserProvider(selection.provider);
-        readHaiBalance(wallet.connectedWallet, provider)
-          .then((result) => { if (active) setOnChainHai(result.formatted); })
-          .catch(() => { if (active) setOnChainHai(null); });
-      }
+        readHaiBalance(wallet.connectedWallet!, provider)
+          .then((result) => {
+            if (active) setOnChainHai(result.formatted);
+          })
+          .catch(() => {
+            if (active) setOnChainHai(null);
+          });
+      })();
     } else {
       setOnChainHai(null);
     }

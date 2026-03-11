@@ -2,8 +2,8 @@ import type { NextPage } from "next";
 import { getInviteCode } from "./invite";
 import { BrowserProvider, getAddress } from "ethers";
 import {
+  ensureInjectedProvider,
   getAllProviders,
-  getInjectedProvider,
   isUsableWallet,
   normalizeWalletError,
   readConnectedAccounts,
@@ -728,11 +728,11 @@ export interface ConvertCreditsPayload {
   signature: string;
 }
 
-function requireEthereumProvider(): any {
+async function requireEthereumProvider(): Promise<any> {
   if (typeof window === "undefined") {
     throw new HavnaiApiError("Wallet connection is only available in the browser.", "wallet_unavailable");
   }
-  const selection = getInjectedProvider();
+  const selection = await ensureInjectedProvider();
   if (!selection.provider) {
     const issue =
       selection.error || new WalletError("wallet_unavailable", "MetaMask not found. Install MetaMask and try again.");
@@ -811,13 +811,19 @@ async function signWalletNonce(
   nonce: string;
   signature: string;
 }> {
-  const preferred = getInjectedProvider();
+  const preferred = await ensureInjectedProvider();
   const candidates = getAllProviders();
   if (preferred.provider && !candidates.includes(preferred.provider)) {
     candidates.unshift(preferred.provider);
   }
   if (candidates.length === 0) {
-    requireEthereumProvider();
+    const ensured = await ensureInjectedProvider();
+    if (ensured.provider) {
+      candidates.push(ensured.provider);
+    }
+  }
+  if (candidates.length === 0) {
+    await requireEthereumProvider();
   }
 
   onProgress?.("resolving_wallet");
@@ -900,7 +906,7 @@ export async function convertCredits(payload: ConvertCreditsPayload): Promise<Cr
 }
 
 export async function convertCreditsWithMetaMask(amount: number, wallet?: string): Promise<CreditConversion> {
-  const provider = new BrowserProvider(requireEthereumProvider());
+  const provider = new BrowserProvider(await requireEthereumProvider());
   const signer = await provider.getSigner();
   const signerWallet = getAddress(wallet || (await signer.getAddress()));
   const challenge = await requestConversionNonce(signerWallet, amount);

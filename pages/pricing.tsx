@@ -24,7 +24,7 @@ import {
   ensureSepoliaNetwork,
   getBrowserProvider,
 } from "../lib/hai-token";
-import { WALLET, formatWalletShort, getConnectButtonLabel, getInjectedProvider, getAllProviders } from "../lib/wallet";
+import { WALLET, formatWalletShort, getConnectButtonLabel, ensureInjectedProvider, getAllProviders } from "../lib/wallet";
 
 const FALLBACK_PACKAGES: CreditPackage[] = [
   { id: "starter", name: "Starter Pack", credits: 50, price_cents: 500, description: "50 credits" },
@@ -293,13 +293,21 @@ const PricingPage: NextPage = () => {
       return;
     }
     let active = true;
-    const selection = getInjectedProvider();
-    if (selection.provider) {
+    void (async () => {
+      const selection = await ensureInjectedProvider();
+      if (!active || !selection.provider) {
+        if (active) setHaiBalance(null);
+        return;
+      }
       const provider = getBrowserProvider(selection.provider);
       readHaiBalance(connectedWallet, provider)
-        .then((result) => { if (active) setHaiBalance(result.formatted); })
-        .catch(() => { if (active) setHaiBalance(null); });
-    }
+        .then((result) => {
+          if (active) setHaiBalance(result.formatted);
+        })
+        .catch(() => {
+          if (active) setHaiBalance(null);
+        });
+    })();
     return () => { active = false; };
   }, [connectedWallet, haiFundingConfigured, haiFundingSuccess]);
 
@@ -317,7 +325,7 @@ const PricingPage: NextPage = () => {
     setHaiFundingError(null);
     setHaiFundingSuccess(null);
     try {
-      const selection = getInjectedProvider();
+      const selection = await ensureInjectedProvider();
       if (!selection.provider) throw new Error("No wallet provider found");
       const candidates = getAllProviders();
       if (candidates.length === 0) {

@@ -1,8 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ensureInjectedProvider,
   getAllProviders,
   getConfiguredWallet,
-  getInjectedProvider,
   InjectedProvider,
   InjectedProviderSelection,
   normalizeWalletError,
@@ -118,7 +118,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const refresh = useCallback(async () => {
     let selection: InjectedProviderSelection;
     try {
-      selection = getInjectedProvider();
+      selection = await ensureInjectedProvider();
     } catch {
       patchSnapshot({
         connectedWallet: null,
@@ -222,7 +222,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const connect = useCallback(async () => {
     let selection: InjectedProviderSelection;
     try {
-      selection = getInjectedProvider();
+      selection = await ensureInjectedProvider();
     } catch (err) {
       const issue = new WalletError("wallet_unknown", "Failed to detect wallet provider. Try disabling other wallet extensions.");
       patchSnapshot({

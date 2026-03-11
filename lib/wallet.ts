@@ -1,4 +1,5 @@
 import { getAddress } from "ethers";
+import type { MetaMaskSDK as MetaMaskSDKType } from "@metamask/sdk";
 
 export const ZERO_WALLET = "0x0000000000000000000000000000000000000000";
 export const WALLET =
@@ -23,6 +24,19 @@ const ALLOWED_CHAIN_IDS = (process.env.NEXT_PUBLIC_HAVNAI_ALLOWED_CHAIN_IDS || "
   .split(",")
   .map((value) => value.trim().toLowerCase())
   .filter(Boolean);
+
+const METAMASK_SDK_ENABLED = !["0", "false", "no", "off"].includes(
+  String(process.env.NEXT_PUBLIC_METAMASK_SDK_ENABLED ?? "true").trim().toLowerCase()
+);
+const METAMASK_DAPP_NAME =
+  String(process.env.NEXT_PUBLIC_METAMASK_DAPP_NAME || "HavnAI Network").trim() || "HavnAI Network";
+const METAMASK_DAPP_URL = String(
+  process.env.NEXT_PUBLIC_METAMASK_DAPP_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
+).trim();
+
+let metaMaskSdkInstance: MetaMaskSDKType | null = null;
+let metaMaskSdkProvider: InjectedProvider | null = null;
+let metaMaskSdkInitPromise: Promise<InjectedProvider | null> | null = null;
 
 export type WalletSource = "connected" | "env" | "none";
 export type WalletStatus =
@@ -110,6 +124,75 @@ export function getConfiguredWallet(): string | null {
 function getWindowEthereum(): InjectedProvider | undefined {
   if (typeof window === "undefined") return undefined;
   return window.ethereum;
+}
+
+function getMetaMaskDappUrl(): string | undefined {
+  if (METAMASK_DAPP_URL) return METAMASK_DAPP_URL;
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+  return undefined;
+}
+
+async function initMetaMaskSdkProvider(): Promise<InjectedProvider | null> {
+  if (metaMaskSdkProvider && isProviderUsable(metaMaskSdkProvider)) {
+    return metaMaskSdkProvider;
+  }
+  if (typeof window === "undefined" || !METAMASK_SDK_ENABLED) {
+    return null;
+  }
+  if (metaMaskSdkInitPromise) {
+    return metaMaskSdkInitPromise;
+  }
+
+  metaMaskSdkInitPromise = (async () => {
+    try {
+      const sdkModule = await import("@metamask/sdk");
+      const MetaMaskSDKCtor =
+        (sdkModule.default || (sdkModule as any).MetaMaskSDK) as
+          | (new (options?: Record<string, unknown>) => MetaMaskSDKType)
+          | undefined;
+
+      if (typeof MetaMaskSDKCtor !== "function") {
+        return null;
+      }
+
+      const dappUrl = getMetaMaskDappUrl();
+      metaMaskSdkInstance = new MetaMaskSDKCtor({
+        dappMetadata: {
+          name: METAMASK_DAPP_NAME,
+          ...(dappUrl ? { url: dappUrl } : {}),
+        },
+        checkInstallationImmediately: false,
+        injectProvider: false,
+        useDeeplink: true,
+        logging: {
+          developerMode: false,
+          sdk: false,
+        },
+      });
+
+      if (typeof (metaMaskSdkInstance as any).init === "function") {
+        await (metaMaskSdkInstance as any).init();
+      }
+
+      const provider = (metaMaskSdkInstance as any).getProvider?.();
+      if (isProviderUsable(provider)) {
+        metaMaskSdkProvider = provider;
+        return metaMaskSdkProvider;
+      }
+      return null;
+    } catch (error) {
+      console.warn("[wallet] MetaMask SDK provider initialization failed", error);
+      return null;
+    } finally {
+      if (!metaMaskSdkProvider) {
+        metaMaskSdkInitPromise = null;
+      }
+    }
+  })();
+
+  return metaMaskSdkInitPromise;
 }
 
 function dedupeProviders(providers: InjectedProvider[]): InjectedProvider[] {
@@ -242,6 +325,15 @@ export function detectProviderConflict(): {
 export function getInjectedProvider(): InjectedProviderSelection {
   const ethereum = getWindowEthereum();
   if (!ethereum) {
+    if (isProviderUsable(metaMaskSdkProvider)) {
+      return {
+        provider: metaMaskSdkProvider,
+        providerName: "MetaMask",
+        hasProvider: true,
+        hasConflict: false,
+        error: null,
+      };
+    }
     return {
       provider: null,
       providerName: undefined,
@@ -303,6 +395,26 @@ export function getInjectedProvider(): InjectedProviderSelection {
   };
 }
 
+export async function ensureInjectedProvider(): Promise<InjectedProviderSelection> {
+  const current = getInjectedProvider();
+  if (current.provider) {
+    return current;
+  }
+
+  const sdkProvider = await initMetaMaskSdkProvider();
+  if (isProviderUsable(sdkProvider)) {
+    return {
+      provider: sdkProvider,
+      providerName: "MetaMask",
+      hasProvider: true,
+      hasConflict: false,
+      error: null,
+    };
+  }
+
+  return current;
+}
+
 function normalizeAccounts(rawAccounts: unknown): string[] {
   if (!Array.isArray(rawAccounts)) return [];
   return rawAccounts
@@ -316,10 +428,11 @@ function normalizeAccounts(rawAccounts: unknown): string[] {
     .filter((account): account is string => Boolean(account));
 }
 
-function requireProvider(provider?: InjectedProvider | null): InjectedProvider {
-  const selection = provider
-    ? { provider, error: null }
-    : getInjectedProvider();
+async function requireProvider(provider?: InjectedProvider | null): Promise<InjectedProvider> {
+  if (isProviderUsable(provider)) {
+    return provider;
+  }
+  const selection = await ensureInjectedProvider();
   if (!selection.provider) {
     throw selection.error || new WalletError("wallet_unavailable", "MetaMask not found. Install MetaMask and try again.");
   }
@@ -338,19 +451,19 @@ function chainAllowed(chainId?: string): boolean {
 }
 
 export async function readConnectedAccounts(provider?: InjectedProvider | null): Promise<string[]> {
-  const injected = requireProvider(provider);
+  const injected = await requireProvider(provider);
   const accounts = await injected.request({ method: "eth_accounts" });
   return normalizeAccounts(accounts);
 }
 
 export async function requestAccounts(provider?: InjectedProvider | null): Promise<string[]> {
-  const injected = requireProvider(provider);
+  const injected = await requireProvider(provider);
   const accounts = await injected.request({ method: "eth_requestAccounts" });
   return normalizeAccounts(accounts);
 }
 
 export async function readChainInfo(provider?: InjectedProvider | null): Promise<ChainInfo> {
-  const injected = requireProvider(provider);
+  const injected = await requireProvider(provider);
   try {
     const rawChainId = await injected.request({ method: "eth_chainId" });
     const chainId = normalizeChainId(rawChainId);
@@ -409,7 +522,9 @@ export function normalizeWalletError(error: unknown): WalletError {
  */
 export function getAllProviders(): InjectedProvider[] {
   const ethereum = getWindowEthereum();
-  if (!ethereum) return [];
+  if (!ethereum) {
+    return isProviderUsable(metaMaskSdkProvider) ? [metaMaskSdkProvider] : [];
+  }
   const conflict = detectProviderConflict();
   const seen = new Set<InjectedProvider>();
   const result: InjectedProvider[] = [];
@@ -431,6 +546,10 @@ export function getAllProviders(): InjectedProvider[] {
   // Root ethereum as last resort if not already included
   if (!seen.has(ethereum) && isProviderUsable(ethereum)) {
     result.push(ethereum);
+  }
+
+  if (isProviderUsable(metaMaskSdkProvider) && !seen.has(metaMaskSdkProvider)) {
+    result.push(metaMaskSdkProvider);
   }
 
   return result;
