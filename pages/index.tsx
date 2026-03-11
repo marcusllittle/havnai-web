@@ -2,12 +2,11 @@ import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
-import { WalletButton } from "../components/WalletButton";
+import { SiteHeader } from "../components/SiteHeader";
 import { fetchJobWithResult, JobDetailResponse, ResultResponse, resolveAssetUrl } from "../lib/havnai";
 import { getApiBase } from "../lib/apiBase";
 
 const HomePage: NextPage = () => {
-  const [navOpen, setNavOpen] = useState(false);
   const [liveJobs, setLiveJobs] = useState<any[]>([]);
   const [liveJobsLoading, setLiveJobsLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -162,46 +161,7 @@ const HomePage: NextPage = () => {
         <meta property="og:type" content="website" />
       </Head>
 
-      <header className="site-header">
-        <div className="header-inner">
-          <a href="#home" className="brand">
-            <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
-            <div className="brand-text">
-              <span className="brand-stage">Public Beta</span>
-              <span className="brand-name">HavnAI Network</span>
-            </div>
-          </a>
-          <button
-            type="button"
-            className={`nav-toggle ${navOpen ? "nav-open" : ""}`}
-            id="navToggle"
-            aria-label="Toggle navigation"
-            onClick={() => setNavOpen((open) => !open)}
-          >
-            <span />
-            <span />
-          </button>
-          <nav
-            className={`nav-links ${navOpen ? "nav-open" : ""}`}
-            id="primaryNav"
-            aria-label="Primary navigation"
-            onClick={() => setNavOpen(false)}
-          >
-            <a href="#home">Home</a>
-            <a href="/generator">Generator</a>
-            <a href="/library">My Library</a>
-            <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">
-              Dashboard
-            </a>
-            <a href="/pricing">Buy Credits</a>
-            <a href="/analytics">Analytics</a>
-            <a href="/nodes">Nodes</a>
-            <a href="/marketplace">Marketplace</a>
-            <a href="/join" className="nav-primary">Join</a>
-            <WalletButton />
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main>
         {/* HERO */}

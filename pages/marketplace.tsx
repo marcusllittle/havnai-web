@@ -3,6 +3,7 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import { useWallet } from "../components/WalletProvider";
+import { SiteHeader } from "../components/SiteHeader";
 import { getApiBase } from "../lib/apiBase";
 import {
   createWorkflow,
@@ -93,7 +94,6 @@ function purchaseToListing(purchase: GalleryPurchaseRecord): GalleryListing {
 const MarketplacePage: NextPage = () => {
   const wallet = useWallet();
   const router = useRouter();
-  const [navOpen, setNavOpen] = useState(false);
   const apiBase = getApiBase();
 
   const [tab, setTab] = useState<MarketplaceTab>("gallery");
@@ -486,46 +486,7 @@ const MarketplacePage: NextPage = () => {
         <title>HavnAI Marketplace</title>
       </Head>
 
-      <header className="site-header">
-        <div className="header-inner">
-          <a href="/#home" className="brand">
-            <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
-            <div className="brand-text">
-              <span className="brand-stage">Stage 6 → 7 Alpha</span>
-              <span className="brand-name">HavnAI Network</span>
-            </div>
-          </a>
-          <button
-            type="button"
-            className={`nav-toggle ${navOpen ? "nav-open" : ""}`}
-            id="navToggle"
-            aria-label="Toggle navigation"
-            onClick={() => setNavOpen((open) => !open)}
-          >
-            <span />
-            <span />
-          </button>
-          <nav
-            className={`nav-links ${navOpen ? "nav-open" : ""}`}
-            id="primaryNav"
-            aria-label="Primary navigation"
-          >
-            <a href="/#home">Home</a>
-            <a href="/generator">Generator</a>
-            <a href="/library">My Library</a>
-            <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer">
-              Dashboard
-            </a>
-            <a href="/pricing">Buy Credits</a>
-            <a href="/analytics">Analytics</a>
-            <a href="/nodes">Nodes</a>
-            <a href="/marketplace" className="nav-active">
-              Marketplace
-            </a>
-            <a href="/join">Join Alpha</a>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="library-page">
         <section className="page-hero">
