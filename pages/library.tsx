@@ -9,6 +9,7 @@ import {
   fetchJob,
   fetchResult,
   createGalleryListingWithMetaMask,
+  formatApiError,
   JobDetailResponse,
   resolveAssetUrl,
   ResultResponse,
@@ -172,6 +173,7 @@ const LibraryPage: NextPage = () => {
   const [sellLoading, setSellLoading] = useState(false);
   const [sellMsg, setSellMsg] = useState("");
   const [sellErr, setSellErr] = useState("");
+  const [sellProgress, setSellProgress] = useState("");
 
   const openSellForm = (item: LibraryViewItem) => {
     setSellItem(item);
@@ -181,6 +183,7 @@ const LibraryPage: NextPage = () => {
     setSellCategory("");
     setSellMsg("");
     setSellErr("");
+    setSellProgress("");
   };
 
   const handleSell = async () => {
@@ -188,19 +191,30 @@ const LibraryPage: NextPage = () => {
     const price = parseFloat(sellPrice);
     if (!price || price <= 0) { setSellErr("Price must be > 0"); return; }
     setSellLoading(true);
+    setSellProgress("Preparing wallet signature...");
     setSellErr("");
     try {
-      await createGalleryListingWithMetaMask({
-        wallet: wallet.activeWallet || undefined,
-        job_id: sellItem.entry.job_id,
-        title: sellTitle.trim() || `Generation #${sellItem.entry.job_id.slice(0, 8)}`,
-        price_credits: price,
-        description: sellDesc.trim(),
-        category: sellCategory.trim(),
-      });
+      await createGalleryListingWithMetaMask(
+        {
+          wallet: wallet.activeWallet || undefined,
+          job_id: sellItem.entry.job_id,
+          title: sellTitle.trim() || `Generation #${sellItem.entry.job_id.slice(0, 8)}`,
+          price_credits: price,
+          description: sellDesc.trim(),
+          category: sellCategory.trim(),
+        },
+        {
+          onProgress: (step) => {
+            if (step === "requesting_nonce") setSellProgress("Requesting nonce from coordinator...");
+            else if (step === "awaiting_signature") setSellProgress("Waiting for MetaMask signature...");
+            else if (step === "submitting_listing") setSellProgress("Submitting listing to marketplace...");
+          },
+        }
+      );
       setSellMsg("Listed on the marketplace!");
+      setSellProgress("");
     } catch (err: any) {
-      setSellErr(err?.message || "Failed to list.");
+      setSellErr(formatApiError(err, "Failed to list."));
     }
     setSellLoading(false);
   };
@@ -770,6 +784,7 @@ const LibraryPage: NextPage = () => {
                     <input type="text" className="library-search" value={sellCategory} onChange={(e) => setSellCategory(e.target.value)} placeholder="Portrait, Landscape, etc." />
                   </label>
                   {sellErr && <p className="job-hint error">{sellErr}</p>}
+                  {sellLoading && sellProgress && <p className="job-hint">{sellProgress}</p>}
                   {sellMsg ? (
                     <p style={{ color: "#8ff0b6", textAlign: "center" }}>{sellMsg}</p>
                   ) : (

@@ -171,6 +171,49 @@ export class HavnaiApiError extends Error {
   }
 }
 
+function extractApiErrorDetail(data?: Record<string, any>): string | undefined {
+  if (!data || typeof data !== "object") return undefined;
+  const candidates = [
+    data.message,
+    data.detail,
+    data.reason,
+    data.error_description,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  if (Array.isArray((data as any).errors) && (data as any).errors.length > 0) {
+    const first = (data as any).errors[0];
+    if (typeof first === "string" && first.trim()) return first.trim();
+    if (first && typeof first.message === "string" && first.message.trim()) return first.message.trim();
+  }
+  return undefined;
+}
+
+export function formatApiError(error: unknown, fallback = "Request failed."): string {
+  if (error instanceof HavnaiApiError) {
+    const base = String(error.message || "").trim() || fallback;
+    const parts = [base];
+    if (typeof error.status === "number" && Number.isFinite(error.status)) {
+      parts.push(`HTTP ${error.status}`);
+    }
+    if (error.code && error.code.trim()) {
+      parts.push(`code=${error.code.trim()}`);
+    }
+    const detail = extractApiErrorDetail(error.data);
+    if (detail && detail !== base && detail !== error.code) {
+      parts.push(detail);
+    }
+    return parts.join(" | ");
+  }
+  if (error && typeof (error as any).message === "string" && (error as any).message.trim()) {
+    return (error as any).message.trim();
+  }
+  return fallback;
+}
+
 export interface SubmitJobOptions {
   wallet?: string;
   steps?: number;
@@ -723,6 +766,8 @@ interface WalletNonceRequest {
   anchor_id?: number;
 }
 
+type WalletNonceProgress = "requesting_nonce" | "awaiting_signature";
+
 async function requestWalletNonce(payload: WalletNonceRequest): Promise<WalletNonceChallenge> {
   const res = await fetchWithTimeout(apiUrl("/wallet/nonce"), {
     method: "POST",
@@ -735,7 +780,10 @@ async function requestWalletNonce(payload: WalletNonceRequest): Promise<WalletNo
   return (await res.json()) as WalletNonceChallenge;
 }
 
-async function signWalletNonce(payload: WalletNonceRequest): Promise<{
+async function signWalletNonce(
+  payload: WalletNonceRequest,
+  onProgress?: (step: WalletNonceProgress) => void
+): Promise<{
   wallet: string;
   nonce: string;
   signature: string;
@@ -749,10 +797,12 @@ async function signWalletNonce(payload: WalletNonceRequest): Promise<{
       "wallet_mismatch"
     );
   }
+  onProgress?.("requesting_nonce");
   const challenge = await requestWalletNonce({
     ...payload,
     wallet: signerWallet,
   });
+  onProgress?.("awaiting_signature");
   const signature = await signMessageWithTimeout(signer, challenge.message);
   return {
     wallet: signerWallet,
@@ -1247,6 +1297,15 @@ export interface CreateGalleryListingInput {
   category?: string;
 }
 
+export type GalleryListingProgressStep =
+  | "requesting_nonce"
+  | "awaiting_signature"
+  | "submitting_listing";
+
+export interface CreateGalleryListingOptions {
+  onProgress?: (step: GalleryListingProgressStep) => void;
+}
+
 function normalizeGalleryListing(raw: any): GalleryListing {
   const imageUrl = resolveAssetUrl(raw?.image_url);
   const videoUrl = resolveAssetUrl(raw?.video_url);
@@ -1350,13 +1409,31 @@ export async function fetchGalleryPurchases(wallet: string = WALLET): Promise<Ga
   return Array.isArray(data?.purchases) ? data.purchases.map(normalizeGalleryPurchase) : [];
 }
 
-export async function createGalleryListing(input: CreateGalleryListingInput): Promise<GalleryListing> {
-  const signed = await signWalletNonce({
-    wallet: input.wallet || WALLET,
-    amount: input.price_credits,
-    purpose: "gallery_list",
-    job_id: input.job_id,
-  });
+export async function createGalleryListing(
+  input: CreateGalleryListingInput,
+  options: CreateGalleryListingOptions = {}
+): Promise<GalleryListing> {
+  let signed: { wallet: string; nonce: string; signature: string };
+  try {
+    signed = await signWalletNonce(
+      {
+        wallet: input.wallet || WALLET,
+        amount: input.price_credits,
+        purpose: "gallery_list",
+        job_id: input.job_id,
+      },
+      (step) => options.onProgress?.(step)
+    );
+  } catch (error: unknown) {
+    throw new HavnaiApiError(
+      `Listing signature step failed. ${formatApiError(error, "Wallet signature was not completed.")}`,
+      error instanceof HavnaiApiError ? error.code : undefined,
+      error instanceof HavnaiApiError ? error.data : undefined,
+      error instanceof HavnaiApiError ? error.status : undefined
+    );
+  }
+
+  options.onProgress?.("submitting_listing");
   const res = await fetchWithTimeout(apiUrl("/gallery/listings"), {
     method: "POST",
     headers: buildHeaders(true),
@@ -1367,15 +1444,24 @@ export async function createGalleryListing(input: CreateGalleryListingInput): Pr
       signature: signed.signature,
     }),
   });
-  if (!res.ok) throw await parseErrorResponse(res);
+  if (!res.ok) {
+    const apiError = await parseErrorResponse(res);
+    throw new HavnaiApiError(
+      `Listing request failed. ${formatApiError(apiError, "Backend rejected listing.")}`,
+      apiError.code,
+      apiError.data,
+      apiError.status
+    );
+  }
   const data = await res.json();
   return normalizeGalleryListing(data);
 }
 
 export async function createGalleryListingWithMetaMask(
-  input: Omit<CreateGalleryListingInput, "wallet"> & { wallet?: string }
+  input: Omit<CreateGalleryListingInput, "wallet"> & { wallet?: string },
+  options: CreateGalleryListingOptions = {}
 ): Promise<GalleryListing> {
-  return createGalleryListing(input);
+  return createGalleryListing(input, options);
 }
 
 export async function purchaseGalleryListing(

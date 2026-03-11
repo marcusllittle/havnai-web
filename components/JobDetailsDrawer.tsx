@@ -4,6 +4,7 @@ import {
   JobLoraEntry,
   ResultResponse,
   createGalleryListing,
+  formatApiError,
   resolveAssetUrl,
   cancelJob,
   getJobStuckWarning,
@@ -171,6 +172,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
   const [listingCategory, setListingCategory] = useState("");
   const [listingPrice, setListingPrice] = useState("10");
   const [listingSubmitting, setListingSubmitting] = useState(false);
+  const [listingProgress, setListingProgress] = useState<string | undefined>();
   const [listingError, setListingError] = useState<string | undefined>();
   const [listingSuccess, setListingSuccess] = useState<string | undefined>();
 
@@ -185,6 +187,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
   useEffect(() => {
     if (!open) {
       setListingOpen(false);
+      setListingProgress(undefined);
       setListingError(undefined);
       setListingSuccess(undefined);
       return;
@@ -194,6 +197,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     setListingDescription("");
     setListingCategory("");
     setListingPrice("10");
+    setListingProgress(undefined);
     setListingError(undefined);
     setListingSuccess(undefined);
     setListingOpen(false);
@@ -356,17 +360,27 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     }
 
     setListingSubmitting(true);
+    setListingProgress("Preparing wallet signature...");
     setListingError(undefined);
     setListingSuccess(undefined);
     try {
-      const listing = await createGalleryListing({
-        wallet: marketplace.wallet,
-        job_id: resolvedId,
-        title: listingTitle.trim(),
-        description: listingDescription.trim(),
-        category: listingCategory.trim(),
-        price_credits: parsedPrice,
-      });
+      const listing = await createGalleryListing(
+        {
+          wallet: marketplace.wallet,
+          job_id: resolvedId,
+          title: listingTitle.trim(),
+          description: listingDescription.trim(),
+          category: listingCategory.trim(),
+          price_credits: parsedPrice,
+        },
+        {
+          onProgress: (step) => {
+            if (step === "requesting_nonce") setListingProgress("Requesting nonce from coordinator...");
+            else if (step === "awaiting_signature") setListingProgress("Waiting for MetaMask signature...");
+            else if (step === "submitting_listing") setListingProgress("Submitting listing to marketplace...");
+          },
+        }
+      );
       setListingSuccess(
         listing.already_listed
           ? "Already listed. View it in My Listings."
@@ -375,9 +389,10 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
       setListingOpen(false);
       marketplace?.onListingCreated?.(listing.id);
     } catch (err: any) {
-      setListingError(err?.message || "Failed to create listing.");
+      setListingError(formatApiError(err, "Failed to create listing."));
     } finally {
       setListingSubmitting(false);
+      setListingProgress(undefined);
     }
   };
 
@@ -604,6 +619,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   </label>
                 </div>
                 {listingError && <p className="job-hint error">{listingError}</p>}
+                {listingSubmitting && listingProgress && <p className="job-hint">{listingProgress}</p>}
                 <div className="job-actions">
                   <button
                     type="button"
