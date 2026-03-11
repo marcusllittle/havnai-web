@@ -3,10 +3,12 @@ import Head from "next/head";
 import { useEffect, useState } from "react";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
 import { SiteHeader } from "../components/SiteHeader";
+import { useWallet } from "../components/WalletProvider";
 import { fetchJobWithResult, JobDetailResponse, ResultResponse, resolveAssetUrl } from "../lib/havnai";
 import { getApiBase } from "../lib/apiBase";
 
 const HomePage: NextPage = () => {
+  const wallet = useWallet();
   const [liveJobs, setLiveJobs] = useState<any[]>([]);
   const [liveJobsLoading, setLiveJobsLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -603,6 +605,11 @@ const HomePage: NextPage = () => {
         result={drawerResult}
         loading={drawerLoading}
         error={drawerError}
+        marketplace={{
+          wallet: wallet.activeWallet,
+          canSign: Boolean(wallet.connectedWallet),
+          source: wallet.source,
+        }}
         onClose={() => setDrawerOpen(false)}
       />
     </>
