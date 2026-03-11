@@ -191,6 +191,7 @@ const LibraryPage: NextPage = () => {
     setSellErr("");
     try {
       await createGalleryListingWithMetaMask({
+        wallet: wallet.activeWallet || undefined,
         job_id: sellItem.entry.job_id,
         title: sellTitle.trim() || `Generation #${sellItem.entry.job_id.slice(0, 8)}`,
         price_credits: price,
