@@ -158,7 +158,18 @@ export async function transferHaiToTreasury(
 // Network helpers
 // ---------------------------------------------------------------------------
 
-const SEPOLIA_CHAIN_ID = process.env.NEXT_PUBLIC_SEPOLIA_CHAIN_ID || "0xaa36a7";
+function normalizeChainId(value: unknown): string {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (!raw) return "";
+  if (raw.startsWith("0x")) return raw;
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isFinite(parsed)) {
+    return `0x${parsed.toString(16)}`;
+  }
+  return raw;
+}
+
+const SEPOLIA_CHAIN_ID = normalizeChainId(process.env.NEXT_PUBLIC_SEPOLIA_CHAIN_ID || "0xaa36a7") || "0xaa36a7";
 
 /**
  * Ensure the connected wallet is on the Sepolia network.
@@ -166,12 +177,43 @@ const SEPOLIA_CHAIN_ID = process.env.NEXT_PUBLIC_SEPOLIA_CHAIN_ID || "0xaa36a7";
  */
 export async function ensureSepoliaNetwork(injectedProvider: any): Promise<void> {
   if (!injectedProvider) throw new Error("No wallet provider found");
-  const chainId = await injectedProvider.request({ method: "eth_chainId" });
-  if (String(chainId).toLowerCase() !== SEPOLIA_CHAIN_ID.toLowerCase()) {
-    await injectedProvider.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: SEPOLIA_CHAIN_ID }],
-    });
+  const chainId = normalizeChainId(await injectedProvider.request({ method: "eth_chainId" }));
+  if (chainId !== SEPOLIA_CHAIN_ID) {
+    try {
+      await injectedProvider.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: SEPOLIA_CHAIN_ID }],
+      });
+    } catch (error: any) {
+      const code = Number(error?.code);
+      if (code === 4001) {
+        throw new Error("Network switch was rejected in MetaMask.");
+      }
+      if (code === -32002) {
+        throw new Error("MetaMask already has a pending request. Open the extension and approve or cancel it.");
+      }
+      if (code === 4902) {
+        // Chain not found in wallet; try adding Sepolia then switch again.
+        await injectedProvider.request({
+          method: "wallet_addEthereumChain",
+          params: [
+            {
+              chainId: "0xaa36a7",
+              chainName: "Sepolia",
+              nativeCurrency: { name: "Sepolia ETH", symbol: "ETH", decimals: 18 },
+              rpcUrls: ["https://rpc.sepolia.org"],
+              blockExplorerUrls: ["https://sepolia.etherscan.io"],
+            },
+          ],
+        });
+        await injectedProvider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0xaa36a7" }],
+        });
+        return;
+      }
+      throw error;
+    }
   }
 }
 
