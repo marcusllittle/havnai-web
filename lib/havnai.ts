@@ -213,6 +213,10 @@ const API_REQUEST_TIMEOUT_MS = Number.parseInt(
   String(process.env.NEXT_PUBLIC_API_TIMEOUT_MS || "25000"),
   10
 );
+const WALLET_SIGN_TIMEOUT_MS = Number.parseInt(
+  String(process.env.NEXT_PUBLIC_WALLET_SIGN_TIMEOUT_MS || "45000"),
+  10
+);
 
 async function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -233,6 +237,34 @@ async function fetchWithTimeout(
     throw error;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function signMessageWithTimeout(signer: any, message: string): Promise<string> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<string>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(
+        new HavnaiApiError(
+          "Wallet signature timed out. Open MetaMask and complete or cancel pending requests.",
+          "wallet_request_timeout"
+        )
+      );
+    }, Math.max(1000, WALLET_SIGN_TIMEOUT_MS));
+  });
+  try {
+    return await Promise.race([
+      signer.signMessage(message) as Promise<string>,
+      timeoutPromise,
+    ]);
+  } catch (error: any) {
+    if (error instanceof HavnaiApiError) {
+      throw error;
+    }
+    const issue = normalizeWalletError(error);
+    throw new HavnaiApiError(issue.message, issue.code);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
   }
 }
 
@@ -721,7 +753,7 @@ async function signWalletNonce(payload: WalletNonceRequest): Promise<{
     ...payload,
     wallet: signerWallet,
   });
-  const signature = await signer.signMessage(challenge.message);
+  const signature = await signMessageWithTimeout(signer, challenge.message);
   return {
     wallet: signerWallet,
     nonce: challenge.nonce,
@@ -758,7 +790,7 @@ export async function convertCreditsWithMetaMask(amount: number, wallet?: string
   const signer = await provider.getSigner();
   const signerWallet = getAddress(wallet || (await signer.getAddress()));
   const challenge = await requestConversionNonce(signerWallet, amount);
-  const signature = await signer.signMessage(challenge.message);
+  const signature = await signMessageWithTimeout(signer, challenge.message);
   return convertCredits({
     wallet: signerWallet,
     amount,
@@ -1284,7 +1316,7 @@ export async function fetchGalleryBrowse(
   if (opts.offset != null) params.set("offset", String(opts.offset));
   if (opts.limit != null) params.set("limit", String(opts.limit));
   const qs = params.toString();
-  const res = await fetch(apiUrl(`/gallery/browse${qs ? `?${qs}` : ""}`), {
+  const res = await fetchWithTimeout(apiUrl(`/gallery/browse${qs ? `?${qs}` : ""}`), {
     headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
@@ -1299,7 +1331,7 @@ export async function fetchGalleryBrowse(
 }
 
 export async function fetchMyGalleryListings(wallet: string = WALLET): Promise<GalleryListing[]> {
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     apiUrl(`/gallery/my-listings?wallet=${encodeURIComponent(wallet)}&include_sold=true`),
     { headers: buildHeaders(false) }
   );
@@ -1309,7 +1341,7 @@ export async function fetchMyGalleryListings(wallet: string = WALLET): Promise<G
 }
 
 export async function fetchGalleryPurchases(wallet: string = WALLET): Promise<GalleryPurchaseRecord[]> {
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     apiUrl(`/gallery/purchases?wallet=${encodeURIComponent(wallet)}`),
     { headers: buildHeaders(false) }
   );
@@ -1325,7 +1357,7 @@ export async function createGalleryListing(input: CreateGalleryListingInput): Pr
     purpose: "gallery_list",
     job_id: input.job_id,
   });
-  const res = await fetch(apiUrl("/gallery/listings"), {
+  const res = await fetchWithTimeout(apiUrl("/gallery/listings"), {
     method: "POST",
     headers: buildHeaders(true),
     body: JSON.stringify({
@@ -1353,7 +1385,7 @@ export async function purchaseGalleryListing(
 ): Promise<GalleryPurchaseResponse> {
   let price = priceCredits;
   if (!(typeof price === "number" && Number.isFinite(price) && price > 0)) {
-    const detailRes = await fetch(apiUrl(`/gallery/listings/${listingId}`), {
+    const detailRes = await fetchWithTimeout(apiUrl(`/gallery/listings/${listingId}`), {
       headers: buildHeaders(false),
     });
     if (!detailRes.ok) throw await parseErrorResponse(detailRes);
@@ -1366,7 +1398,7 @@ export async function purchaseGalleryListing(
     purpose: "gallery_purchase",
     listing_id: listingId,
   });
-  const res = await fetch(apiUrl(`/gallery/listings/${listingId}/purchase`), {
+  const res = await fetchWithTimeout(apiUrl(`/gallery/listings/${listingId}/purchase`), {
     method: "POST",
     headers: buildHeaders(true),
     body: JSON.stringify({
@@ -1380,7 +1412,7 @@ export async function purchaseGalleryListing(
 }
 
 export async function delistGalleryListing(listingId: number, wallet: string = WALLET): Promise<{ ok: boolean }> {
-  const res = await fetch(apiUrl(`/gallery/listings/${listingId}`), {
+  const res = await fetchWithTimeout(apiUrl(`/gallery/listings/${listingId}`), {
     method: "DELETE",
     headers: buildHeaders(true),
     body: JSON.stringify({ wallet }),
