@@ -260,6 +260,10 @@ const WALLET_SIGN_TIMEOUT_MS = Number.parseInt(
   String(process.env.NEXT_PUBLIC_WALLET_SIGN_TIMEOUT_MS || "45000"),
   10
 );
+const WALLET_PROVIDER_TIMEOUT_MS = Number.parseInt(
+  String(process.env.NEXT_PUBLIC_WALLET_PROVIDER_TIMEOUT_MS || "20000"),
+  10
+);
 
 async function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -306,6 +310,24 @@ async function signMessageWithTimeout(signer: any, message: string): Promise<str
     }
     const issue = normalizeWalletError(error);
     throw new HavnaiApiError(issue.message, issue.code);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
+
+async function withWalletTimeout<T>(
+  promise: Promise<T>,
+  message: string,
+  timeoutMs = WALLET_PROVIDER_TIMEOUT_MS
+): Promise<T> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(new HavnaiApiError(message, "wallet_request_timeout"));
+    }, Math.max(1000, timeoutMs));
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
   } finally {
     if (timeoutHandle) clearTimeout(timeoutHandle);
   }
@@ -766,7 +788,7 @@ interface WalletNonceRequest {
   anchor_id?: number;
 }
 
-type WalletNonceProgress = "requesting_nonce" | "awaiting_signature";
+type WalletNonceProgress = "resolving_wallet" | "requesting_nonce" | "awaiting_signature";
 
 async function requestWalletNonce(payload: WalletNonceRequest): Promise<WalletNonceChallenge> {
   const res = await fetchWithTimeout(apiUrl("/wallet/nonce"), {
@@ -789,8 +811,17 @@ async function signWalletNonce(
   signature: string;
 }> {
   const provider = new BrowserProvider(requireEthereumProvider());
-  const signer = await provider.getSigner();
-  const signerWallet = getAddress(await signer.getAddress());
+  onProgress?.("resolving_wallet");
+  const signer = await withWalletTimeout(
+    provider.getSigner(),
+    "Wallet request timed out while accessing signer. Open MetaMask and complete or cancel pending requests."
+  );
+  const signerWallet = getAddress(
+    await withWalletTimeout(
+      signer.getAddress(),
+      "Wallet request timed out while reading wallet address. Open MetaMask and complete or cancel pending requests."
+    )
+  );
   if (payload.wallet && signerWallet.toLowerCase() !== payload.wallet.toLowerCase()) {
     throw new HavnaiApiError(
       `Connected wallet ${signerWallet} does not match ${payload.wallet}.`,
@@ -1298,6 +1329,7 @@ export interface CreateGalleryListingInput {
 }
 
 export type GalleryListingProgressStep =
+  | "resolving_wallet"
   | "requesting_nonce"
   | "awaiting_signature"
   | "submitting_listing";

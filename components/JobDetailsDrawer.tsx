@@ -375,7 +375,8 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
         },
         {
           onProgress: (step) => {
-            if (step === "requesting_nonce") setListingProgress("Requesting nonce from coordinator...");
+            if (step === "resolving_wallet") setListingProgress("Resolving wallet provider...");
+            else if (step === "requesting_nonce") setListingProgress("Requesting nonce from coordinator...");
             else if (step === "awaiting_signature") setListingProgress("Waiting for MetaMask signature...");
             else if (step === "submitting_listing") setListingProgress("Submitting listing to marketplace...");
           },

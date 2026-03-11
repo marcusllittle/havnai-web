@@ -205,7 +205,8 @@ const LibraryPage: NextPage = () => {
         },
         {
           onProgress: (step) => {
-            if (step === "requesting_nonce") setSellProgress("Requesting nonce from coordinator...");
+            if (step === "resolving_wallet") setSellProgress("Resolving wallet provider...");
+            else if (step === "requesting_nonce") setSellProgress("Requesting nonce from coordinator...");
             else if (step === "awaiting_signature") setSellProgress("Waiting for MetaMask signature...");
             else if (step === "submitting_listing") setSellProgress("Submitting listing to marketplace...");
           },
