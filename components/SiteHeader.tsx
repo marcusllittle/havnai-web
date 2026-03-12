@@ -37,7 +37,6 @@ export function SiteHeader() {
           <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
           <div className="brand-text">
             <div className="brand-meta">
-              <span className="brand-stage">Stage 6 &rarr; 7 Alpha</span>
               <span className="brand-status">{PUBLIC_ALPHA_LABEL}</span>
             </div>
             <span className="brand-name">HavnAI Network</span>
