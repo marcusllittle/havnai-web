@@ -1,7 +1,7 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { fetchNodes, fetchLeaderboard, NodeInfo, LeaderboardEntry } from "../lib/havnai";
+import { fetchNodes, fetchOperatorWorkers, fetchLeaderboard, NodeInfo, LeaderboardEntry } from "../lib/havnai";
 import { getNodeSSE, SSEEvent } from "../lib/sse";
 import { SiteHeader } from "../components/SiteHeader";
 
@@ -17,15 +17,20 @@ const NodesPage: NextPage = () => {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    Promise.all([
-      fetchNodes().catch(() => []),
-      fetchLeaderboard().catch(() => []),
-    ]).then(([n, lb]) => {
+    void (async () => {
+      const lb = await fetchLeaderboard().catch(() => []);
+      let workers: NodeInfo[] = [];
+      const operatorPayload = await fetchOperatorWorkers(300).catch(() => null);
+      if (operatorPayload && Array.isArray(operatorPayload.workers) && operatorPayload.workers.length > 0) {
+        workers = operatorPayload.workers;
+      } else {
+        workers = await fetchNodes().catch(() => []);
+      }
       if (!active) return;
-      setNodes(n);
+      setNodes(workers);
       setLeaderboard(lb);
       setLoading(false);
-    });
+    })();
     return () => { active = false; };
   }, []);
 
@@ -73,7 +78,9 @@ const NodesPage: NextPage = () => {
       (n.node_id || "").toLowerCase().includes(q) ||
       (n.node_name || "").toLowerCase().includes(q) ||
       (n.gpu?.gpu_name || "").toLowerCase().includes(q) ||
-      (n.wallet || "").toLowerCase().includes(q)
+      (n.wallet || "").toLowerCase().includes(q) ||
+      (n.operator?.display_name || "").toLowerCase().includes(q) ||
+      (n.supported_job_types || []).join(" ").toLowerCase().includes(q)
     );
   }, [nodes, search]);
 
@@ -85,6 +92,18 @@ const NodesPage: NextPage = () => {
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
     return `${Math.floor(diff / 86400000)}d ago`;
+  }, []);
+
+  const formatPercent = useCallback((value: number | null | undefined) => {
+    const numeric = Number(value ?? 0);
+    if (!Number.isFinite(numeric)) return "--";
+    return `${(numeric * 100).toFixed(1)}%`;
+  }, []);
+
+  const shortWallet = useCallback((wallet?: string | null) => {
+    if (!wallet) return "--";
+    if (wallet.length < 12) return wallet;
+    return `${wallet.slice(0, 6)}...${wallet.slice(-4)}`;
   }, []);
 
   return (
@@ -182,12 +201,54 @@ const NodesPage: NextPage = () => {
                     <span>{node.role}</span>
                   </div>
                   <div className="node-detail-row">
-                    <span>Jobs Done</span>
-                    <span>{node.tasks_completed}</span>
+                    <span>Operator</span>
+                    <span>{shortWallet(node.operator?.wallet || node.wallet || null)}</span>
                   </div>
                   <div className="node-detail-row">
-                    <span>HAI Earned</span>
-                    <span>{node.rewards.toFixed(4)}</span>
+                    <span>Display</span>
+                    <span>{node.operator?.display_name || node.node_name || node.node_id}</span>
+                  </div>
+                  <div className="node-detail-row">
+                    <span>Job Types</span>
+                    <span>
+                      {(node.supported_job_types && node.supported_job_types.length > 0
+                        ? node.supported_job_types.join(", ")
+                        : node.supports && node.supports.length > 0
+                        ? node.supports.join(", ")
+                        : node.role)}
+                    </span>
+                  </div>
+                  <div className="node-detail-row">
+                    <span>Jobs Done</span>
+                    <span>{node.performance?.completed_attempts ?? node.tasks_completed}</span>
+                  </div>
+                  <div className="node-detail-row">
+                    <span>Failures</span>
+                    <span>{node.performance?.failed_attempts ?? "--"}</span>
+                  </div>
+                  <div className="node-detail-row">
+                    <span>Success Rate</span>
+                    <span>{formatPercent(node.performance?.success_rate)}</span>
+                  </div>
+                  <div className="node-detail-row">
+                    <span>Malformed Rate</span>
+                    <span>{formatPercent(node.performance?.malformed_rate)}</span>
+                  </div>
+                  <div className="node-detail-row">
+                    <span>Payout Total</span>
+                    <span>{(node.payouts?.total ?? node.rewards).toFixed(4)}</span>
+                  </div>
+                  <div className="node-detail-row">
+                    <span>Payouts (30d)</span>
+                    <span>{node.payouts?.window_count ?? 0} tx / {(node.payouts?.window_total ?? 0).toFixed(4)} HAI</span>
+                  </div>
+                  <div className="node-detail-row">
+                    <span>Trust</span>
+                    <span>
+                      {node.trust?.score == null
+                        ? `${node.trust?.level || "new"}`
+                        : `${node.trust.score.toFixed(1)} (${node.trust.level || "monitoring"})`}
+                    </span>
                   </div>
                   <div className="node-detail-row">
                     <span>Last Seen</span>

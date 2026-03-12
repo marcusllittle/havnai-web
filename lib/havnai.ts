@@ -1055,6 +1055,42 @@ export interface HaiFundingsResponse {
   hai_funding_enabled: boolean;
 }
 
+export interface TesterDistributionConfig {
+  enabled: boolean;
+  allowlist_enforced: boolean;
+  default_request_hai: number;
+  cooldown_hours: number;
+}
+
+export interface TesterDistributionRequestRecord {
+  id: number;
+  wallet: string;
+  requested_hai: number;
+  status: string;
+  request_note?: string;
+  admin_note?: string;
+  tx_hash?: string | null;
+  credits_granted: number;
+  created_at: number;
+  updated_at: number;
+  resolved_at?: number | null;
+}
+
+export interface TesterDistributionRequestCreateResponse {
+  status: string;
+  request?: TesterDistributionRequestRecord;
+  request_id?: number;
+  message?: string;
+  error?: string;
+  retry_after_seconds?: number;
+}
+
+export interface TesterDistributionRequestsResponse {
+  wallet?: string;
+  requests: TesterDistributionRequestRecord[];
+  tester_distribution: TesterDistributionConfig;
+}
+
 /**
  * Submit a HAI funding request to the backend after an on-chain transfer.
  * The backend verifies the tx on Sepolia and deposits credits.
@@ -1087,6 +1123,42 @@ export async function fetchHaiFundings(wallet: string): Promise<HaiFundingsRespo
     throw await parseErrorResponse(res);
   }
   return (await res.json()) as HaiFundingsResponse;
+}
+
+export async function requestTesterDistribution(
+  wallet: string,
+  requestedHai?: number,
+  requestNote?: string
+): Promise<TesterDistributionRequestCreateResponse> {
+  const body: Record<string, any> = { wallet };
+  if (requestedHai != null) body.requested_hai = requestedHai;
+  if (requestNote && requestNote.trim().length > 0) body.request_note = requestNote.trim();
+  const res = await fetchWithTimeout(apiUrl("/credits/tester-distribution/request"), {
+    method: "POST",
+    headers: buildHeaders(false),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return (await res.json()) as TesterDistributionRequestCreateResponse;
+}
+
+export async function fetchTesterDistributionRequests(
+  wallet: string,
+  limit = 20
+): Promise<TesterDistributionRequestsResponse> {
+  const qs = new URLSearchParams();
+  qs.set("wallet", wallet);
+  qs.set("limit", String(Math.max(1, Math.min(200, Number(limit) || 20))));
+  const res = await fetchWithTimeout(
+    apiUrl(`/credits/tester-distribution/requests?${qs.toString()}`),
+    { headers: buildHeaders(false) }
+  );
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  return (await res.json()) as TesterDistributionRequestsResponse;
 }
 
 // ---------------------------------------------------------------------------
@@ -1190,11 +1262,65 @@ export interface NodeInfo {
   wallet?: string;
   online: boolean;
   status?: string;
+  supports?: string[];
+  supported_job_types?: string[];
+  operator?: {
+    wallet?: string | null;
+    display_name?: string;
+    identity?: string;
+  };
+  performance?: {
+    attempts_total: number;
+    completed_attempts: number;
+    failed_attempts: number;
+    malformed_attempts: number;
+    success_rate: number;
+    malformed_rate: number;
+    recent_attempt_at?: number | null;
+  };
+  payouts?: {
+    total: number;
+    count: number;
+    window_days?: number;
+    window_total?: number;
+    window_count?: number;
+    last_payout_at?: number | null;
+  };
+  trust?: {
+    score?: number | null;
+    level?: string;
+    sample_size?: number;
+  };
+  recent_activity_at?: number | null;
 }
 
 export interface NodeDetail extends NodeInfo {
   reward_history: { reward: number; timestamp: string }[];
   uptime?: number;
+  recent_attempts?: {
+    id: number;
+    job_id: string;
+    status: string;
+    claim_time: number;
+    finish_time?: number | null;
+    quality_status?: string;
+    settlement_outcome?: string;
+    model?: string;
+    job_type?: string;
+    error_message?: string;
+  }[];
+  recent_payouts?: {
+    id: number;
+    node_id: string;
+    job_id: string;
+    reward_amount: number;
+    reward_asset_type: string;
+    status: string;
+    tx_hash?: string | null;
+    metadata?: string | null;
+    created_at: number;
+    updated_at: number;
+  }[];
 }
 
 export interface LeaderboardEntry {
@@ -1203,6 +1329,17 @@ export interface LeaderboardEntry {
   jobs: number;
   last_24h: number;
   nodes: { node_id: string; node_name: string; role: string }[];
+}
+
+export interface OperatorWorkersResponse {
+  workers: NodeInfo[];
+  summary?: {
+    total_workers: number;
+    online_workers: number;
+    offline_workers: number;
+    total_payouts: number;
+    timestamp: string;
+  };
 }
 
 function toNumber(value: any, fallback = 0): number {
@@ -1229,6 +1366,14 @@ function normalizeNodeInfo(raw: any): NodeInfo {
     memory_used_mb: toNumber(rawGpu?.memory_used_mb ?? rawGpu?.memory_used, 0) || undefined,
     utilization: toNumber(rawGpu?.utilization ?? utilization, 0),
   };
+  const supports = Array.isArray(raw?.supports) ? raw.supports.map((value: any) => String(value)) : [];
+  const supportedJobTypes = Array.isArray(raw?.supported_job_types)
+    ? raw.supported_job_types.map((value: any) => String(value))
+    : [];
+  const operatorRaw = raw?.operator && typeof raw.operator === "object" ? raw.operator : {};
+  const performanceRaw = raw?.performance && typeof raw.performance === "object" ? raw.performance : {};
+  const payoutsRaw = raw?.payouts && typeof raw.payouts === "object" ? raw.payouts : {};
+  const trustRaw = raw?.trust && typeof raw.trust === "object" ? raw.trust : {};
 
   return {
     node_id: String(raw?.node_id || ""),
@@ -1246,6 +1391,38 @@ function normalizeNodeInfo(raw: any): NodeInfo {
     wallet: raw?.wallet,
     online,
     status: status || (online ? "online" : "offline"),
+    supports,
+    supported_job_types: supportedJobTypes,
+    operator: {
+      wallet: operatorRaw?.wallet ?? raw?.wallet ?? null,
+      display_name: operatorRaw?.display_name || raw?.node_name || raw?.node_id || "",
+      identity: operatorRaw?.identity || operatorRaw?.wallet || raw?.wallet || raw?.node_id || "",
+    },
+    performance: {
+      attempts_total: toNumber(performanceRaw?.attempts_total, 0),
+      completed_attempts: toNumber(performanceRaw?.completed_attempts, 0),
+      failed_attempts: toNumber(performanceRaw?.failed_attempts, 0),
+      malformed_attempts: toNumber(performanceRaw?.malformed_attempts, 0),
+      success_rate: toNumber(performanceRaw?.success_rate, 0),
+      malformed_rate: toNumber(performanceRaw?.malformed_rate, 0),
+      recent_attempt_at:
+        performanceRaw?.recent_attempt_at == null ? null : toNumber(performanceRaw?.recent_attempt_at, 0),
+    },
+    payouts: {
+      total: toNumber(payoutsRaw?.total, toNumber(raw?.rewards, 0)),
+      count: toNumber(payoutsRaw?.count, 0),
+      window_days: toNumber(payoutsRaw?.window_days, 0),
+      window_total: toNumber(payoutsRaw?.window_total, 0),
+      window_count: toNumber(payoutsRaw?.window_count, 0),
+      last_payout_at: payoutsRaw?.last_payout_at == null ? null : toNumber(payoutsRaw?.last_payout_at, 0),
+    },
+    trust: {
+      score: trustRaw?.score == null ? null : toNumber(trustRaw?.score, 0),
+      level: trustRaw?.level ? String(trustRaw.level) : undefined,
+      sample_size: toNumber(trustRaw?.sample_size, 0),
+    },
+    recent_activity_at:
+      raw?.recent_activity_at == null ? null : toNumber(raw?.recent_activity_at, 0),
   };
 }
 
@@ -1268,7 +1445,27 @@ export async function fetchNodeDetail(nodeId: string): Promise<NodeDetail> {
     ...normalized,
     reward_history: Array.isArray(raw?.reward_history) ? raw.reward_history : [],
     uptime: typeof raw?.uptime === "number" ? raw.uptime : undefined,
+    recent_attempts: Array.isArray(raw?.recent_attempts) ? raw.recent_attempts : [],
+    recent_payouts: Array.isArray(raw?.recent_payouts) ? raw.recent_payouts : [],
   };
+}
+
+export async function fetchOperatorWorkers(limit = 200, status?: string): Promise<OperatorWorkersResponse> {
+  const qs = new URLSearchParams();
+  qs.set("limit", String(Math.max(1, Math.min(1000, Number(limit) || 200))));
+  if (status && status.trim().length > 0) {
+    qs.set("status", status.trim().toLowerCase());
+  }
+  const res = await fetch(apiUrl(`/operators/workers?${qs.toString()}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  const workers = Array.isArray(data?.workers) ? data.workers.map(normalizeNodeInfo) : [];
+  return {
+    workers,
+    summary: data?.summary,
+  } as OperatorWorkersResponse;
 }
 
 export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
