@@ -30,6 +30,7 @@ import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 import { getJobSSE, SSEEvent } from "../lib/sse";
 import { getApiBase } from "../lib/apiBase";
 import { getConnectButtonLabel } from "../lib/wallet";
+import { buildModelOptionLabel } from "../lib/modelMetadata";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
@@ -69,8 +70,12 @@ type RuntimeDefaults = {
 type RuntimeDefaultsSource = Record<string, string>;
 
 type ModelListEntry = {
+  model_key?: string;
   name: string;
   tier: string;
+  weight?: number;
+  reward_weight?: number;
+  credit_cost?: number;
   task_type?: string;
   pipeline?: string;
   available?: boolean;
@@ -342,42 +347,6 @@ const TestPage: React.FC = () => {
   useEffect(() => {
     let active = true;
 
-    // Clean up technical model names for better UX
-    const cleanModelName = (name: string): string => {
-      // Remove version suffixes like _v5SD15, _vxviiCrystalclear, _v23Final, _beta, etc.
-      let cleaned = name
-        .replace(/_v\d+SD15/i, "")
-        .replace(/_v[xvi]+[a-z]*/i, "") // Removes _vxviiCrystalclear, _v23Final, etc.
-        .replace(/_v\d+/i, "")
-        .replace(/By$/i, "")
-        .replace(/_beta$/i, " (Beta)")
-        .replace(/_final$/i, "")
-        .replace(/Merge$/i, "")
-        .replace(/Porn/gi, "")
-        .replace(/_/g, " ");
-
-      // Special case replacements for readability
-      cleaned = cleaned
-        .replace(/XL /g, "XL ")
-        .replace(/SD15/g, "")
-        .replace(/amix/i, "aMix")
-        .replace(/pony/i, "Pony");
-
-      // Capitalize first letter of each word
-      cleaned = cleaned
-        .split(" ")
-        .map((word) => {
-          if (!word) return "";
-          // Keep acronyms and versions uppercase
-          if (word === "XL" || word === "v5" || word === "v60" || word === "V10") return word;
-          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-        })
-        .join(" ")
-        .trim();
-
-      return cleaned;
-    };
-
     const loadModels = async () => {
       if (typeof window === "undefined") return;
       try {
@@ -414,7 +383,7 @@ const TestPage: React.FC = () => {
           { id: "auto", label: "Auto (let grid choose best)" },
           ...imageModelsData.map((m) => ({
             id: m.name,
-            label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${String(m.pipeline || "").toUpperCase()}`,
+            label: buildModelOptionLabel(m, String(m.pipeline || "").toUpperCase()),
           })),
         ];
 
@@ -423,13 +392,13 @@ const TestPage: React.FC = () => {
           const typeLabel = isAnimateDiff ? "AnimateDiff · SD1.5 motion" : "LTX2 · native video";
           return {
             id: m.name,
-            label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${typeLabel}`,
+            label: buildModelOptionLabel(m, typeLabel),
           };
         });
 
         const faceSwapOptions = faceSwapModelsData.map((m) => ({
           id: m.name,
-          label: `${cleanModelName(m.name)} · Tier ${m.tier} · ${String(m.pipeline || "").toUpperCase()}`,
+          label: buildModelOptionLabel(m, String(m.pipeline || "").toUpperCase()),
         }));
 
         setImageModels(imageOptions);
@@ -1134,14 +1103,14 @@ const TestPage: React.FC = () => {
     const ssePromise = new Promise<"completed" | "failed" | null>((resolve) => {
       const timeout = setTimeout(() => resolve(null), maxWaitSeconds * 1000);
       const unsub = sse.subscribe((event: SSEEvent) => {
-        if (event.event !== "job_update") return;
+        if (event.event !== "job_lifecycle") return;
         if (event.job_id !== id) return;
-        const status = (event.status || "").toUpperCase();
+        const status = (event.lifecycle_status || event.status || "").toUpperCase();
         if (status === "QUEUED") {
           setStatusMessage("Job queued...");
         } else if (status === "RUNNING") {
           setStatusMessage("Rendering on HavnAI node...");
-        } else if (status === "SUCCESS" || status === "COMPLETED") {
+        } else if (status === "SUCCEEDED" || status === "SUCCESS" || status === "COMPLETED") {
           setStatusMessage("Finalizing output...");
           sseResolved = true;
           clearTimeout(timeout);

@@ -68,6 +68,14 @@ function formatTimestamp(value?: number | null): string {
   return "--";
 }
 
+function formatListingModel(listing: Pick<GalleryListing, "model" | "model_tier">): string {
+  const model = String(listing?.model || "").trim();
+  if (!model) return "--";
+  const tier = String(listing?.model_tier || "").trim().toUpperCase();
+  if (!tier) return model;
+  return `${model} · Tier ${tier}`;
+}
+
 function purchaseToListing(purchase: GalleryPurchaseRecord): GalleryListing {
   return {
     id: purchase.listing_id,
@@ -79,6 +87,12 @@ function purchaseToListing(purchase: GalleryPurchaseRecord): GalleryListing {
     category: undefined,
     asset_type: purchase.asset_type,
     model: purchase.model,
+    model_key: purchase.model_key,
+    model_tier: purchase.model_tier,
+    model_reward_weight: purchase.model_reward_weight,
+    model_credit_cost: purchase.model_credit_cost,
+    model_pipeline: purchase.model_pipeline,
+    model_task_type: purchase.model_task_type,
     prompt: purchase.prompt,
     listed: false,
     sold: true,
@@ -685,7 +699,7 @@ const MarketplacePage: NextPage = () => {
                               <div className="marketplace-gallery-meta">
                                 <span>{listing.asset_type}</span>
                                 {listing.category && <span>{listing.category}</span>}
-                                {listing.model && <span>{listing.model}</span>}
+                                {listing.model && <span>{formatListingModel(listing)}</span>}
                               </div>
                               <div className="marketplace-gallery-footer">
                                 <span>{formatWallet(listing.seller_wallet)}</span>
@@ -1104,7 +1118,7 @@ const MarketplacePage: NextPage = () => {
                       <div><span className="job-label">job_id</span><span>{selectedListing.job_id}</span></div>
                       <div><span className="job-label">asset_type</span><span>{selectedListing.asset_type}</span></div>
                       <div><span className="job-label">created</span><span>{formatTimestamp(selectedListing.created_at)}</span></div>
-                      <div><span className="job-label">model</span><span>{selectedListing.model || "--"}</span></div>
+                      <div><span className="job-label">model</span><span>{formatListingModel(selectedListing)}</span></div>
                       <div><span className="job-label">category</span><span>{selectedListing.category || "--"}</span></div>
                     </div>
                   </section>

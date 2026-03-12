@@ -39,6 +39,17 @@ export interface JobDetail {
   applied_loras?: JobLoraEntry[];
   status_reason?: string;
   lora_summary?: string | null;
+  model_metadata?: {
+    model_key?: string;
+    model_name?: string;
+    pipeline?: string;
+    task_type?: string;
+    reward_weight?: number;
+    tier?: string;
+    credit_cost?: number;
+    prompt?: string;
+    source?: string;
+  } | null;
   data?: any;
 }
 
@@ -265,6 +276,20 @@ const WALLET_PROVIDER_TIMEOUT_MS = Number.parseInt(
   String(process.env.NEXT_PUBLIC_WALLET_PROVIDER_TIMEOUT_MS || "20000"),
   10
 );
+const ENABLE_LEGACY_WAN_STATUS =
+  String(process.env.NEXT_PUBLIC_ENABLE_LEGACY_WAN_STATUS || "")
+    .trim()
+    .toLowerCase() === "true";
+const ENABLE_IDENTITY_ANCHORS =
+  String(process.env.NEXT_PUBLIC_ENABLE_IDENTITY_ANCHORS || "")
+    .trim()
+    .toLowerCase() === "true";
+
+function requireFeatureEnabled(enabled: boolean, code: string, message: string): void {
+  if (!enabled) {
+    throw new HavnaiApiError(message, code);
+  }
+}
 
 async function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -637,6 +662,11 @@ export function getJobStuckWarning(job: JobDetail): string | null {
 }
 
 export async function fetchWanVideoJob(jobId: string): Promise<WanVideoStatus> {
+  requireFeatureEnabled(
+    ENABLE_LEGACY_WAN_STATUS,
+    "feature_disabled",
+    "Legacy WAN video status endpoint is disabled on this deployment."
+  );
   const res = await fetch(apiUrl(`/generate-video/${encodeURIComponent(jobId)}`), {
     headers: buildHeaders(true),
   });
@@ -1309,6 +1339,12 @@ export interface GalleryListing {
   category?: string;
   asset_type: "image" | "video" | string;
   model?: string;
+  model_key?: string;
+  model_tier?: string;
+  model_reward_weight?: number;
+  model_credit_cost?: number;
+  model_pipeline?: string;
+  model_task_type?: string;
   prompt?: string;
   listed: boolean;
   sold: boolean;
@@ -1352,6 +1388,12 @@ export interface GalleryPurchaseRecord {
   title: string;
   asset_type: "image" | "video" | string;
   model?: string;
+  model_key?: string;
+  model_tier?: string;
+  model_reward_weight?: number;
+  model_credit_cost?: number;
+  model_pipeline?: string;
+  model_task_type?: string;
   prompt?: string;
   image_url?: string;
   video_url?: string;
@@ -1391,6 +1433,14 @@ function normalizeGalleryListing(raw: any): GalleryListing {
     category: raw?.category ? String(raw.category) : undefined,
     asset_type: String(raw?.asset_type || "image"),
     model: raw?.model ? String(raw.model) : undefined,
+    model_key: raw?.model_key ? String(raw.model_key) : undefined,
+    model_tier: raw?.model_tier ? String(raw.model_tier) : undefined,
+    model_reward_weight:
+      raw?.model_reward_weight == null ? undefined : Number(raw.model_reward_weight),
+    model_credit_cost:
+      raw?.model_credit_cost == null ? undefined : Number(raw.model_credit_cost),
+    model_pipeline: raw?.model_pipeline ? String(raw.model_pipeline) : undefined,
+    model_task_type: raw?.model_task_type ? String(raw.model_task_type) : undefined,
     prompt: raw?.prompt ? String(raw.prompt) : undefined,
     listed: Boolean(raw?.listed),
     sold: Boolean(raw?.sold),
@@ -1423,6 +1473,14 @@ function normalizeGalleryPurchase(raw: any): GalleryPurchaseRecord {
     title: String(raw?.title || ""),
     asset_type: String(raw?.asset_type || "image"),
     model: raw?.model ? String(raw.model) : undefined,
+    model_key: raw?.model_key ? String(raw.model_key) : undefined,
+    model_tier: raw?.model_tier ? String(raw.model_tier) : undefined,
+    model_reward_weight:
+      raw?.model_reward_weight == null ? undefined : Number(raw.model_reward_weight),
+    model_credit_cost:
+      raw?.model_credit_cost == null ? undefined : Number(raw.model_credit_cost),
+    model_pipeline: raw?.model_pipeline ? String(raw.model_pipeline) : undefined,
+    model_task_type: raw?.model_task_type ? String(raw.model_task_type) : undefined,
     prompt: raw?.prompt ? String(raw.prompt) : undefined,
     image_url: resolveAssetUrl(raw?.image_url),
     video_url: resolveAssetUrl(raw?.video_url),
@@ -1633,6 +1691,11 @@ export async function publishWorkflow(id: string, wallet: string = WALLET): Prom
 }
 
 export async function fetchIdentityAnchors(wallet: string = WALLET): Promise<IdentityAnchor[]> {
+  requireFeatureEnabled(
+    ENABLE_IDENTITY_ANCHORS,
+    "feature_disabled",
+    "Identity anchors are disabled on this deployment."
+  );
   const res = await fetch(apiUrl(`/identity-anchors?wallet=${encodeURIComponent(wallet)}`), {
     headers: buildHeaders(false),
   });
@@ -1647,6 +1710,11 @@ export async function createIdentityAnchor(input: {
   imageDataUrl: string;
   wallet?: string;
 }): Promise<IdentityAnchor> {
+  requireFeatureEnabled(
+    ENABLE_IDENTITY_ANCHORS,
+    "feature_disabled",
+    "Identity anchors are disabled on this deployment."
+  );
   const signed = await signWalletNonce({
     wallet: input.wallet || WALLET,
     purpose: "identity_anchor_create",
@@ -1669,6 +1737,11 @@ export async function createIdentityAnchor(input: {
 }
 
 export async function deleteIdentityAnchor(anchorId: number, wallet: string = WALLET): Promise<{ ok: boolean }> {
+  requireFeatureEnabled(
+    ENABLE_IDENTITY_ANCHORS,
+    "feature_disabled",
+    "Identity anchors are disabled on this deployment."
+  );
   const signed = await signWalletNonce({
     wallet,
     purpose: "identity_anchor_delete",

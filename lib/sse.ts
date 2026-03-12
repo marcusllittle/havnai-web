@@ -2,10 +2,19 @@
 
 import { getApiBase } from "./apiBase";
 
+export type JobLifecycleStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED";
+
 export interface SSEJobEvent {
-  event: "job_update";
+  event: "job_lifecycle";
+  event_type: "job_lifecycle";
   job_id: string;
-  status: string;
+  job_type?: string;
+  lifecycle_status: JobLifecycleStatus | string;
+  status: JobLifecycleStatus | string;
+  settlement_status?: string;
+  quality_status?: string;
+  message?: string;
+  reason?: string;
   model?: string;
   node_id?: string;
   wallet?: string;
@@ -22,6 +31,54 @@ export interface SSENodeEvent {
 export type SSEEvent = SSEJobEvent | SSENodeEvent;
 
 type SSECallback = (event: SSEEvent) => void;
+
+function normalizeLifecycleStatus(raw: unknown): JobLifecycleStatus | null {
+  const value = String(raw || "").trim().toUpperCase();
+  if (value === "QUEUED") return "QUEUED";
+  if (value === "RUNNING") return "RUNNING";
+  if (value === "SUCCEEDED" || value === "SUCCESS" || value === "COMPLETED") return "SUCCEEDED";
+  if (value === "CANCELLED" || value === "CANCELED") return "CANCELLED";
+  if (value === "FAILED") return "FAILED";
+  return null;
+}
+
+export function normalizeJobLifecycleEvent(eventName: string, rawData: any): SSEJobEvent | null {
+  const name = String(eventName || "").trim().toLowerCase();
+  const data = rawData && typeof rawData === "object" ? rawData : {};
+  const jobId = String(data.job_id || "").trim();
+  if (!jobId) return null;
+
+  const canonicalStatus =
+    normalizeLifecycleStatus(data.lifecycle_status) ??
+    normalizeLifecycleStatus(data.status) ??
+    (name === "job_queued"
+      ? "QUEUED"
+      : name === "job_running"
+      ? "RUNNING"
+      : name === "job_success"
+      ? "SUCCEEDED"
+      : name === "job_failed"
+      ? normalizeLifecycleStatus(data.status) ?? "FAILED"
+      : null);
+  if (!canonicalStatus) return null;
+
+  return {
+    event: "job_lifecycle",
+    event_type: "job_lifecycle",
+    job_id: jobId,
+    job_type: data.job_type || data.task_type,
+    lifecycle_status: canonicalStatus,
+    status: canonicalStatus,
+    settlement_status: data.settlement_status,
+    quality_status: data.quality_status,
+    message: data.message,
+    reason: data.reason,
+    model: data.model,
+    node_id: data.node_id,
+    wallet: data.wallet,
+    timestamp: data.timestamp,
+  };
+}
 
 export class HavnSSE {
   private source: EventSource | null = null;
@@ -45,14 +102,22 @@ export class HavnSSE {
         this.reconnectDelay = 2000;
       };
 
-      this.source.addEventListener("job_update", (e) => {
+      const onJobEvent = (eventName: string, e: Event) => {
         try {
           const data = JSON.parse((e as MessageEvent).data);
-          this.notify({ event: "job_update", ...data });
+          const normalized = normalizeJobLifecycleEvent(eventName, data);
+          if (normalized) {
+            this.notify(normalized);
+          }
         } catch {
           // ignore parse errors
         }
-      });
+      };
+
+      // Canonical contract
+      this.source.addEventListener("job_lifecycle", (e) => onJobEvent("job_lifecycle", e));
+      // Backward compatibility for older coordinators.
+      this.source.addEventListener("job_update", (e) => onJobEvent("job_update", e));
 
       this.source.addEventListener("node_update", (e) => {
         try {
