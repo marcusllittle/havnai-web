@@ -18,6 +18,7 @@ import {
 } from "../lib/havnai";
 import { ensureInjectedProvider, getConnectButtonLabel } from "../lib/wallet";
 import { isHaiFundingConfigured, readHaiBalance, getBrowserProvider } from "../lib/hai-token";
+import { getWalletIdentityLabel, getWalletSourceLabel, getWalletStatusCopy, PUBLIC_ALPHA_LABEL } from "../lib/publicAlpha";
 
 const WalletPage: NextPage = () => {
   const wallet = useWallet();
@@ -40,6 +41,9 @@ const WalletPage: NextPage = () => {
   const [testerError, setTesterError] = useState<string | null>(null);
   const haiFundingConfigured = isHaiFundingConfigured();
   const connectLabel = getConnectButtonLabel(wallet);
+  const walletSourceLabel = getWalletSourceLabel(wallet.source);
+  const walletIdentityLabel = getWalletIdentityLabel(wallet);
+  const walletStatusCopy = getWalletStatusCopy(wallet, "wallet");
 
   useEffect(() => {
     let active = true;
@@ -207,7 +211,7 @@ const WalletPage: NextPage = () => {
           <div className="page-hero-inner">
             <p className="hero-kicker">Wallet</p>
             <h1 className="hero-title">Your Wallet</h1>
-            <p className="hero-subtitle">View your credits, HAI rewards, and on-chain balance.</p>
+            <p className="hero-subtitle">View your {PUBLIC_ALPHA_LABEL.toLowerCase()} credits, tracked HAI, and Sepolia on-chain balance.</p>
           </div>
         </section>
 
@@ -215,13 +219,7 @@ const WalletPage: NextPage = () => {
           <div className="wallet-status-card">
             <div className="wallet-status-copy-block">
               <div className="wallet-status-heading-row">
-                <span className={`wallet-status-pill wallet-source-${wallet.source}`}>
-                  {wallet.source === "connected"
-                    ? "Connected wallet"
-                    : wallet.source === "env"
-                    ? "Fallback site wallet"
-                    : "No wallet"}
-                </span>
+                <span className={`wallet-status-pill wallet-source-${wallet.source}`}>{walletSourceLabel}</span>
                 {wallet.providerName && <span className="wallet-status-provider">{wallet.providerName}</span>}
                 {wallet.chainName && (
                   <span className={`wallet-status-provider${wallet.chainAllowed ? "" : " is-warning"}`}>
@@ -229,16 +227,8 @@ const WalletPage: NextPage = () => {
                   </span>
                 )}
               </div>
-              <div className="wallet-status-address">{wallet.activeWallet || "No wallet connected"}</div>
-              <p className="wallet-status-note">
-                {wallet.error?.message ||
-                  wallet.message ||
-                  (wallet.source === "connected"
-                    ? "Wallet dashboard is using your connected MetaMask wallet."
-                    : wallet.source === "env"
-                    ? "Wallet dashboard is using NEXT_PUBLIC_HAVNAI_WALLET as a fallback site wallet."
-                    : "Connect MetaMask or configure NEXT_PUBLIC_HAVNAI_WALLET to load wallet data.")}
-              </p>
+              <div className="wallet-status-address">{walletIdentityLabel}</div>
+              <p className="wallet-status-note">{walletStatusCopy}</p>
             </div>
             <div className="wallet-status-actions">
               <button
@@ -254,10 +244,10 @@ const WalletPage: NextPage = () => {
 
           <div className="chart-section">
             <div className="chart-header">
-              <h3 className="chart-title">Tester Onboarding (Sepolia)</h3>
+              <h3 className="chart-title">Public Alpha Wallet Guide (Sepolia)</h3>
             </div>
             <ol style={{ color: "var(--text-muted)", lineHeight: 1.6, paddingLeft: "1.2rem", margin: 0 }}>
-              <li>Connect MetaMask and confirm your active network is Sepolia.</li>
+              <li>Connect your wallet and confirm the active network is Sepolia.</li>
               <li>
                 Get SepoliaETH for gas from faucets such as{" "}
                 <a href="https://www.alchemy.com/faucets/ethereum-sepolia" target="_blank" rel="noreferrer">
@@ -268,8 +258,8 @@ const WalletPage: NextPage = () => {
                   Chainlink
                 </a>.
               </li>
-              <li>Use Pricing to buy credits with HAI (1 HAI = 1 credit in this test phase).</li>
-              <li>This page shows your credits, on-chain HAI, and HAI funding/tester request history.</li>
+              <li>Use Buy Credits to fund credits with HAI at the current Public Alpha rate.</li>
+              <li>This page shows your credits, on-chain HAI, and Sepolia funding/request history.</li>
             </ol>
           </div>
 
@@ -321,7 +311,8 @@ const WalletPage: NextPage = () => {
               </div>
               <p style={{ color: "var(--text-muted)", marginBottom: "1rem", fontSize: "0.85rem" }}>
                 You have <strong style={{ color: "#8ff0b6" }}>{rewards.claimable.toFixed(4)} HAI</strong> available to claim.
-                Once on-chain settlement is live, this will trigger a transaction to your wallet.
+                Once on-chain settlement is enabled on this deployment, claiming will trigger a
+                transaction to your wallet.
               </p>
               <button type="button" className="job-action-button" disabled={claiming} onClick={handleClaim}>
                 {claiming ? "Claiming..." : `Claim ${rewards.claimable.toFixed(4)} HAI`}
@@ -351,7 +342,7 @@ const WalletPage: NextPage = () => {
             ) : fundingError ? (
               <p className="job-hint error">{fundingError}</p>
             ) : fundings.length === 0 ? (
-              <p className="job-hint">No HAI funding transactions recorded yet.</p>
+              <p className="job-hint">No HAI funding transactions have been recorded for this identity yet.</p>
             ) : (
               <div className="table-wrapper">
                 <table className="rewards-table">
@@ -391,23 +382,23 @@ const WalletPage: NextPage = () => {
               </div>
             )}
             <p className="job-hint" style={{ marginTop: "0.6rem" }}>
-              Pending means backend verification is still in progress; failed includes a verification error.
+              Pending means backend verification is still in progress. Failed indicates the transfer could not be verified or credited.
             </p>
           </div>
 
           <div className="chart-section">
             <div className="chart-header">
-              <h3 className="chart-title">Request Test HAI Support</h3>
+              <h3 className="chart-title">Request Test HAI Review</h3>
             </div>
             <p className="job-hint" style={{ marginBottom: "0.8rem" }}>
-              Trusted tester requests are reviewed manually by the HavnAI team. This is intentionally gated and
-              may be allowlist-restricted.
+              Test HAI requests are reviewed manually by the HavnAI team. This process is intentionally
+              gated during Public Alpha and may be allowlist-restricted.
             </p>
             {testerConfig && (
               <p className="job-hint" style={{ marginBottom: "0.8rem" }}>
                 {testerDistributionEnabled
                   ? `Enabled · Default request ${testerConfig.default_request_hai} HAI · Cooldown ${testerConfig.cooldown_hours}h`
-                  : "Tester distribution requests are currently disabled on this coordinator."}
+                  : "Test HAI review requests are currently unavailable on this coordinator."}
               </p>
             )}
             <div className="convert-row">
@@ -444,7 +435,7 @@ const WalletPage: NextPage = () => {
             {testerLoading ? (
               <p className="library-loading">Loading tester requests...</p>
             ) : testerRequests.length === 0 ? (
-              <p className="job-hint">No tester HAI requests yet for this wallet.</p>
+              <p className="job-hint">No test HAI requests have been submitted for this identity yet.</p>
             ) : (
               <div className="table-wrapper" style={{ marginTop: "0.8rem" }}>
                 <table className="rewards-table">

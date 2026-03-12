@@ -340,11 +340,11 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
   const listingBlockedReason = !canListInMarketplace
     ? undefined
     : !jobOwnerWallet
-    ? "Loading job owner wallet before enabling marketplace listing."
+    ? "Loading the job owner identity before marketplace publishing is available."
     : !marketplaceWalletMatchesJob
-    ? `This job belongs to ${jobOwnerWallet}. Connect that wallet to list it on the marketplace.`
+    ? `This job belongs to ${jobOwnerWallet}. Connect that wallet to publish it in the marketplace.`
     : marketplace?.canSign !== true
-    ? "MetaMask must be connected with the job owner wallet to sign a marketplace listing."
+    ? "Connect the job owner wallet to sign this marketplace listing."
     : undefined;
 
   const handleCreateListing = async () => {
@@ -360,7 +360,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     }
 
     setListingSubmitting(true);
-    setListingProgress("Preparing wallet signature...");
+    setListingProgress("Preparing listing signature...");
     setListingError(undefined);
     setListingSuccess(undefined);
     try {
@@ -375,17 +375,17 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
         },
         {
           onProgress: (step) => {
-            if (step === "resolving_wallet") setListingProgress("Resolving wallet provider...");
-            else if (step === "requesting_nonce") setListingProgress("Requesting nonce from coordinator...");
-            else if (step === "awaiting_signature") setListingProgress("Waiting for MetaMask signature...");
-            else if (step === "submitting_listing") setListingProgress("Submitting listing to marketplace...");
+            if (step === "resolving_wallet") setListingProgress("Resolving wallet connection...");
+            else if (step === "requesting_nonce") setListingProgress("Preparing secure listing request...");
+            else if (step === "awaiting_signature") setListingProgress("Waiting for wallet approval...");
+            else if (step === "submitting_listing") setListingProgress("Publishing listing to the marketplace...");
           },
         }
       );
       setListingSuccess(
         listing.already_listed
-          ? "Already listed. View it in My Listings."
-          : "Listed successfully. View it in My Listings."
+          ? "This piece is already listed. View it in My Listings."
+          : "Listing is live. View it in My Listings."
       );
       setListingOpen(false);
       marketplace?.onListingCreated?.(listing.id);
@@ -512,7 +512,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   }}
                 />
               ) : (
-                <div className="job-preview-empty">Preview not available</div>
+                <div className="job-preview-empty">Preview unavailable</div>
               )}
             </div>
           </section>
@@ -558,7 +558,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   className="job-action-button secondary"
                   onClick={() => setListingOpen((value) => !value)}
                 >
-                  {listingOpen ? "Close listing form" : "List on Marketplace"}
+                  {listingOpen ? "Close listing form" : "List in Marketplace"}
                 </button>
               )}
             </div>
@@ -567,7 +567,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
             {listingSuccess && (
               <p className="job-hint" style={{ color: "#8ff0b6" }}>
                 {listingSuccess}{" "}
-                <a href="/marketplace?tab=gallery&galleryView=my-listings">My Listings</a>
+                <a href="/marketplace?tab=gallery&galleryView=my-listings">View My Listings</a>
               </p>
             )}
             {canListInMarketplace && !showListingAction && listingBlockedReason && (
@@ -575,8 +575,11 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
             )}
             {showListingAction && listingOpen && (
               <div className="marketplace-listing-form">
+                <p className="job-hint" style={{ marginTop: 0 }}>
+                  Publish this result to the Public Alpha marketplace after approving the wallet request.
+                </p>
                 <label>
-                  <span className="job-label">title</span>
+                  <span className="job-label">Title</span>
                   <input
                     type="text"
                     className="library-search"
@@ -586,7 +589,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   />
                 </label>
                 <label>
-                  <span className="job-label">description</span>
+                  <span className="job-label">Description</span>
                   <textarea
                     className="library-search"
                     value={listingDescription}
@@ -598,7 +601,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                 </label>
                 <div className="marketplace-listing-form-grid">
                   <label>
-                    <span className="job-label">price_credits</span>
+                    <span className="job-label">Price (credits)</span>
                     <input
                       type="number"
                       min="0.1"
@@ -609,7 +612,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                     />
                   </label>
                   <label>
-                    <span className="job-label">category</span>
+                    <span className="job-label">Category</span>
                     <input
                       type="text"
                       className="library-search"
@@ -628,7 +631,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                     disabled={listingSubmitting}
                     onClick={handleCreateListing}
                   >
-                    {listingSubmitting ? "Listing..." : "Create Listing"}
+                    {listingSubmitting ? "Publishing..." : "Publish Listing"}
                   </button>
                 </div>
               </div>

@@ -90,11 +90,31 @@ main,
   flex-direction: column;
 }
 
+.brand-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
 .brand-stage {
   font-size: 0.65rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+.brand-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 234, 255, 0.28);
+  background: rgba(0, 234, 255, 0.1);
+  color: var(--accent-strong);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .brand-name {
@@ -4629,6 +4649,12 @@ details[open] .faq-icon {
   background: rgba(255, 80, 80, 0.12);
   border: 1px solid rgba(255, 80, 80, 0.25);
   color: #ff8888;
+}
+
+.pricing-alert-info {
+  background: rgba(0, 234, 255, 0.08);
+  border: 1px solid rgba(0, 234, 255, 0.18);
+  color: var(--text);
 }
 
 .pricing-loading {

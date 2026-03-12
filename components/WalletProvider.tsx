@@ -12,6 +12,7 @@ import {
   WalletError,
   WalletSnapshot,
 } from "../lib/wallet";
+import { SITE_SESSION_MESSAGE } from "../lib/publicAlpha";
 
 const CONNECT_TIMEOUT_MS = 30_000;
 const SAFETY_TIMEOUT_MS = 35_000;
@@ -35,9 +36,9 @@ const WalletContext = createContext<WalletContextValue | null>(null);
 
 function getConflictMessage(providerName?: string): string {
   if (providerName === "MetaMask") {
-    return "Multiple wallet extensions detected. MetaMask is being used as the active provider.";
+    return "Multiple wallet extensions detected. HavnAI will use MetaMask as the active wallet.";
   }
-  return "Multiple wallet extensions detected. Using the browser's active wallet provider. If connection fails, disable other wallet extensions or make MetaMask the preferred wallet.";
+  return "Multiple wallet extensions detected. HavnAI will use the browser's active wallet. If connection fails, disable extra wallet extensions or make MetaMask the preferred wallet.";
 }
 
 function buildSnapshot(
@@ -74,7 +75,7 @@ function initialSnapshot(envWallet: string | null): WalletSnapshot {
     source: envWallet ? "env" : "none",
     status: envWallet ? "fallback" : "idle",
     error: null,
-    message: envWallet ? "Using the fallback site wallet for env-based actions." : undefined,
+    message: envWallet ? SITE_SESSION_MESSAGE : undefined,
     providerName: undefined,
     hasProvider: false,
     hasConflict: false,
@@ -154,7 +155,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         error: selection.error,
         message:
           selection.error?.message ||
-          (envWallet ? "Using the fallback site wallet for env-based actions." : undefined),
+          (envWallet ? SITE_SESSION_MESSAGE : undefined),
         connecting: false,
         status: selection.error ? "error" : envWallet ? "fallback" : "idle",
       });
@@ -178,7 +179,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         message: selection.hasConflict
           ? getConflictMessage(selection.providerName)
           : envWallet && accounts.length === 0
-          ? "Using the fallback site wallet for env-based actions."
+          ? SITE_SESSION_MESSAGE
           : undefined,
         connecting: Boolean(connectPromiseRef.current),
         status: accounts[0] ? "connected" : envWallet ? "fallback" : "idle",
@@ -202,7 +203,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const snap = snapshotRef.current;
     patchSnapshot({
       error: null,
-      message: envWallet ? "Using the fallback site wallet for env-based actions." : undefined,
+      message: envWallet ? SITE_SESSION_MESSAGE : undefined,
       status: snap.connectedWallet ? "connected" : envWallet ? "fallback" : "idle",
     });
   }, [envWallet, patchSnapshot]);
@@ -213,7 +214,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     patchSnapshot({
       connectedWallet: null,
       error: null,
-      message: envWallet ? "Using the fallback site wallet for env-based actions." : undefined,
+      message: envWallet ? SITE_SESSION_MESSAGE : undefined,
       connecting: false,
       status: envWallet ? "fallback" : "idle",
     });
@@ -239,7 +240,11 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (!selection.provider) {
       const issue =
-        selection.error || new WalletError("wallet_unavailable", "MetaMask not found. Install MetaMask and try again.");
+        selection.error ||
+        new WalletError(
+          "wallet_unavailable",
+          "No compatible wallet was found. Install MetaMask or open a supported browser wallet and try again."
+        );
       patchSnapshot({
         error: issue,
         message: issue.message,
@@ -255,7 +260,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (connectPromiseRef.current) {
       const issue = new WalletError(
         "wallet_request_pending",
-        "MetaMask already has a connection request open. Open the extension and finish or cancel it."
+        "A wallet connection request is already open. Finish or cancel it in your wallet."
       );
       patchSnapshot({
         error: issue,
@@ -284,14 +289,14 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       patchSnapshot({
         connecting: true,
         status: "prompting",
-        message: "Approve the request in MetaMask to continue.",
+        message: "Approve the request in your wallet to continue.",
       });
     }, 1000);
 
     attentionTimerRef.current = window.setTimeout(() => {
       const issue = new WalletError(
         "wallet_request_timeout",
-        "MetaMask has not finished yet. Open the extension and complete or cancel the request."
+        "Your wallet has not finished yet. Open the extension and complete or cancel the request."
       );
       patchSnapshot({
         error: issue,
@@ -422,7 +427,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       patchSnapshot({
         connectedWallet: null,
         error: null,
-        message: envWallet ? "Using the fallback site wallet for env-based actions." : undefined,
+        message: envWallet ? SITE_SESSION_MESSAGE : undefined,
         status: envWallet ? "fallback" : "idle",
       });
       void refresh();

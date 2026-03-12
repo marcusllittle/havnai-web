@@ -50,11 +50,19 @@ const AnalyticsPage: NextPage = () => {
           <div className="page-hero-inner">
             <p className="hero-kicker">Analytics</p>
             <h1 className="hero-title">Network Dashboard</h1>
-            <p className="hero-subtitle">Job statistics, costs, and reward breakdowns across the HavnAI network.</p>
+            <p className="hero-subtitle">Live Public Alpha job statistics, credit activity, and tracked reward breakdowns across the HavnAI network.</p>
           </div>
         </section>
 
         <section className="page-container">
+          <div className="chart-section">
+            <p style={{ margin: 0, color: "var(--text-muted)", lineHeight: 1.6 }}>
+              These metrics reflect live coordinator activity. Credits, HAI tracking, and payment
+              rails are still operating in Public Alpha, so Sepolia and testnet-era behavior may be
+              visible in the data.
+            </p>
+          </div>
+
           {/* Time range selector */}
           <div className="library-filters" style={{ marginBottom: "1.5rem" }}>
             <div className="library-filter-group">
@@ -88,7 +96,7 @@ const AnalyticsPage: NextPage = () => {
                 <div className="stat-value">{overview.active_nodes ?? overview.online_nodes ?? 0}</div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">Total HAI Distributed</div>
+                <div className="stat-label">Tracked HAI</div>
                 <div className="stat-value">{(overview.total_rewards ?? 0).toFixed(2)}</div>
               </div>
               <div className="stat-card">
@@ -176,7 +184,7 @@ const AnalyticsPage: NextPage = () => {
           {!loading && rewards && Array.isArray(rewards.by_node) && rewards.by_node.length > 0 && (
             <div className="chart-section">
               <div className="chart-header">
-                <h3 className="chart-title">Rewards by Node</h3>
+                <h3 className="chart-title">Tracked Rewards by Node</h3>
                 <span className="stat-sub">Total: {(rewards.total ?? 0).toFixed(4)} HAI</span>
               </div>
               <table className="data-table">

@@ -24,7 +24,14 @@ import {
   ensureSepoliaNetwork,
   getBrowserProvider,
 } from "../lib/hai-token";
-import { WALLET, formatWalletShort, getConnectButtonLabel, ensureInjectedProvider, getAllProviders } from "../lib/wallet";
+import { formatWalletShort, getConnectButtonLabel, ensureInjectedProvider, getAllProviders } from "../lib/wallet";
+import {
+  getCardCheckoutCopy,
+  getWalletIdentityLabel,
+  getWalletSourceLabel,
+  getWalletStatusCopy,
+  PUBLIC_ALPHA_LABEL,
+} from "../lib/publicAlpha";
 
 const FALLBACK_PACKAGES: CreditPackage[] = [
   { id: "starter", name: "Starter Pack", credits: 50, price_cents: 500, description: "50 credits" },
@@ -52,12 +59,6 @@ function formatOutputCount(referenceId: string, credits: number, cost: number): 
     default:
       return `${withGrouping} ${count === 1 ? "image" : "images"}`;
   }
-}
-
-function describeWalletSource(source: "connected" | "env" | "none"): string {
-  if (source === "connected") return "Connected wallet";
-  if (source === "env") return "Fallback site wallet";
-  return "No wallet";
 }
 
 const PricingPage: NextPage = () => {
@@ -95,18 +96,14 @@ const PricingPage: NextPage = () => {
   const connectedWallet = wallet.connectedWallet;
   const referencePackages = packages.length > 0 ? packages : FALLBACK_PACKAGES;
   const connectLabel = getConnectButtonLabel(wallet);
-  const walletSourceLabel = describeWalletSource(wallet.source);
-  const walletStatusCopy =
-    wallet.source === "connected"
-      ? "Credit purchases and balance/history use your connected MetaMask wallet."
-      : wallet.source === "env"
-      ? `The site is using the configured wallet (${formatWalletShort(WALLET || "")}) as a fallback identity for purchases and balance/history.`
-      : "Connect MetaMask to enable wallet-aware actions.";
+  const walletSourceLabel = getWalletSourceLabel(wallet.source);
+  const walletIdentityLabel = getWalletIdentityLabel(wallet);
+  const walletStatusCopy = getWalletStatusCopy(wallet, "pricing");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("payment") === "success") {
-      setSuccessMessage("Payment successful. Your credits will appear after the Stripe webhook confirms the purchase.");
+      setSuccessMessage("Card checkout confirmed. Credits will appear after the payment webhook finalizes the order.");
       window.history.replaceState({}, "", "/pricing");
     } else if (params.get("payment") === "cancelled") {
       setError("Payment was cancelled.");
@@ -216,7 +213,7 @@ const PricingPage: NextPage = () => {
           : typeof err?.message === "string"
           ? err.message
           : "Wallet connection failed.";
-      setConvertError(message);
+      setError(message);
     }
   };
 
@@ -227,7 +224,7 @@ const PricingPage: NextPage = () => {
       return;
     }
     if (!connectedWallet) {
-      setConvertError("Connect your MetaMask wallet before converting credits.");
+      setConvertError("Connect your wallet before converting credits.");
       return;
     }
     setConverting(true);
@@ -240,7 +237,7 @@ const PricingPage: NextPage = () => {
     } catch (err: any) {
       setConvertMessage(null);
       if (err?.code === 4001 || /user rejected/i.test(String(err?.message || ""))) {
-        setConvertError("Signature request was rejected in MetaMask.");
+        setConvertError("Signature request was rejected in your wallet.");
       } else if (err instanceof HavnaiApiError) {
         if (err.code === "nonce_expired") {
           setConvertError("Signature expired. Please try again.");
@@ -264,7 +261,7 @@ const PricingPage: NextPage = () => {
   const handleBuy = async (pkg: CreditPackage) => {
     setError(null);
     if (!activeWallet) {
-      setError("Connect a wallet or configure NEXT_PUBLIC_HAVNAI_WALLET before buying credits.");
+      setError("Connect your wallet before starting checkout.");
       return;
     }
     setBuyingId(pkg.id);
@@ -318,7 +315,7 @@ const PricingPage: NextPage = () => {
       return;
     }
     if (!connectedWallet) {
-      setHaiFundingError("Connect MetaMask first.");
+      setHaiFundingError("Connect your wallet to fund credits with HAI.");
       return;
     }
     setHaiFunding(true);
@@ -363,7 +360,7 @@ const PricingPage: NextPage = () => {
         );
       }
 
-      setHaiFundingStep("Confirm transfer in MetaMask...");
+      setHaiFundingStep("Confirm transfer in your wallet...");
       const { txHash, wait } = await transferHaiToTreasury(signer, amount.toString());
 
       setHaiFundingStep(`Waiting for confirmations (tx: ${txHash.slice(0, 10)}...)...`);
@@ -394,7 +391,7 @@ const PricingPage: NextPage = () => {
       setBalance(updated);
     } catch (err: any) {
       if (err?.code === 4001 || /user rejected/i.test(String(err?.message || ""))) {
-        setHaiFundingError("Transaction was rejected in MetaMask.");
+        setHaiFundingError("Transaction was rejected in your wallet.");
       } else {
         setHaiFundingError(err?.message || "HAI funding failed.");
       }
@@ -404,7 +401,7 @@ const PricingPage: NextPage = () => {
     }
   };
 
-  const packageDestination = activeWallet || "No active wallet configured";
+  const packageDestination = walletIdentityLabel;
 
   const referenceRows = useMemo(() => {
     if (creditReference.length > 0) return creditReference;
@@ -420,10 +417,10 @@ const PricingPage: NextPage = () => {
   return (
     <>
       <Head>
-        <title>Buy Credits — HavnAI</title>
+        <title>Buy Credits — HavnAI Public Alpha</title>
         <meta
           name="description"
-          content="Purchase HavnAI credits to generate images and videos on the GPU grid."
+          content="Purchase HavnAI Public Alpha credits to generate images and videos on the GPU grid."
         />
       </Head>
 
@@ -434,8 +431,9 @@ const PricingPage: NextPage = () => {
           <div className="section-header">
             <h2>Buy Credits</h2>
             <p>
-              Credits power every generation on the HavnAI grid. Package pricing loads independently from wallet
-              history so store availability is visible even if account lookups fail.
+              Credits power every generation across HavnAI {PUBLIC_ALPHA_LABEL}. Sepolia HAI funding
+              is the primary live path today. Card checkout appears only on deployments where it has
+              been enabled.
             </p>
           </div>
 
@@ -444,7 +442,7 @@ const PricingPage: NextPage = () => {
               <span className="pricing-balance-label">Your Balance</span>
               <span className="pricing-balance-value">{balance.balance.toFixed(1)} credits</span>
               {balance.credits_enabled === false && (
-                <span className="pricing-balance-note">Credits are currently running in free mode.</span>
+                <span className="pricing-balance-note">Credits are currently open access on this coordinator during Public Alpha.</span>
               )}
             </div>
           )}
@@ -461,9 +459,9 @@ const PricingPage: NextPage = () => {
                 )}
               </div>
               <div className="wallet-status-address">
-                {activeWallet ? activeWallet : "No wallet connected"}
+                {walletIdentityLabel}
               </div>
-              <p className="wallet-status-note">{wallet.error?.message || wallet.message || walletStatusCopy}</p>
+              <p className="wallet-status-note">{walletStatusCopy}</p>
             </div>
             <div className="wallet-status-actions">
               <button
@@ -483,11 +481,11 @@ const PricingPage: NextPage = () => {
 
           <div className="pricing-wallet-info">
             <p>
-              Purchase destination: <code>{packageDestination}</code>
+              Active funding destination: <code>{packageDestination}</code>
             </p>
             <p className="pricing-wallet-note">
-              {walletStatusCopy} Generator submissions still use{" "}
-              <code>{formatWalletShort(WALLET || "")}</code>.
+              New credits attach to the active identity shown above. Guest browsing can review
+              pricing, but checkout and wallet-based funding require an active identity.
             </p>
           </div>
 
@@ -496,43 +494,51 @@ const PricingPage: NextPage = () => {
           ) : packagesError ? (
             <div className="pricing-alert pricing-alert-error">{packagesError}</div>
           ) : packages.length === 0 ? (
-            <div className="pricing-alert pricing-alert-error">No credit packages are currently configured.</div>
+            <div className="pricing-alert pricing-alert-info">Card checkout packages are not available on this deployment yet.</div>
           ) : (
-            <div className="pricing-grid">
-              {packages.map((pkg) => (
-                <article
-                  key={pkg.id}
-                  className={`pricing-card${pkg.id === "creator" ? " pricing-card-featured" : ""}`}
-                >
-                  {pkg.id === "creator" && <div className="pricing-card-badge">Best Value</div>}
-                  <h3 className="pricing-card-name">{pkg.name}</h3>
-                  <div className="pricing-card-price">{formatPrice(pkg.price_cents)}</div>
-                  <div className="pricing-card-credits">{pkg.credits} credits</div>
-                  <div className="pricing-card-per">{formatPerCredit(pkg)}</div>
-                  <p className="pricing-card-desc">{pkg.description}</p>
-                  <button
-                    type="button"
-                    className={`btn ${pkg.id === "creator" ? "primary" : "tertiary"} wide`}
-                    disabled={!stripeEnabled || buyingId !== null || !activeWallet}
-                    onClick={() => handleBuy(pkg)}
+            <>
+              {!stripeEnabled && (
+                <div className="pricing-alert pricing-alert-info">{getCardCheckoutCopy(stripeEnabled)}</div>
+              )}
+              <div className="pricing-grid">
+                {packages.map((pkg) => (
+                  <article
+                    key={pkg.id}
+                    className={`pricing-card${pkg.id === "creator" ? " pricing-card-featured" : ""}`}
                   >
-                    {buyingId === pkg.id
-                      ? "Redirecting..."
-                      : !activeWallet
-                      ? "Set Wallet"
-                      : !stripeEnabled
-                      ? "Payments Disabled"
-                      : "Buy Now"}
-                  </button>
-                </article>
-              ))}
-            </div>
+                    {pkg.id === "creator" && <div className="pricing-card-badge">Best Value</div>}
+                    <h3 className="pricing-card-name">{pkg.name}</h3>
+                    <div className="pricing-card-price">{formatPrice(pkg.price_cents)}</div>
+                    <div className="pricing-card-credits">{pkg.credits} credits</div>
+                    <div className="pricing-card-per">{formatPerCredit(pkg)}</div>
+                    <p className="pricing-card-desc">{pkg.description}</p>
+                    <button
+                      type="button"
+                      className={`btn ${pkg.id === "creator" ? "primary" : "tertiary"} wide`}
+                      disabled={!stripeEnabled || buyingId !== null || !activeWallet}
+                      onClick={() => handleBuy(pkg)}
+                    >
+                      {buyingId === pkg.id
+                        ? "Redirecting..."
+                        : !activeWallet
+                        ? "Connect wallet"
+                        : !stripeEnabled
+                        ? "Card checkout not live"
+                        : "Checkout"}
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </>
           )}
 
           {haiFundingConfigured && (
             <div className="pricing-convert">
-              <h3>Buy Credits with $HAI</h3>
-              <p>Transfer HAI tokens from your wallet to purchase credits at a 1:1 rate.</p>
+              <h3>Fund Credits with $HAI</h3>
+              <p className="pricing-convert-desc">
+                Transfer testnet HAI from your connected wallet to add credits at the current
+                Public Alpha rate of 1 HAI = 1 credit.
+              </p>
               {haiBalance !== null && (
                 <p className="convert-note">
                   Your HAI balance: <strong>{Number(haiBalance).toFixed(2)} HAI</strong>
@@ -556,11 +562,11 @@ const PricingPage: NextPage = () => {
                   onClick={handleBuyWithHai}
                   disabled={haiFunding || !connectedWallet}
                 >
-                  {haiFunding ? haiFundingStep || "Processing..." : `Buy ${haiAmount} Credits`}
+                  {haiFunding ? haiFundingStep || "Processing..." : `Fund ${haiAmount} Credits`}
                 </button>
               </div>
               {!connectedWallet && (
-                <p className="convert-note">Connect MetaMask to buy credits with HAI.</p>
+                <p className="convert-note">Connect your wallet on Sepolia to fund credits with HAI.</p>
               )}
               {haiFundingSuccess && <p className="convert-message">{haiFundingSuccess}</p>}
               {haiFundingError && <p className="convert-error">{haiFundingError}</p>}
@@ -570,7 +576,8 @@ const PricingPage: NextPage = () => {
           <div className="pricing-costs">
             <h3>What Credits Get You</h3>
             <p className="pricing-wallet-note" style={{ marginBottom: "0.9rem" }}>
-              This table is derived from the coordinator&apos;s current default credit costs.
+              This table is derived from the coordinator&apos;s current default credit costs and may
+              change during Public Alpha.
             </p>
             {creditReferenceLoading ? (
               <div className="pricing-loading">Loading credit cost reference...</div>
@@ -610,7 +617,7 @@ const PricingPage: NextPage = () => {
 
           {payments.length > 0 && (
             <div className="pricing-history">
-              <h3>Payment History</h3>
+              <h3>Checkout History</h3>
               <div className="table-wrapper">
                 <table className="rewards-table">
                   <thead>
@@ -642,7 +649,7 @@ const PricingPage: NextPage = () => {
 
           <div className="pricing-convert">
             <h3>Convert credits to $HAI</h3>
-            <p>Convert your unused credits into $HAI tokens.</p>
+            <p className="pricing-convert-desc">Convert unused Public Alpha credits back into testnet HAI.</p>
             <div className="convert-row">
               <button
                 type="button"
@@ -676,7 +683,8 @@ const PricingPage: NextPage = () => {
             </div>
             {!connectedWallet && (
               <p className="convert-note">
-                Connect MetaMask to sign conversion requests. Fallback env wallets cannot sign them.
+                Connect your wallet to sign credit-to-HAI conversions. Site sessions can view balances
+                but cannot approve conversions.
               </p>
             )}
             {convertMessage && <p className="convert-message">{convertMessage}</p>}

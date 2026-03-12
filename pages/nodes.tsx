@@ -116,11 +116,19 @@ const NodesPage: NextPage = () => {
           <div className="page-hero-inner">
             <p className="hero-kicker">Network</p>
             <h1 className="hero-title">GPU Nodes</h1>
-            <p className="hero-subtitle">Live view of GPU nodes powering the HavnAI network.</p>
+            <p className="hero-subtitle">Live Public Alpha view of the GPU nodes powering the HavnAI network.</p>
           </div>
         </section>
 
         <section className="page-container">
+          <div className="chart-section">
+            <p style={{ margin: 0, color: "var(--text-muted)", lineHeight: 1.6 }}>
+              Live node telemetry comes directly from the coordinator. Reward totals reflect Public
+              Alpha tracking and may include Sepolia or testnet-era activity while settlement rails
+              continue to evolve.
+            </p>
+          </div>
+
           {/* Stats bar */}
           <div className="stats-grid">
             <div className="stat-card">
@@ -235,11 +243,11 @@ const NodesPage: NextPage = () => {
                     <span>{formatPercent(node.performance?.malformed_rate)}</span>
                   </div>
                   <div className="node-detail-row">
-                    <span>Payout Total</span>
+                    <span>Tracked HAI</span>
                     <span>{(node.payouts?.total ?? node.rewards).toFixed(4)}</span>
                   </div>
                   <div className="node-detail-row">
-                    <span>Payouts (30d)</span>
+                    <span>Reward Activity (30d)</span>
                     <span>{node.payouts?.window_count ?? 0} tx / {(node.payouts?.window_total ?? 0).toFixed(4)} HAI</span>
                   </div>
                   <div className="node-detail-row">
@@ -267,7 +275,9 @@ const NodesPage: NextPage = () => {
                 </div>
               ))}
               {filteredNodes.length === 0 && !loading && (
-                <div className="library-empty"><p>No nodes found.</p></div>
+                <div className="library-empty">
+                  <p>No nodes match this view yet. Clear your search or check back as more Public Alpha operators come online.</p>
+                </div>
               )}
             </div>
           )}
@@ -305,7 +315,9 @@ const NodesPage: NextPage = () => {
                 </tbody>
               </table>
               {leaderboard.length === 0 && (
-                <p style={{ textAlign: "center", color: "var(--text-muted)", padding: "1rem" }}>No leaderboard data yet.</p>
+                <p style={{ textAlign: "center", color: "var(--text-muted)", padding: "1rem" }}>
+                  Leaderboard data will appear here as Public Alpha reward tracking accumulates.
+                </p>
               )}
             </div>
           )}

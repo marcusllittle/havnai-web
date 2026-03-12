@@ -23,6 +23,7 @@ import {
 } from "../lib/libraryStore";
 import { normalizeJobStatus } from "../lib/jobStatus";
 import { getConnectButtonLabel } from "../lib/wallet";
+import { getWalletIdentityLabel, getWalletSourceLabel, getWalletStatusCopy, PUBLIC_ALPHA_LABEL } from "../lib/publicAlpha";
 
 type StatusFilter = "all" | "ready" | "running" | "failed";
 type TypeFilter = "all" | "image" | "video";
@@ -163,6 +164,9 @@ const LibraryPage: NextPage = () => {
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerError, setDrawerError] = useState<string | undefined>();
   const connectLabel = getConnectButtonLabel(wallet);
+  const walletSourceLabel = getWalletSourceLabel(wallet.source);
+  const walletIdentityLabel = getWalletIdentityLabel(wallet);
+  const walletStatusCopy = getWalletStatusCopy(wallet, "library");
 
   // Sell listing state
   const [sellItem, setSellItem] = useState<LibraryViewItem | null>(null);
@@ -189,9 +193,9 @@ const LibraryPage: NextPage = () => {
   const handleSell = async () => {
     if (!sellItem) return;
     const price = parseFloat(sellPrice);
-    if (!price || price <= 0) { setSellErr("Price must be > 0"); return; }
+    if (!price || price <= 0) { setSellErr("Enter a price above 0 credits."); return; }
     setSellLoading(true);
-    setSellProgress("Preparing wallet signature...");
+    setSellProgress("Preparing listing signature...");
     setSellErr("");
     try {
       await createGalleryListingWithMetaMask(
@@ -205,14 +209,14 @@ const LibraryPage: NextPage = () => {
         },
         {
           onProgress: (step) => {
-            if (step === "resolving_wallet") setSellProgress("Resolving wallet provider...");
-            else if (step === "requesting_nonce") setSellProgress("Requesting nonce from coordinator...");
-            else if (step === "awaiting_signature") setSellProgress("Waiting for MetaMask signature...");
-            else if (step === "submitting_listing") setSellProgress("Submitting listing to marketplace...");
+            if (step === "resolving_wallet") setSellProgress("Resolving wallet connection...");
+            else if (step === "requesting_nonce") setSellProgress("Preparing secure listing request...");
+            else if (step === "awaiting_signature") setSellProgress("Waiting for wallet approval...");
+            else if (step === "submitting_listing") setSellProgress("Publishing listing to the marketplace...");
           },
         }
       );
-      setSellMsg("Listed on the marketplace!");
+      setSellMsg("Listing is live in the marketplace.");
       setSellProgress("");
     } catch (err: any) {
       setSellErr(formatApiError(err, "Failed to list."));
@@ -390,8 +394,8 @@ const LibraryPage: NextPage = () => {
             <p className="hero-kicker">My Library</p>
             <h1 className="hero-title">Saved creations</h1>
             <p className="hero-subtitle">
-              Your completed jobs are stored locally in this browser. Nothing is
-              saved on the server.
+              Saved outputs for your {PUBLIC_ALPHA_LABEL.toLowerCase()} session live in this browser.
+              Nothing is stored remotely until you choose to publish it.
             </p>
           </div>
         </section>
@@ -400,23 +404,13 @@ const LibraryPage: NextPage = () => {
           <div className="wallet-status-card wallet-status-card-inline">
             <div className="wallet-status-copy-block">
               <div className="wallet-status-heading-row">
-                <span className={`wallet-status-pill wallet-source-${wallet.source}`}>
-                  {wallet.source === "connected"
-                    ? "Connected wallet"
-                    : wallet.source === "env"
-                    ? "Fallback site wallet"
-                    : "No wallet"}
-                </span>
+                <span className={`wallet-status-pill wallet-source-${wallet.source}`}>{walletSourceLabel}</span>
                 {wallet.providerName && <span className="wallet-status-provider">{wallet.providerName}</span>}
               </div>
               <div className="wallet-status-address">
-                {wallet.activeWallet || "No wallet connected"}
+                {walletIdentityLabel}
               </div>
-              <p className="wallet-status-note">
-                {wallet.error?.message ||
-                  wallet.message ||
-                  "Listing from library requires a MetaMask-connected wallet that matches the job owner. Generator submissions may still belong to NEXT_PUBLIC_HAVNAI_WALLET."}
-              </p>
+              <p className="wallet-status-note">{walletStatusCopy}</p>
             </div>
             <div className="wallet-status-actions">
               <button
@@ -586,14 +580,14 @@ const LibraryPage: NextPage = () => {
           {emptyState && (
             <div className="library-empty">
               <p>
-                No saved items yet. Create something in Generator and it will
-                appear here.
+                No saved items yet. Generate something in Public Alpha, then save the results you
+                want to revisit or publish later.
               </p>
             </div>
           )}
           {noResults && (
             <div className="library-empty">
-              <p>No items match your filters.</p>
+              <p>No saved items match this view. Clear the filters to return to your full library.</p>
               <button
                 type="button"
                 className="job-action-button"
@@ -652,7 +646,7 @@ const LibraryPage: NextPage = () => {
                           />
                         )
                       ) : (
-                        <div className="library-preview-empty">No preview</div>
+                        <div className="library-preview-empty">Preview unavailable</div>
                       )}
                       <span
                         className={`library-badge library-type-${item.type}`}
@@ -705,7 +699,7 @@ const LibraryPage: NextPage = () => {
                               className="job-action-button secondary"
                               onClick={() => openSellForm(item)}
                             >
-                              Sell
+                              List
                             </button>
                           )}
                           <button
@@ -749,8 +743,8 @@ const LibraryPage: NextPage = () => {
           <aside className="job-drawer-panel" role="dialog" onClick={(e) => e.stopPropagation()}>
             <div className="job-drawer-header">
               <div>
-                <p className="job-drawer-kicker">List for Sale</p>
-                <h3>Sell on Marketplace</h3>
+                <p className="job-drawer-kicker">Marketplace Listing</p>
+                <h3>Publish to Marketplace</h3>
               </div>
               <button type="button" className="job-drawer-close" onClick={() => setSellItem(null)}>Close</button>
             </div>
@@ -766,9 +760,12 @@ const LibraryPage: NextPage = () => {
                   </div>
                 </section>
               )}
-              <section className="job-section">
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
-                  <label>
+                <section className="job-section">
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
+                    <p className="job-hint" style={{ marginTop: 0 }}>
+                      Listings appear in the Public Alpha marketplace after wallet approval.
+                    </p>
+                    <label>
                     <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Title</span>
                     <input type="text" className="library-search" value={sellTitle} onChange={(e) => setSellTitle(e.target.value)} />
                   </label>
@@ -790,7 +787,7 @@ const LibraryPage: NextPage = () => {
                     <p style={{ color: "#8ff0b6", textAlign: "center" }}>{sellMsg}</p>
                   ) : (
                     <button type="button" className="job-action-button" disabled={sellLoading} onClick={handleSell}>
-                      {sellLoading ? "Listing..." : "List for Sale"}
+                      {sellLoading ? "Publishing..." : "Publish Listing"}
                     </button>
                   )}
                 </div>

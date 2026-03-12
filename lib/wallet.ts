@@ -434,7 +434,13 @@ async function requireProvider(provider?: InjectedProvider | null): Promise<Inje
   }
   const selection = await ensureInjectedProvider();
   if (!selection.provider) {
-    throw selection.error || new WalletError("wallet_unavailable", "MetaMask not found. Install MetaMask and try again.");
+    throw (
+      selection.error ||
+      new WalletError(
+        "wallet_unavailable",
+        "No compatible wallet was found. Install MetaMask or open a supported browser wallet and try again."
+      )
+    );
   }
   return selection.provider;
 }
@@ -498,19 +504,22 @@ export function normalizeWalletError(error: unknown): WalletError {
   if (code === -32002) {
     return new WalletError(
       "wallet_request_pending",
-      "MetaMask already has a connection request open. Open the extension and finish or cancel it."
+      "A wallet connection request is already open. Finish or cancel it in your wallet."
     );
   }
   if (code === 4001 || /user rejected|rejected/i.test(message)) {
-    return new WalletError("wallet_rejected", "Wallet connection was rejected in MetaMask.");
+    return new WalletError("wallet_rejected", "Wallet connection was rejected.");
   }
   if (/not found|install metamask|wallet unavailable/i.test(message)) {
-    return new WalletError("wallet_unavailable", "MetaMask not found. Install MetaMask and try again.");
+    return new WalletError(
+      "wallet_unavailable",
+      "No compatible wallet was found. Install MetaMask or open a supported browser wallet and try again."
+    );
   }
   if (/multiple wallet/i.test(message)) {
     return new WalletError(
       "wallet_conflict",
-      "Multiple wallet extensions were detected. Disable extra wallet extensions or make MetaMask the active provider."
+      "Multiple wallet extensions were detected. Disable extra wallet extensions or make one wallet the active provider."
     );
   }
   return new WalletError("wallet_unknown", message || "Wallet connection failed.");
@@ -561,9 +570,8 @@ export function formatWalletShort(wallet: string | null | undefined): string {
 }
 
 export function getConnectButtonLabel(snapshot: Pick<WalletSnapshot, "status" | "activeWallet" | "connectedWallet" | "connecting">): string {
-  if (snapshot.connecting || snapshot.status === "prompting") return "Check MetaMask";
-  if (snapshot.status === "attention" || snapshot.status === "error") return "Retry Connection";
-  if (snapshot.connectedWallet) return "Reconnect Wallet";
-  if (snapshot.activeWallet) return "Connect Wallet";
+  if (snapshot.connecting || snapshot.status === "prompting") return "Check Wallet";
+  if (snapshot.status === "attention" || snapshot.status === "error") return "Retry Wallet Connection";
+  if (snapshot.connectedWallet) return "Switch Wallet";
   return "Connect Wallet";
 }

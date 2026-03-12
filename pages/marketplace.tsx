@@ -20,6 +20,7 @@ import {
   Workflow,
 } from "../lib/havnai";
 import { getConnectButtonLabel, isUsableWallet } from "../lib/wallet";
+import { getWalletIdentityLabel, getWalletSourceLabel, getWalletStatusCopy, PUBLIC_ALPHA_LABEL } from "../lib/publicAlpha";
 
 type MarketplaceTab = "gallery" | "workflows";
 type GalleryView = "browse" | "my-listings" | "purchases";
@@ -42,12 +43,6 @@ const GALLERY_SORT_OPTIONS: { value: string; label: string }[] = [
   { value: "price_low", label: "Price low" },
   { value: "price_high", label: "Price high" },
 ];
-
-function describeWalletSource(source: "connected" | "env" | "none"): string {
-  if (source === "connected") return "Connected wallet";
-  if (source === "env") return "Fallback site wallet";
-  return "No wallet";
-}
 
 function formatWallet(wallet?: string | null): string {
   if (!wallet) return "--";
@@ -165,7 +160,9 @@ const MarketplacePage: NextPage = () => {
   const galleryLimit = 24;
   const activeWallet = wallet.activeWallet;
   const connectedWallet = wallet.connectedWallet;
-  const walletSourceLabel = describeWalletSource(wallet.source);
+  const walletSourceLabel = getWalletSourceLabel(wallet.source);
+  const walletIdentityLabel = getWalletIdentityLabel(wallet);
+  const walletStatusCopy = getWalletStatusCopy(wallet, "marketplace");
   const connectLabel = getConnectButtonLabel(wallet);
   const galleryTotalPages = Math.max(1, Math.ceil(galleryTotal / galleryLimit));
   const workflowTotalPages = Math.max(1, Math.ceil(workflowTotal / workflowLimit));
@@ -391,7 +388,7 @@ const MarketplacePage: NextPage = () => {
         },
       });
       setWorkflowCreateSuccess(
-        `Workflow "${workflow.name}" created. Marketplace publishing is not exposed in the web UI yet.`
+        `Workflow "${workflow.name}" created. Public Alpha publishing controls are not exposed in the web UI yet.`
       );
       setFormName("");
       setFormDesc("");
@@ -487,7 +484,7 @@ const MarketplacePage: NextPage = () => {
     : selectedListingReadonly
     ? "Purchased"
     : !connectedWallet
-    ? "Connect MetaMask to buy"
+    ? "Connect wallet to buy"
     : userOwnsSelectedListing
     ? "Your listing"
     : selectedListing.status !== "active"
@@ -508,7 +505,7 @@ const MarketplacePage: NextPage = () => {
             <p className="hero-kicker">Marketplace</p>
             <h1 className="hero-title">Gallery and workflows</h1>
             <p className="hero-subtitle">
-              Buy generated assets with credits, manage your listings, and browse reusable workflows.
+              The {PUBLIC_ALPHA_LABEL.toLowerCase()} marketplace for generated assets, collectible outputs, and reusable workflows.
             </p>
           </div>
         </section>
@@ -544,19 +541,11 @@ const MarketplacePage: NextPage = () => {
                       </span>
                     )}
                   </div>
-                  <div className="marketplace-wallet-label">Active wallet</div>
+                  <div className="marketplace-wallet-label">Active identity</div>
                   <div className="marketplace-wallet-value">
-                    {activeWallet ? activeWallet : "Browse-only mode"}
+                    {walletIdentityLabel}
                   </div>
-                  <p className="wallet-status-note">
-                    {wallet.error?.message ||
-                      wallet.message ||
-                      (wallet.source === "connected"
-                        ? "Gallery purchases use your connected wallet for signatures. Generator outputs may still belong to the env submission wallet."
-                        : wallet.source === "env"
-                        ? "Browsing and wallet views can use the fallback site wallet, but purchases and new gallery listings still require MetaMask signatures."
-                        : "Browse without a wallet. Connect MetaMask to buy listings or create signed gallery actions.")}
-                  </p>
+                  <p className="wallet-status-note">{walletStatusCopy}</p>
                 </div>
                 <div>
                   <div className="marketplace-wallet-label">Credits</div>
@@ -573,9 +562,9 @@ const MarketplacePage: NextPage = () => {
                   >
                     {connectLabel}
                   </button>
-                  {!activeWallet && (
+                  {wallet.source === "none" && (
                     <span className="marketplace-wallet-note">
-                      Browsing works without a wallet. Buying and seller tools require one.
+                      Browsing is live in guest mode. Buying and new listing actions require a connected wallet.
                     </span>
                   )}
                 </div>
@@ -608,6 +597,11 @@ const MarketplacePage: NextPage = () => {
                   Purchases
                 </button>
               </div>
+              {!activeWallet && (
+                <p className="job-hint" style={{ marginTop: "-0.35rem", marginBottom: "1rem" }}>
+                  Connect your wallet to unlock My Listings and Purchases. Public browsing stays open without a wallet.
+                </p>
+              )}
 
               {galleryView === "browse" && (
                 <>
@@ -665,7 +659,7 @@ const MarketplacePage: NextPage = () => {
                   {galleryError && <p className="job-hint error">{galleryError}</p>}
                   {!galleryLoading && galleryCards.length === 0 && (
                     <div className="library-empty">
-                      <p>No listings found yet.</p>
+                      <p>No listings are live yet. Public Alpha gallery inventory appears here as creators publish work from Generator or My Library.</p>
                     </div>
                   )}
                   {!galleryLoading && galleryCards.length > 0 && (
@@ -744,13 +738,13 @@ const MarketplacePage: NextPage = () => {
                     <h3 className="chart-title">My Listings</h3>
                   </div>
                     {!activeWallet && (
-                      <p className="job-hint">Connect a wallet or configure `NEXT_PUBLIC_HAVNAI_WALLET` to manage listings.</p>
+                      <p className="job-hint">Connect your wallet to view wallet-linked listings. Guest mode can browse the public gallery only.</p>
                     )}
                   {activeWallet && myListingsLoading && <p className="library-loading">Loading your listings...</p>}
                   {activeWallet && myListingsError && <p className="job-hint error">{myListingsError}</p>}
                   {activeWallet && !myListingsLoading && myListings.length === 0 && (
                     <div className="library-empty">
-                      <p>No listings yet. Create one from a completed job in Generator or Library.</p>
+                      <p>No active listings yet. Publish a completed result from Generator or My Library to see it here.</p>
                     </div>
                   )}
                   {activeWallet && !myListingsLoading && myListings.length > 0 && (
@@ -792,13 +786,13 @@ const MarketplacePage: NextPage = () => {
                     <h3 className="chart-title">Purchases</h3>
                   </div>
                     {!activeWallet && (
-                      <p className="job-hint">Connect a wallet or configure `NEXT_PUBLIC_HAVNAI_WALLET` to view purchases.</p>
+                      <p className="job-hint">Connect your wallet to view wallet-linked purchases. Guest mode can browse listings without purchasing.</p>
                     )}
                   {activeWallet && purchasesLoading && <p className="library-loading">Loading purchases...</p>}
                   {activeWallet && purchasesError && <p className="job-hint error">{purchasesError}</p>}
                   {activeWallet && !purchasesLoading && purchases.length === 0 && (
                     <div className="library-empty">
-                      <p>No purchases yet.</p>
+                      <p>No purchases yet. When you buy a gallery piece, it will appear here with its source details.</p>
                     </div>
                   )}
                   {activeWallet && !purchasesLoading && purchases.length > 0 && (
@@ -897,7 +891,7 @@ const MarketplacePage: NextPage = () => {
                   {workflowLoading && <p className="library-loading">Loading workflows...</p>}
                   {!workflowLoading && workflows.length === 0 && (
                     <div className="library-empty">
-                      <p>No published workflows found.</p>
+                      <p>Published workflows are still limited in Public Alpha. Check back as the catalog grows or create your own workflow below.</p>
                     </div>
                   )}
                   {!workflowLoading && workflows.length > 0 && (
@@ -958,6 +952,9 @@ const MarketplacePage: NextPage = () => {
                   <div className="chart-header">
                     <h3 className="chart-title">Create a Workflow</h3>
                   </div>
+                  <p className="job-hint" style={{ marginTop: 0 }}>
+                    Save a reusable setup for your own use now. Public Alpha publishing controls are still limited in the web UI.
+                  </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
                     <label>
                       <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Name</span>
@@ -1101,7 +1098,7 @@ const MarketplacePage: NextPage = () => {
                       ) : selectedListing.image_url ? (
                         <img src={selectedListing.image_url} alt={selectedListing.title} />
                       ) : (
-                        <div className="job-preview-empty">Preview not available</div>
+                        <div className="job-preview-empty">Preview unavailable</div>
                       )}
                     </div>
                   </section>
@@ -1114,12 +1111,12 @@ const MarketplacePage: NextPage = () => {
                   <section className="job-section">
                     <h4>Details</h4>
                     <div className="job-details-grid">
-                      <div><span className="job-label">seller</span><span>{selectedListing.seller_wallet}</span></div>
-                      <div><span className="job-label">job_id</span><span>{selectedListing.job_id}</span></div>
-                      <div><span className="job-label">asset_type</span><span>{selectedListing.asset_type}</span></div>
-                      <div><span className="job-label">created</span><span>{formatTimestamp(selectedListing.created_at)}</span></div>
-                      <div><span className="job-label">model</span><span>{formatListingModel(selectedListing)}</span></div>
-                      <div><span className="job-label">category</span><span>{selectedListing.category || "--"}</span></div>
+                      <div><span className="job-label">Seller</span><span>{selectedListing.seller_wallet}</span></div>
+                      <div><span className="job-label">Job ID</span><span>{selectedListing.job_id}</span></div>
+                      <div><span className="job-label">Asset type</span><span>{selectedListing.asset_type}</span></div>
+                      <div><span className="job-label">Created</span><span>{formatTimestamp(selectedListing.created_at)}</span></div>
+                      <div><span className="job-label">Model</span><span>{formatListingModel(selectedListing)}</span></div>
+                      <div><span className="job-label">Category</span><span>{selectedListing.category || "--"}</span></div>
                     </div>
                   </section>
                   {selectedListing.prompt && (
@@ -1162,7 +1159,7 @@ const MarketplacePage: NextPage = () => {
                     </div>
                     {!connectedWallet && (
                       <p className="job-hint">
-                        Connect MetaMask to sign gallery purchases. Fallback env wallets can browse but cannot sign buys.
+                        Connect your wallet to sign this purchase. Site sessions can browse, but buying requires a connected wallet approval.
                       </p>
                     )}
                     {galleryActionError && <p className="job-hint error">{galleryActionError}</p>}

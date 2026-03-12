@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { WalletButton } from "./WalletButton";
+import { PUBLIC_ALPHA_LABEL } from "../lib/publicAlpha";
 
 interface NavItem {
   href: string;
@@ -35,7 +36,10 @@ export function SiteHeader() {
         <Link href="/" className="brand">
           <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
           <div className="brand-text">
-            <span className="brand-stage">Stage 6 &rarr; 7 Alpha</span>
+            <div className="brand-meta">
+              <span className="brand-stage">Stage 6 &rarr; 7 Alpha</span>
+              <span className="brand-status">{PUBLIC_ALPHA_LABEL}</span>
+            </div>
             <span className="brand-name">HavnAI Network</span>
           </div>
         </Link>

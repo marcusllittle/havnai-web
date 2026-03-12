@@ -31,6 +31,12 @@ import { getJobSSE, SSEEvent } from "../lib/sse";
 import { getApiBase } from "../lib/apiBase";
 import { getConnectButtonLabel } from "../lib/wallet";
 import { buildModelOptionLabel } from "../lib/modelMetadata";
+import {
+  getWalletIdentityLabel,
+  getWalletSourceLabel,
+  getWalletStatusCopy,
+  PUBLIC_ALPHA_LABEL,
+} from "../lib/publicAlpha";
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
@@ -234,6 +240,9 @@ const TestPage: React.FC = () => {
   const [credits, setCredits] = useState<CreditBalance | null>(null);
   const inviteSaved = Boolean(savedInviteCode);
   const connectLabel = getConnectButtonLabel(wallet);
+  const walletSourceLabel = getWalletSourceLabel(wallet.source);
+  const walletIdentityLabel = getWalletIdentityLabel(wallet);
+  const walletStatusCopy = getWalletStatusCopy(wallet, "generator");
   const imagePrefillKeyRef = useRef<string>("");
   const videoPrefillKeyRef = useRef<string>("");
   const faceSwapPrefillKeyRef = useRef<string>("");
@@ -551,7 +560,7 @@ const TestPage: React.FC = () => {
         const message =
           err instanceof HavnaiApiError
             ? err.message
-            : err?.message || "Failed to load invite quota.";
+            : err?.message || "Failed to load access limits.";
         setQuota(null);
         setQuotaError(message);
       });
@@ -903,7 +912,7 @@ const TestPage: React.FC = () => {
     const cleanedPrompt = promptAnchor.promptWithoutTag.trim();
     const effectivePrompt = mode === "face_swap" ? trimmed : cleanedPrompt || trimmed;
     if (!activeWallet) {
-      setStatusMessage("Connect a wallet or configure NEXT_PUBLIC_HAVNAI_WALLET before submitting.");
+      setStatusMessage("Connect your wallet or wait for a site session before submitting.");
       return;
     }
     if (mode !== "face_swap" && !trimmed) {
@@ -935,7 +944,7 @@ const TestPage: React.FC = () => {
       return;
     }
     setLoading(true);
-    setStatusMessage("Job submitted…");
+    setStatusMessage("Job submitted to the grid...");
     setImageUrl(undefined);
     setVideoUrl(undefined);
     setRuntimeSeconds(null);
@@ -1004,14 +1013,14 @@ const TestPage: React.FC = () => {
           const cost = err?.data?.cost ?? "?";
           setStatusMessage(`Not enough credits — need ${cost} but you have ${bal}.`);
         } else if (code === "invite_required") {
-          setStatusMessage("Invite code required. Add your code to submit jobs.");
+          setStatusMessage("A Public Alpha access code is required to submit jobs.");
           setInviteOpen(true);
         } else if (code === "rate_limited") {
           const resetLabel = formatResetAt(err?.data?.reset_at);
           setStatusMessage(
             resetLabel
-              ? `Invite quota exceeded. Resets at ${resetLabel}.`
-              : "Invite quota exceeded. Please try again later."
+              ? `This access code has reached its current limit. Resets at ${resetLabel}.`
+              : "This access code has reached its current limit. Please try again later."
           );
         } else if (code === "no_capacity") {
           const message =
@@ -1270,7 +1279,7 @@ const TestPage: React.FC = () => {
     setModel(item.model);
     setRuntimeSeconds(null);
     setJobId(item.jobId);
-    setStatusMessage("Showing from history. Generate again to refresh.");
+    setStatusMessage("Showing a saved result from this browser. Generate again to request a fresh render.");
     const summary: JobSummary = {
       job_id: item.jobId,
       model: item.model,
@@ -1337,10 +1346,11 @@ const TestPage: React.FC = () => {
       <main>
         <section className="generator-hero" id="home">
           <div className="generator-hero-inner">
-            <p className="hero-kicker">Creator Playground</p>
-            <h1 className="generator-hero-title">Create Something Amazing.</h1>
+            <p className="hero-kicker">{PUBLIC_ALPHA_LABEL} Generator</p>
+            <h1 className="generator-hero-title">Create on the Grid.</h1>
             <p className="generator-hero-subtitle">
-              Type a description, optionally pick a model, and let the HavnAI grid render it using the same weighted routing as the live network.
+              Write a prompt, choose a model if you want, and render through the live HavnAI network
+              using the same weighted routing as the rest of Public Alpha.
             </p>
           </div>
         </section>
@@ -1351,12 +1361,12 @@ const TestPage: React.FC = () => {
               <div className="generator-left">
                 <div className="invite-panel">
                   <div className={`invite-badge${inviteSaved ? " is-ok" : " is-missing"}`}>
-                    {inviteSaved ? "Beta Access: OK" : "Invite required"}
+                    {inviteSaved ? "Access code active" : "Access code required"}
                   </div>
                   {quota && (
                     <div className="quota-bars">
                       <div className="quota-bar-group">
-                        <span className="quota-bar-label">Daily</span>
+                        <span className="quota-bar-label">Daily jobs</span>
                         <div className="quota-bar-track">
                           <div
                             className={`quota-bar-fill ${
@@ -1378,7 +1388,7 @@ const TestPage: React.FC = () => {
                         </span>
                       </div>
                       <div className="quota-bar-group">
-                        <span className="quota-bar-label">Active</span>
+                        <span className="quota-bar-label">Concurrent jobs</span>
                         <div className="quota-bar-track">
                           <div
                             className={`quota-bar-fill ${
@@ -1411,22 +1421,11 @@ const TestPage: React.FC = () => {
                   )}
                   <div className="generator-wallet-summary">
                     <div className="generator-wallet-copy">
-                      <span className={`wallet-status-pill wallet-source-${wallet.source}`}>
-                        {wallet.source === "connected"
-                          ? "Connected wallet"
-                          : wallet.source === "env"
-                          ? "Fallback site wallet"
-                          : "No wallet"}
-                      </span>
+                      <span className={`wallet-status-pill wallet-source-${wallet.source}`}>{walletSourceLabel}</span>
                       <p className="generator-help" style={{ marginTop: "0.5rem" }}>
-                        Submission wallet:{" "}
-                        <strong>{activeWallet || "Not configured"}</strong>
+                        Active identity: <strong>{walletIdentityLabel}</strong>
                       </p>
-                      <p className="generator-help">
-                        {wallet.error?.message ||
-                          wallet.message ||
-                          "Generator jobs submit under the active wallet shown here."}
-                      </p>
+                      <p className="generator-help">{walletStatusCopy}</p>
                     </div>
                     <button
                       type="button"
@@ -1442,19 +1441,19 @@ const TestPage: React.FC = () => {
                     className="invite-toggle"
                     onClick={() => setInviteOpen((prev) => !prev)}
                   >
-                    {inviteSaved ? "Manage invite" : "Add invite"}
+                    {inviteSaved ? "Manage access code" : "Add access code"}
                   </button>
                 </div>
                 {inviteOpen && (
                   <div className="invite-form">
                     <label className="generator-label" htmlFor="invite-code">
-                      Invite code
+                      Public Alpha access code
                     </label>
                     <input
                       id="invite-code"
                       type="text"
                       className="generator-input"
-                      placeholder="Enter your invite code"
+                      placeholder="Enter your access code"
                       value={inviteCode}
                       onChange={(e) => setInviteCodeState(e.target.value)}
                     />
@@ -1511,7 +1510,7 @@ const TestPage: React.FC = () => {
                 />
                 {mode === "image" && (
                   <p className="generator-help">
-                    Add <code>[IDENTITY ANCHOR: slug]</code> directly in the prompt when you want face anchoring.
+                    Add <code>[IDENTITY ANCHOR: slug]</code> to an image prompt when you want consistent facial identity across runs.
                   </p>
                 )}
 
@@ -1655,7 +1654,7 @@ const TestPage: React.FC = () => {
                       </p>
                     )}
                     <p className="generator-help">
-                      LoRA controls have been removed from MVP mode for more predictable face-swap output.
+                      LoRA controls stay hidden in Public Alpha for more predictable face-swap output.
                     </p>
                   </div>
                 )}
@@ -1664,10 +1663,10 @@ const TestPage: React.FC = () => {
                   <HavnAIButton
                     label={
                       mode === "face_swap"
-                        ? "Swap face"
+                        ? "Run face swap"
                         : mode === "video"
                         ? "Generate video"
-                        : "Generate"
+                        : "Generate image"
                     }
                     loading={loading}
                     disabled={mode !== "face_swap" && !prompt.trim()}

@@ -27,7 +27,7 @@ const JoinPage: NextPage = () => {
     <>
       <Head>
         <title>Join the HavnAI GPU Grid</title>
-        <meta name="description" content="Full install guide for joining the HavnAI decentralized GPU network. Prerequisites, setup, and troubleshooting." />
+        <meta name="description" content="Public Alpha install guide for joining the HavnAI decentralized GPU network. Prerequisites, setup, and troubleshooting." />
       </Head>
 
       <SiteHeader />
@@ -38,8 +38,8 @@ const JoinPage: NextPage = () => {
             <p className="hero-kicker">Join the Grid</p>
             <h1 className="hero-title">Install a HavnAI Node</h1>
             <p className="hero-subtitle">
-              Connect your GPU to the decentralized network and start earning $HAI for every
-              generation job you complete.
+              Connect your GPU to HavnAI Public Alpha and start serving generation jobs across the
+              live network.
             </p>
           </div>
         </section>
@@ -79,8 +79,8 @@ const JoinPage: NextPage = () => {
             </div>
             <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.75rem" }}>
               Optional flags: <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>--token TOKEN</code> if
-              your coordinator requires one, and <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>--wallet 0x...</code> to
-              pre-fill your reward address.
+              your coordinator issued an operator access token, and <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>--wallet 0x...</code> to
+              pre-fill the reward address you want the node to report under.
             </p>
           </div>
 
@@ -117,7 +117,7 @@ const JoinPage: NextPage = () => {
                   </tr>
                   <tr>
                     <td>Wallet</td>
-                    <td>An EVM-compatible wallet address (e.g. MetaMask). Rewards are tracked against this address (simulated during beta).</td>
+                    <td>An EVM-compatible wallet address (for example MetaMask). Public Alpha reward tracking is tied to this address, with Sepolia settlement flows continuing to mature.</td>
                   </tr>
                 </tbody>
               </table>
@@ -135,7 +135,7 @@ const JoinPage: NextPage = () => {
                 <li>Sets up a Python virtual environment at <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>~/.havnai/venv</code></li>
                 <li>Downloads the node client and model registry from the coordinator</li>
                 <li>Installs Python dependencies (PyTorch, diffusers, etc.)</li>
-                <li>Creates a <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>~/.havnai/.env</code> config file where you set your wallet and token</li>
+                <li>Creates a <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>~/.havnai/.env</code> config file where you set your wallet and any access token your coordinator requires</li>
                 <li>Optionally sets up a systemd service (Linux) or launchd agent (macOS) so your node runs on boot</li>
               </ol>
             </div>
@@ -152,7 +152,7 @@ const JoinPage: NextPage = () => {
               <pre style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
                 <code>{`# Edit ~/.havnai/.env\nWALLET=0xYourWalletAddressHere`}</code>
               </pre>
-              <p style={{ marginBottom: "0.5rem" }}><strong style={{ color: "var(--text)" }}>2. Set the join token (if required)</strong></p>
+              <p style={{ marginBottom: "0.5rem" }}><strong style={{ color: "var(--text)" }}>2. Add your operator access token if one was issued</strong></p>
               <pre style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
                 <code>{`# In ~/.havnai/.env\nJOIN_TOKEN=your-token-here`}</code>
               </pre>
@@ -177,7 +177,7 @@ const JoinPage: NextPage = () => {
             <div style={{ color: "var(--text-muted)", lineHeight: 1.7 }}>
               <p style={{ marginBottom: "0.75rem" }}>
                 If your GPU has 16 GB+ VRAM, you can run video generation jobs using LTX-Video.
-                Video jobs earn a 2× reward bonus.
+                Video jobs carry higher reward weighting during Public Alpha.
               </p>
               <p style={{ marginBottom: "0.5rem" }}>
                 The node client automatically downloads video models when it first receives a video
@@ -231,7 +231,7 @@ const JoinPage: NextPage = () => {
           {/* Contact */}
           <div className="chart-section" style={{ textAlign: "center", padding: "2rem" }}>
             <p style={{ color: "var(--text-muted)", marginBottom: "0.75rem" }}>
-              Need help or a join token? Reach out:
+              Need install help or an operator access token? Reach out:
             </p>
             <a href="mailto:support@joinhavn.io" className="job-action-button" style={{ textDecoration: "none", display: "inline-block" }}>
               support@joinhavn.io

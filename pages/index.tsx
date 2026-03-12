@@ -6,6 +6,7 @@ import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
 import { fetchJobWithResult, JobDetailResponse, ResultResponse, resolveAssetUrl } from "../lib/havnai";
 import { getApiBase } from "../lib/apiBase";
+import { PUBLIC_ALPHA_LABEL } from "../lib/publicAlpha";
 
 const HomePage: NextPage = () => {
   const wallet = useWallet();
@@ -150,15 +151,15 @@ const HomePage: NextPage = () => {
   return (
     <>
       <Head>
-        <title>HavnAI Network — Own Your Intelligence</title>
+        <title>HavnAI Network Public Alpha — Own Your Intelligence</title>
         <meta
           name="description"
-          content="HavnAI is a decentralized GPU network for AI image generation, face swap, and video jobs when video-capable nodes are online."
+          content="HavnAI Public Alpha is a decentralized GPU network for AI image generation, face swap, and video jobs when video-capable nodes are online."
         />
-        <meta property="og:title" content="HavnAI Network — Own Your Intelligence" />
+        <meta property="og:title" content="HavnAI Network Public Alpha — Own Your Intelligence" />
         <meta
           property="og:description"
-          content="A decentralized GPU network for AI image generation, face swap, and video jobs when video-capable nodes are online."
+          content="HavnAI Public Alpha is a decentralized GPU network for AI image generation, face swap, and video jobs when video-capable nodes are online."
         />
         <meta property="og:type" content="website" />
       </Head>
@@ -170,22 +171,22 @@ const HomePage: NextPage = () => {
         <section id="home" className="hero">
           <div className="hero-inner">
             <div className="hero-content">
-              <p className="hero-kicker">Decentralized GPU Intelligence</p>
+              <p className="hero-kicker">{PUBLIC_ALPHA_LABEL} • Decentralized GPU Intelligence</p>
               <h1 className="hero-title">OWN YOUR INTELLIGENCE</h1>
               <p className="hero-subtitle">
-                A decentralized GPU network for AI creation. Node operators earn{" "}
-                <strong>$HAI</strong> by serving SDXL image jobs, SDXL face-swap jobs, and video jobs
-                whenever video-capable nodes are online.
+                HavnAI is a decentralized GPU network for AI creation in Public Alpha. Node operators
+                serve SDXL image jobs, SDXL face-swap jobs, and video jobs whenever compatible video
+                capacity is online.
               </p>
               <div className="hero-install-note">
-                <h3>Join the HavnAI GPU Grid</h3>
+                <h3>Run a HavnAI Node</h3>
                 <p>Run this on your GPU machine to install the node:</p>
                 <pre>
                   <code>{`curl -fsSL ${installBase}/installers/install-node.sh \n  | bash -s -- --server ${installBase}`}</code>
                 </pre>
                 <p>
-                  Full prerequisites, WAN I2V setup, systemd steps, and troubleshooting live on the
-                  coordinator’s install guide.
+                  Full prerequisites, video setup, service management, and troubleshooting live in the
+                  node install guide.
                 </p>
                 <a
                   href="/join"
@@ -233,7 +234,7 @@ const HomePage: NextPage = () => {
         <section id="how" className="section">
           <div className="section-header">
             <h2>How It Works</h2>
-            <p>From GPU to $HAI rewards in four steps.</p>
+            <p>From GPU availability to tracked $HAI rewards in four steps.</p>
           </div>
           <div className="steps-grid">
             <article className="step-card">
@@ -257,7 +258,7 @@ const HomePage: NextPage = () => {
               <h3>Your GPU Generates</h3>
               <p>
                 Your node runs available models from the live registry and returns outputs. The
-                current MVP focuses on SDXL image + face swap, with video jobs routed when LTX2
+                current Public Alpha focuses on SDXL image + face swap, with video jobs routed when LTX2
                 capacity is online.
               </p>
             </article>
@@ -265,8 +266,8 @@ const HomePage: NextPage = () => {
               <div className="step-icon">4</div>
               <h3>Earn $HAI</h3>
               <p>
-                Every completed job earns $HAI rewards. Payouts scale with model tier, pipeline cost,
-                and runtime.
+                Every completed job earns tracked $HAI rewards. Reward weighting scales with model
+                tier, pipeline cost, and runtime throughout Public Alpha.
               </p>
             </article>
           </div>
@@ -328,8 +329,8 @@ const HomePage: NextPage = () => {
           <div className="section-header">
             <h2>Dynamic $HAI Rewards</h2>
             <p>
-              Rewards scale with model tier, pipeline cost, and runtime. Better models earn more per
-              job.
+              Reward tracking scales with model tier, pipeline cost, and runtime. Better models earn
+              more per job.
             </p>
           </div>
           <div className="table-wrapper">
@@ -377,8 +378,8 @@ const HomePage: NextPage = () => {
             </table>
           </div>
           <p style={{ marginTop: "0.75rem", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-            SDXL pipelines earn an additional 1.5× compute bonus. Video (LTX2) earns 2.0×. Longer
-            runtimes also scale rewards proportionally.
+            SDXL pipelines earn an additional 1.5× compute bonus. Video (LTX2) earns 2.0×. Public
+            Alpha reward tracking may continue to evolve as settlement rails mature.
           </p>
         </section>
 
@@ -386,7 +387,7 @@ const HomePage: NextPage = () => {
         <section className="section live-section">
           <div className="section-header">
             <h2>Live Jobs Snapshot</h2>
-            <p>Recent public jobs, straight from the grid.</p>
+            <p>Recent public jobs flowing through the grid right now.</p>
           </div>
           <div className="live-layout">
             <div className="table-wrapper">
@@ -478,7 +479,7 @@ const HomePage: NextPage = () => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={5}>No recent public jobs reported yet.</td>
+                      <td colSpan={5}>No recent Public Alpha jobs are visible yet. This feed updates automatically as new work completes.</td>
                     </tr>
                   )}
                 </tbody>
@@ -508,10 +509,11 @@ const HomePage: NextPage = () => {
         <section id="join" className="section join-section">
           <div className="join-inner">
             <div className="join-copy">
-              <h2>Join Public Beta</h2>
+              <h2>Join Public Alpha</h2>
               <p>
-                We are running SDXL image + face-swap workloads and video when compatible nodes are online.
-                If you have a capable NVIDIA GPU and want to earn $HAI by powering generation, join the alpha.
+                HavnAI Public Alpha is live for SDXL image generation, face swap, and video whenever
+                compatible nodes are online. If you have a capable NVIDIA GPU and want to power the
+                network, operator onboarding is open now.
               </p>
               <ul>
                 <li>12&nbsp;GB+ NVIDIA GPU (3060 / 3080 / 4090 class).</li>
@@ -527,7 +529,8 @@ const HomePage: NextPage = () => {
                 View Live Dashboard
               </a>
               <p className="join-note">
-                The install guide covers prerequisites, GPU setup, WAN I2V configuration, and systemd steps.
+                The install guide covers prerequisites, reward address setup, optional access tokens,
+                GPU setup, video prerequisites, and service management.
               </p>
             </div>
           </div>
@@ -542,7 +545,7 @@ const HomePage: NextPage = () => {
               <img src="/HavnAI-logo.png" alt="HavnAI" className="footer-logo" />
               <div>
                 <div className="footer-brand-name">HavnAI</div>
-                <p className="footer-tagline">Decentralized GPU network for AI creators.</p>
+                <p className="footer-tagline">Public Alpha decentralized GPU network for AI creators.</p>
               </div>
             </div>
             <p className="footer-copy">© 2026 HavnAI Network</p>
