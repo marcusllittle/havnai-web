@@ -558,7 +558,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   className="job-action-button secondary"
                   onClick={() => setListingOpen((value) => !value)}
                 >
-                  {listingOpen ? "Close listing form" : "List in Marketplace"}
+                  {listingOpen ? "Close listing form" : "Publish to Marketplace"}
                 </button>
               )}
             </div>
@@ -576,7 +576,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
             {showListingAction && listingOpen && (
               <div className="marketplace-listing-form">
                 <p className="job-hint" style={{ marginTop: 0 }}>
-                  Publish this result to the Public Alpha marketplace after approving the wallet request.
+                  Publish this result to the Public Alpha marketplace after one wallet approval.
                 </p>
                 <label>
                   <span className="job-label">Title</span>

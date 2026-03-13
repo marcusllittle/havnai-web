@@ -211,7 +211,7 @@ const WalletPage: NextPage = () => {
           <div className="page-hero-inner">
             <p className="hero-kicker">Wallet</p>
             <h1 className="hero-title">Your Wallet</h1>
-            <p className="hero-subtitle">View your {PUBLIC_ALPHA_LABEL.toLowerCase()} credits, tracked HAI, and Sepolia on-chain balance.</p>
+            <p className="hero-subtitle">View your Public Alpha credits, tracked HAI, Sepolia balance, and funding history in one place.</p>
           </div>
         </section>
 
@@ -244,7 +244,7 @@ const WalletPage: NextPage = () => {
 
           <div className="chart-section">
             <div className="chart-header">
-              <h3 className="chart-title">Public Alpha Wallet Guide (Sepolia)</h3>
+              <h3 className="chart-title">Public Alpha Wallet Guide</h3>
             </div>
             <ol style={{ color: "var(--text-muted)", lineHeight: 1.6, paddingLeft: "1.2rem", margin: 0 }}>
               <li>Connect your wallet and confirm the active network is Sepolia.</li>
@@ -259,7 +259,7 @@ const WalletPage: NextPage = () => {
                 </a>.
               </li>
               <li>Use Buy Credits to fund credits with HAI at the current Public Alpha rate.</li>
-              <li>This page shows your credits, on-chain HAI, and Sepolia funding/request history.</li>
+              <li>This page shows credits, on-chain HAI, tracked rewards, and Sepolia funding/request history for the active identity above.</li>
             </ol>
           </div>
 
@@ -311,8 +311,8 @@ const WalletPage: NextPage = () => {
               </div>
               <p style={{ color: "var(--text-muted)", marginBottom: "1rem", fontSize: "0.85rem" }}>
                 You have <strong style={{ color: "#8ff0b6" }}>{rewards.claimable.toFixed(4)} HAI</strong> available to claim.
-                Once on-chain settlement is enabled on this deployment, claiming will trigger a
-                transaction to your wallet.
+                Claiming is shown here for transparency. Once on-chain settlement is enabled on this
+                deployment, claiming will trigger a transaction to your wallet.
               </p>
               <button type="button" className="job-action-button" disabled={claiming} onClick={handleClaim}>
                 {claiming ? "Claiming..." : `Claim ${rewards.claimable.toFixed(4)} HAI`}
@@ -342,7 +342,7 @@ const WalletPage: NextPage = () => {
             ) : fundingError ? (
               <p className="job-hint error">{fundingError}</p>
             ) : fundings.length === 0 ? (
-              <p className="job-hint">No HAI funding transactions have been recorded for this identity yet.</p>
+              <p className="job-hint">No HAI-to-credit funding has been recorded for this identity yet.</p>
             ) : (
               <div className="table-wrapper">
                 <table className="rewards-table">
@@ -382,22 +382,22 @@ const WalletPage: NextPage = () => {
               </div>
             )}
             <p className="job-hint" style={{ marginTop: "0.6rem" }}>
-              Pending means backend verification is still in progress. Failed indicates the transfer could not be verified or credited.
+              Pending means the transfer is still being verified before credits are issued. Failed indicates the transfer could not be verified or credited.
             </p>
           </div>
 
           <div className="chart-section">
             <div className="chart-header">
-              <h3 className="chart-title">Request Test HAI Review</h3>
+              <h3 className="chart-title">Request Test HAI</h3>
             </div>
             <p className="job-hint" style={{ marginBottom: "0.8rem" }}>
-              Test HAI requests are reviewed manually by the HavnAI team. This process is intentionally
-              gated during Public Alpha and may be allowlist-restricted.
+              Test HAI requests are reviewed manually by the HavnAI team. Availability may be limited
+              or allowlist-based during Public Alpha.
             </p>
             {testerConfig && (
               <p className="job-hint" style={{ marginBottom: "0.8rem" }}>
                 {testerDistributionEnabled
-                  ? `Enabled · Default request ${testerConfig.default_request_hai} HAI · Cooldown ${testerConfig.cooldown_hours}h`
+                  ? `Available now · Default request ${testerConfig.default_request_hai} HAI · Cooldown ${testerConfig.cooldown_hours}h`
                   : "Test HAI review requests are currently unavailable on this coordinator."}
               </p>
             )}

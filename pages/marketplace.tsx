@@ -388,7 +388,7 @@ const MarketplacePage: NextPage = () => {
         },
       });
       setWorkflowCreateSuccess(
-        `Workflow "${workflow.name}" created. Public Alpha publishing controls are not exposed in the web UI yet.`
+        `Workflow "${workflow.name}" saved. Shared workflow publishing is still limited in the Public Alpha web UI.`
       );
       setFormName("");
       setFormDesc("");
@@ -505,7 +505,8 @@ const MarketplacePage: NextPage = () => {
             <p className="hero-kicker">Marketplace</p>
             <h1 className="hero-title">Gallery and workflows</h1>
             <p className="hero-subtitle">
-              The {PUBLIC_ALPHA_LABEL.toLowerCase()} marketplace for generated assets, collectible outputs, and reusable workflows.
+              Browse published Public Alpha creations and reusable workflows. Gallery inventory grows
+              as creators list work from Generator and My Library.
             </p>
           </div>
         </section>
@@ -564,7 +565,7 @@ const MarketplacePage: NextPage = () => {
                   </button>
                   {wallet.source === "none" && (
                     <span className="marketplace-wallet-note">
-                      Browsing is live in guest mode. Buying and new listing actions require a connected wallet.
+                      Gallery browsing is open without a wallet. Buying and new listing actions require wallet approval.
                     </span>
                   )}
                 </div>
@@ -599,7 +600,7 @@ const MarketplacePage: NextPage = () => {
               </div>
               {!activeWallet && (
                 <p className="job-hint" style={{ marginTop: "-0.35rem", marginBottom: "1rem" }}>
-                  Connect your wallet to unlock My Listings and Purchases. Public browsing stays open without a wallet.
+                  Public browsing stays open without a wallet. Connect a wallet to unlock My Listings and Purchases.
                 </p>
               )}
 
@@ -659,7 +660,7 @@ const MarketplacePage: NextPage = () => {
                   {galleryError && <p className="job-hint error">{galleryError}</p>}
                   {!galleryLoading && galleryCards.length === 0 && (
                     <div className="library-empty">
-                      <p>No listings are live yet. Public Alpha gallery inventory appears here as creators publish work from Generator or My Library.</p>
+                      <p>No gallery listings are live yet. Published Public Alpha creations will appear here as creators list work from Generator or My Library.</p>
                     </div>
                   )}
                   {!galleryLoading && galleryCards.length > 0 && (
@@ -738,13 +739,13 @@ const MarketplacePage: NextPage = () => {
                     <h3 className="chart-title">My Listings</h3>
                   </div>
                     {!activeWallet && (
-                      <p className="job-hint">Connect your wallet to view wallet-linked listings. Guest mode can browse the public gallery only.</p>
+                      <p className="job-hint">Connect your wallet to view wallet-linked listings. Guest sessions can browse the public gallery only.</p>
                     )}
                   {activeWallet && myListingsLoading && <p className="library-loading">Loading your listings...</p>}
                   {activeWallet && myListingsError && <p className="job-hint error">{myListingsError}</p>}
                   {activeWallet && !myListingsLoading && myListings.length === 0 && (
                     <div className="library-empty">
-                      <p>No active listings yet. Publish a completed result from Generator or My Library to see it here.</p>
+                      <p>No active listings yet. Publish a finished result from Generator or My Library to start your storefront.</p>
                     </div>
                   )}
                   {activeWallet && !myListingsLoading && myListings.length > 0 && (
@@ -786,13 +787,13 @@ const MarketplacePage: NextPage = () => {
                     <h3 className="chart-title">Purchases</h3>
                   </div>
                     {!activeWallet && (
-                      <p className="job-hint">Connect your wallet to view wallet-linked purchases. Guest mode can browse listings without purchasing.</p>
+                      <p className="job-hint">Connect your wallet to view wallet-linked purchases. Guest sessions can browse listings without purchasing.</p>
                     )}
                   {activeWallet && purchasesLoading && <p className="library-loading">Loading purchases...</p>}
                   {activeWallet && purchasesError && <p className="job-hint error">{purchasesError}</p>}
                   {activeWallet && !purchasesLoading && purchases.length === 0 && (
                     <div className="library-empty">
-                      <p>No purchases yet. When you buy a gallery piece, it will appear here with its source details.</p>
+                      <p>No purchases yet. Bought gallery pieces will appear here with their source details and delivery history.</p>
                     </div>
                   )}
                   {activeWallet && !purchasesLoading && purchases.length > 0 && (
@@ -891,7 +892,7 @@ const MarketplacePage: NextPage = () => {
                   {workflowLoading && <p className="library-loading">Loading workflows...</p>}
                   {!workflowLoading && workflows.length === 0 && (
                     <div className="library-empty">
-                      <p>Published workflows are still limited in Public Alpha. Check back as the catalog grows or create your own workflow below.</p>
+                      <p>Shared workflows are still early in Public Alpha. Check back as the catalog grows, or save your own reusable workflow below.</p>
                     </div>
                   )}
                   {!workflowLoading && workflows.length > 0 && (
@@ -953,7 +954,7 @@ const MarketplacePage: NextPage = () => {
                     <h3 className="chart-title">Create a Workflow</h3>
                   </div>
                   <p className="job-hint" style={{ marginTop: 0 }}>
-                    Save a reusable setup for your own use now. Public Alpha publishing controls are still limited in the web UI.
+                    Save a reusable setup for your own account now. Shared workflow publishing is still limited in the Public Alpha web UI.
                   </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
                     <label>
@@ -997,9 +998,12 @@ const MarketplacePage: NextPage = () => {
                         className="library-search"
                         value={formModel}
                         onChange={(event) => setFormModel(event.target.value)}
-                        placeholder="auto"
+                        placeholder="Optional model slug"
                       />
                     </label>
+                    <p className="job-hint" style={{ marginTop: "-0.1rem" }}>
+                      Leave the model field blank if you want routing to choose from compatible live capacity.
+                    </p>
                     <label>
                       <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Prompt Template</span>
                       <textarea
@@ -1159,7 +1163,7 @@ const MarketplacePage: NextPage = () => {
                     </div>
                     {!connectedWallet && (
                       <p className="job-hint">
-                        Connect your wallet to sign this purchase. Site sessions can browse, but buying requires a connected wallet approval.
+                        Connect your wallet to approve this purchase. Browsing is open, but buying always requires a wallet signature.
                       </p>
                     )}
                     {galleryActionError && <p className="job-hint error">{galleryActionError}</p>}

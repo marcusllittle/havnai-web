@@ -50,16 +50,16 @@ const AnalyticsPage: NextPage = () => {
           <div className="page-hero-inner">
             <p className="hero-kicker">Analytics</p>
             <h1 className="hero-title">Network Dashboard</h1>
-            <p className="hero-subtitle">Live Public Alpha job statistics, credit activity, and tracked reward breakdowns across the HavnAI network.</p>
+            <p className="hero-subtitle">Live Public Alpha volume, credit activity, and tracked reward data across the HavnAI network.</p>
           </div>
         </section>
 
         <section className="page-container">
           <div className="chart-section">
             <p style={{ margin: 0, color: "var(--text-muted)", lineHeight: 1.6 }}>
-              These metrics reflect live coordinator activity. Credits, HAI tracking, and payment
-              rails are still operating in Public Alpha, so Sepolia and testnet-era behavior may be
-              visible in the data.
+              These metrics come directly from live coordinator activity so creators and operators
+              can see current network volume. Credits, HAI tracking, and payment rails are still
+              operating in Public Alpha, so Sepolia and testnet-era behavior may be visible in the data.
             </p>
           </div>
 
@@ -160,7 +160,7 @@ const AnalyticsPage: NextPage = () => {
           {!loading && costs && Array.isArray(costs.by_model) && costs.by_model.length > 0 && (
             <div className="chart-section">
               <div className="chart-header">
-                <h3 className="chart-title">Cost Breakdown by Model</h3>
+                <h3 className="chart-title">Credit Usage by Model</h3>
                 <span className="stat-sub">Total: {(costs.total_spent ?? 0).toFixed(1)} credits</span>
               </div>
               <table className="data-table">
