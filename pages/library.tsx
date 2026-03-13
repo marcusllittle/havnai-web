@@ -216,7 +216,7 @@ const LibraryPage: NextPage = () => {
           },
         }
       );
-      setSellMsg("Listing is live in the marketplace.");
+      setSellMsg("Listing is now live in the Public Alpha marketplace.");
       setSellProgress("");
     } catch (err: any) {
       setSellErr(formatApiError(err, "Failed to list."));
@@ -394,8 +394,8 @@ const LibraryPage: NextPage = () => {
             <p className="hero-kicker">My Library</p>
             <h1 className="hero-title">Saved creations</h1>
             <p className="hero-subtitle">
-              Saved outputs for your {PUBLIC_ALPHA_LABEL.toLowerCase()} session live in this browser.
-              Nothing is stored remotely until you choose to publish it.
+              Saved outputs from this browser stay local until you choose to publish them to the
+              Public Alpha marketplace.
             </p>
           </div>
         </section>
@@ -580,8 +580,8 @@ const LibraryPage: NextPage = () => {
           {emptyState && (
             <div className="library-empty">
               <p>
-                No saved items yet. Generate something in Public Alpha, then save the results you
-                want to revisit or publish later.
+                No saved items yet. Render something in Public Alpha, then save the results you want
+                to revisit or publish later.
               </p>
             </div>
           )}
@@ -699,7 +699,7 @@ const LibraryPage: NextPage = () => {
                               className="job-action-button secondary"
                               onClick={() => openSellForm(item)}
                             >
-                              List
+                              List for Sale
                             </button>
                           )}
                           <button
@@ -763,7 +763,8 @@ const LibraryPage: NextPage = () => {
                 <section className="job-section">
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
                     <p className="job-hint" style={{ marginTop: 0 }}>
-                      Listings appear in the Public Alpha marketplace after wallet approval.
+                      Publishing a listing requires one wallet approval. Once confirmed, the piece
+                      appears in the Public Alpha marketplace.
                     </p>
                     <label>
                     <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Title</span>
