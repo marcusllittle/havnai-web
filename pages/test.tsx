@@ -40,10 +40,8 @@ import {
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
-// Fallback models for offline development
-const FALLBACK_IMAGE_MODELS: { id: string; label: string }[] = [
-  { id: "auto", label: "Auto (let grid choose best)" },
-];
+// Keep the image selector empty until live model capacity is loaded.
+const FALLBACK_IMAGE_MODELS: { id: string; label: string }[] = [];
 
 const IDENTITY_ANCHOR_TAG_RE = /^\[\s*identity\s+anchor\s*:\s*([A-Za-z0-9_-]+)\s*\]$/i;
 const IDENTITY_ANCHOR_BARE_RE = /^\[\s*identity\s+anchor\s*\]$/i;
@@ -189,7 +187,7 @@ const TestPage: React.FC = () => {
   const [runtimeSeconds, setRuntimeSeconds] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [advancedOpen, setAdvancedOpen] = useState(true);
-  const [selectedModel, setSelectedModel] = useState<string>("auto");
+  const [selectedModel, setSelectedModel] = useState<string>("");
   const [imageModels, setImageModels] = useState<{ id: string; label: string }[]>(FALLBACK_IMAGE_MODELS);
   const [videoModels, setVideoModels] = useState<{ id: string; label: string }[]>([]);
   const [faceSwapModels, setFaceSwapModels] = useState<{ id: string; label: string }[]>([]);
@@ -274,11 +272,11 @@ const TestPage: React.FC = () => {
   }, []);
 
   // Determine current model's pipeline for LoRA filtering
-  const currentPipeline = selectedModel && selectedModel !== "auto"
+  const currentPipeline = selectedModel
     ? modelPipelines[selectedModel.toLowerCase()] || ""
     : "";
   const selectedImageModelMeta =
-    selectedModel && selectedModel !== "auto" ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
+    selectedModel ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
   const selectedVideoModelMeta =
     mode === "video" && selectedModel ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
   const selectedFaceSwapModelMeta = faceswapModel
@@ -388,13 +386,10 @@ const TestPage: React.FC = () => {
         });
 
         // Transform to dropdown format with tier badges and clean names
-        const imageOptions = [
-          { id: "auto", label: "Auto (let grid choose best)" },
-          ...imageModelsData.map((m) => ({
-            id: m.name,
-            label: buildModelOptionLabel(m, String(m.pipeline || "").toUpperCase()),
-          })),
-        ];
+        const imageOptions = imageModelsData.map((m) => ({
+          id: m.name,
+          label: buildModelOptionLabel(m, String(m.pipeline || "").toUpperCase()),
+        }));
 
         const videoOptions = videoModelsData.map((m) => {
           const isAnimateDiff = String(m.task_type || "").toUpperCase() === "ANIMATEDIFF";
@@ -456,8 +451,8 @@ const TestPage: React.FC = () => {
       setFaceSourceName(undefined);
       setFaceswapGuidance("");
       setSteps("30");
-      // Set default model to auto for image mode
-      setSelectedModel("auto");
+      // Default image mode to the first live model when available.
+      setSelectedModel(imageModels.length > 0 ? imageModels[0].id : "");
     } else if (mode === "video") {
       // Reset sampler (not used in video mode)
       setSampler("");
@@ -487,10 +482,10 @@ const TestPage: React.FC = () => {
       setSelectedModel(faceSwapModels.length > 0 ? faceSwapModels[0].id : "");
       setFaceswapModel(faceSwapModels.length > 0 ? faceSwapModels[0].id : "");
     }
-  }, [mode, videoModels, faceSwapModels]);
+  }, [mode, imageModels, videoModels, faceSwapModels]);
 
   useEffect(() => {
-    if (mode !== "image" || !selectedImageModelMeta || selectedModel === "auto") {
+    if (mode !== "image" || !selectedImageModelMeta) {
       if (mode !== "image") imagePrefillKeyRef.current = "";
       return;
     }
@@ -927,6 +922,14 @@ const TestPage: React.FC = () => {
       setStatusMessage(promptAnchor.error);
       return;
     }
+    if (mode === "image" && imageModels.length === 0) {
+      setStatusMessage("No online image capacity right now. Try again when an image model is available.");
+      return;
+    }
+    if (mode === "image" && !selectedModel) {
+      setStatusMessage("Select an available image model before generating.");
+      return;
+    }
     if (mode === "video" && videoModels.length === 0) {
       setStatusMessage("No online video capacity right now. Try again when a video node is online.");
       return;
@@ -960,7 +963,7 @@ const TestPage: React.FC = () => {
         const options = buildOptions();
         const id = await submitAutoJob(
           trimmed,
-          selectedModel === "auto" ? undefined : selectedModel,
+          selectedModel || undefined,
           "",
           options
         );
@@ -1724,7 +1727,7 @@ const TestPage: React.FC = () => {
                         ))}
                       </select>
                       <p className="generator-help">
-                        Pick a specific model or keep Auto for weighted routing.
+                        Pick the image model you want to run for this render.
                       </p>
                       <span className="adv-group-title">Generation settings</span>
                       <label className="generator-label" htmlFor="image-steps">
