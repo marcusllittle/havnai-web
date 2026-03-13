@@ -695,7 +695,7 @@ const PricingPage: NextPage = () => {
 
       <footer className="site-footer">
         <div className="footer-inner">
-          <p className="footer-copy">© 2026 HavnAI Network</p>
+          <p className="footer-copy">&copy; 2025 HavnAI Network</p>
         </div>
       </footer>
     </>

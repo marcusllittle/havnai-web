@@ -548,7 +548,7 @@ const HomePage: NextPage = () => {
                 <p className="footer-tagline">Public Alpha decentralized GPU network for AI creators.</p>
               </div>
             </div>
-            <p className="footer-copy">© 2026 HavnAI Network</p>
+            <p className="footer-copy">&copy; 2025 HavnAI Network</p>
           </div>
 
           <div className="footer-col footer-col-center">
