@@ -273,7 +273,7 @@ const WALLET_SIGN_TIMEOUT_MS = Number.parseInt(
   10
 );
 const WALLET_PROVIDER_TIMEOUT_MS = Number.parseInt(
-  String(process.env.NEXT_PUBLIC_WALLET_PROVIDER_TIMEOUT_MS || "20000"),
+  String(process.env.NEXT_PUBLIC_WALLET_PROVIDER_TIMEOUT_MS || "30000"),
   10
 );
 const ENABLE_LEGACY_WAN_STATUS =
@@ -862,6 +862,18 @@ async function signWalletNonce(
   let lastError: unknown = null;
   for (const candidate of candidates) {
     try {
+      // Fast health check: skip providers that don't respond to a basic RPC
+      // call within 3s. This avoids waiting 30s on a provider that will never
+      // show a popup (e.g. Coinbase Wallet pretending to be MetaMask).
+      try {
+        await withWalletTimeout(
+          Promise.resolve((candidate as any).request({ method: "eth_chainId" })),
+          "Provider did not respond to health check.",
+          3000
+        );
+      } catch {
+        continue;
+      }
       const provider = new BrowserProvider(candidate as any);
       const signer = await withWalletTimeout(
         provider.getSigner(),
@@ -896,6 +908,11 @@ async function signWalletNonce(
       };
     } catch (error) {
       lastError = error;
+      // If MetaMask itself timed out, don't try other providers — they share
+      // the same stuck state and will just cascade more timeouts.
+      if (error instanceof HavnaiApiError && error.code === "wallet_request_timeout") {
+        break;
+      }
     }
   }
 
