@@ -19,6 +19,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/nodes", label: "Nodes" },
   { href: "/marketplace", label: "Marketplace" },
   { href: "/join", label: "Join" },
+  { href: "https://astra.joinhavn.io", label: "Play Astra", external: true },
 ];
 
 function isActive(pathname: string, href: string): boolean {
