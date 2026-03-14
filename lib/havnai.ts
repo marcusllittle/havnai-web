@@ -806,6 +806,8 @@ type WalletNoncePurpose =
   | "convert_credits_to_hai"
   | "gallery_purchase"
   | "gallery_list"
+  | "gallery_relist"
+  | "gallery_delist"
   | "identity_anchor_create"
   | "identity_anchor_delete";
 
@@ -1530,6 +1532,7 @@ export interface GalleryListing {
   id: number;
   job_id: string;
   seller_wallet: string;
+  owner_wallet: string;
   title: string;
   description: string;
   price_credits: number;
@@ -1552,6 +1555,17 @@ export interface GalleryListing {
   already_listed?: boolean;
   created_at: number;
   updated_at: number;
+}
+
+export interface GalleryOwnershipEvent {
+  id: number;
+  job_id: string;
+  listing_id: number | null;
+  from_wallet: string;
+  to_wallet: string;
+  event_type: "mint" | "sale" | "relist" | string;
+  price_credits: number;
+  created_at: number;
 }
 
 export interface GalleryBrowseResponse {
@@ -1624,6 +1638,7 @@ function normalizeGalleryListing(raw: any): GalleryListing {
     id: Number(raw?.id || 0),
     job_id: String(raw?.job_id || ""),
     seller_wallet: String(raw?.seller_wallet || ""),
+    owner_wallet: String(raw?.owner_wallet || raw?.seller_wallet || ""),
     title: String(raw?.title || ""),
     description: String(raw?.description || ""),
     price_credits: Number(raw?.price_credits || 0),
@@ -1828,13 +1843,72 @@ export async function purchaseGalleryListing(
 }
 
 export async function delistGalleryListing(listingId: number, wallet: string = WALLET): Promise<{ ok: boolean }> {
+  const signed = await signWalletNonce({
+    wallet,
+    amount: 0,
+    purpose: "gallery_delist",
+    listing_id: listingId,
+  });
   const res = await fetchWithTimeout(apiUrl(`/gallery/listings/${listingId}`), {
     method: "DELETE",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet }),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as { ok: boolean };
+}
+
+export async function fetchGalleryCollection(wallet: string = WALLET): Promise<GalleryListing[]> {
+  const res = await fetchWithTimeout(
+    apiUrl(`/gallery/collection?wallet=${encodeURIComponent(wallet)}`),
+    { headers: buildHeaders(false) }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.assets) ? data.assets.map(normalizeGalleryListing) : [];
+}
+
+export async function fetchOwnershipHistory(jobId: string): Promise<GalleryOwnershipEvent[]> {
+  const res = await fetchWithTimeout(
+    apiUrl(`/gallery/ownership/${encodeURIComponent(jobId)}`),
+    { headers: buildHeaders(false) }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.history) ? data.history : [];
+}
+
+export async function relistGalleryAsset(
+  input: { wallet?: string; job_id: string; title: string; description?: string; price_credits: number; category?: string },
+  options: CreateGalleryListingOptions = {}
+): Promise<GalleryListing> {
+  const signed = await signWalletNonce(
+    {
+      wallet: input.wallet || WALLET,
+      amount: input.price_credits,
+      purpose: "gallery_relist",
+      job_id: input.job_id,
+    },
+    (step) => options.onProgress?.(step)
+  );
+  options.onProgress?.("submitting_listing");
+  const res = await fetchWithTimeout(apiUrl("/gallery/relist"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      ...input,
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return normalizeGalleryListing(data);
 }
 
 export async function fetchMarketplace(
