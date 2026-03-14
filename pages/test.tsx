@@ -40,10 +40,8 @@ import {
 
 const HISTORY_KEY = "havnai_test_history_v1";
 
-// Fallback models for offline development
-const FALLBACK_IMAGE_MODELS: { id: string; label: string }[] = [
-  { id: "auto", label: "Auto (let grid choose best)" },
-];
+// Keep the image selector empty until live model capacity is loaded.
+const FALLBACK_IMAGE_MODELS: { id: string; label: string }[] = [];
 
 const IDENTITY_ANCHOR_TAG_RE = /^\[\s*identity\s+anchor\s*:\s*([A-Za-z0-9_-]+)\s*\]$/i;
 const IDENTITY_ANCHOR_BARE_RE = /^\[\s*identity\s+anchor\s*\]$/i;
@@ -189,7 +187,7 @@ const TestPage: React.FC = () => {
   const [runtimeSeconds, setRuntimeSeconds] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [advancedOpen, setAdvancedOpen] = useState(true);
-  const [selectedModel, setSelectedModel] = useState<string>("auto");
+  const [selectedModel, setSelectedModel] = useState<string>("");
   const [imageModels, setImageModels] = useState<{ id: string; label: string }[]>(FALLBACK_IMAGE_MODELS);
   const [videoModels, setVideoModels] = useState<{ id: string; label: string }[]>([]);
   const [faceSwapModels, setFaceSwapModels] = useState<{ id: string; label: string }[]>([]);
@@ -274,11 +272,11 @@ const TestPage: React.FC = () => {
   }, []);
 
   // Determine current model's pipeline for LoRA filtering
-  const currentPipeline = selectedModel && selectedModel !== "auto"
+  const currentPipeline = selectedModel
     ? modelPipelines[selectedModel.toLowerCase()] || ""
     : "";
   const selectedImageModelMeta =
-    selectedModel && selectedModel !== "auto" ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
+    selectedModel ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
   const selectedVideoModelMeta =
     mode === "video" && selectedModel ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
   const selectedFaceSwapModelMeta = faceswapModel
@@ -388,13 +386,10 @@ const TestPage: React.FC = () => {
         });
 
         // Transform to dropdown format with tier badges and clean names
-        const imageOptions = [
-          { id: "auto", label: "Auto (let grid choose best)" },
-          ...imageModelsData.map((m) => ({
-            id: m.name,
-            label: buildModelOptionLabel(m, String(m.pipeline || "").toUpperCase()),
-          })),
-        ];
+        const imageOptions = imageModelsData.map((m) => ({
+          id: m.name,
+          label: buildModelOptionLabel(m, String(m.pipeline || "").toUpperCase()),
+        }));
 
         const videoOptions = videoModelsData.map((m) => {
           const isAnimateDiff = String(m.task_type || "").toUpperCase() === "ANIMATEDIFF";
@@ -456,8 +451,8 @@ const TestPage: React.FC = () => {
       setFaceSourceName(undefined);
       setFaceswapGuidance("");
       setSteps("30");
-      // Set default model to auto for image mode
-      setSelectedModel("auto");
+      // Default image mode to the first live model when available.
+      setSelectedModel(imageModels.length > 0 ? imageModels[0].id : "");
     } else if (mode === "video") {
       // Reset sampler (not used in video mode)
       setSampler("");
@@ -487,10 +482,10 @@ const TestPage: React.FC = () => {
       setSelectedModel(faceSwapModels.length > 0 ? faceSwapModels[0].id : "");
       setFaceswapModel(faceSwapModels.length > 0 ? faceSwapModels[0].id : "");
     }
-  }, [mode, videoModels, faceSwapModels]);
+  }, [mode, imageModels, videoModels, faceSwapModels]);
 
   useEffect(() => {
-    if (mode !== "image" || !selectedImageModelMeta || selectedModel === "auto") {
+    if (mode !== "image" || !selectedImageModelMeta) {
       if (mode !== "image") imagePrefillKeyRef.current = "";
       return;
     }
@@ -811,10 +806,10 @@ const TestPage: React.FC = () => {
       const request = buildVideoRequest(promptText, initImage || undefined);
       const id = await submitVideoJob(request);
       setJobId(id);
-      setStatusMessage(`Waiting for GPU node… (${index + 1}/${total})`);
+      setStatusMessage(`Waiting for available GPU capacity... (${index + 1}/${total})`);
       const result = await pollJob(id, promptText, 2400);
       if (!result || !result.videoUrl) {
-        setStatusMessage("Chain stopped (no video output).");
+        setStatusMessage("Clip generation stopped before a video output was returned.");
         return;
       }
       jobIds.push(id);
@@ -830,15 +825,15 @@ const TestPage: React.FC = () => {
     }
 
     if (autoStitch && jobIds.length > 1) {
-      setStatusMessage("Stitching clips…");
+      setStatusMessage("Merging clips...");
       try {
         const stitched = await stitchVideos(jobIds);
         setVideoUrl(stitched.video_url);
         setImageUrl(undefined);
-        setStatusMessage("Stitched video ready.");
+        setStatusMessage("Merged video ready.");
         setChainSummary({ clips: jobIds.length, stitched: true });
       } catch (err: any) {
-        setStatusMessage(err?.message || "Auto-stitch failed.");
+        setStatusMessage(err?.message || "Automatic clip merge failed.");
         setChainSummary({ clips: jobIds.length, stitched: false });
       }
     } else if (jobIds.length > 1) {
@@ -912,7 +907,7 @@ const TestPage: React.FC = () => {
     const cleanedPrompt = promptAnchor.promptWithoutTag.trim();
     const effectivePrompt = mode === "face_swap" ? trimmed : cleanedPrompt || trimmed;
     if (!activeWallet) {
-      setStatusMessage("Connect your wallet or wait for a site session before submitting.");
+      setStatusMessage("Connect a wallet or use an active HavnAI site session before submitting.");
       return;
     }
     if (mode !== "face_swap" && !trimmed) {
@@ -925,6 +920,14 @@ const TestPage: React.FC = () => {
     }
     if (promptAnchor.error) {
       setStatusMessage(promptAnchor.error);
+      return;
+    }
+    if (mode === "image" && imageModels.length === 0) {
+      setStatusMessage("No online image capacity right now. Try again when an image model is available.");
+      return;
+    }
+    if (mode === "image" && !selectedModel) {
+      setStatusMessage("Select an available image model before generating.");
       return;
     }
     if (mode === "video" && videoModels.length === 0) {
@@ -944,7 +947,7 @@ const TestPage: React.FC = () => {
       return;
     }
     setLoading(true);
-    setStatusMessage("Job submitted to the grid...");
+    setStatusMessage("Submitting to the grid...");
     setImageUrl(undefined);
     setVideoUrl(undefined);
     setRuntimeSeconds(null);
@@ -960,12 +963,12 @@ const TestPage: React.FC = () => {
         const options = buildOptions();
         const id = await submitAutoJob(
           trimmed,
-          selectedModel === "auto" ? undefined : selectedModel,
+          selectedModel || undefined,
           "",
           options
         );
         setJobId(id);
-        setStatusMessage("Waiting for GPU node…");
+        setStatusMessage("Waiting for available GPU capacity...");
         await pollJob(id, effectivePrompt, 1800);
       } else if (mode === "face_swap") {
         const baseUrl = baseImageData || baseImageUrl.trim();
@@ -992,7 +995,7 @@ const TestPage: React.FC = () => {
         if (guidanceValue !== undefined) request.guidance = guidanceValue;
         const id = await submitFaceSwapJob(request);
         setJobId(id);
-        setStatusMessage("Waiting for GPU node…");
+        setStatusMessage("Waiting for available GPU capacity...");
         await pollJob(id, effectivePrompt || "Face swap", 1800);
       } else if (mode === "video") {
         if (extendValue > 0) {
@@ -1001,7 +1004,7 @@ const TestPage: React.FC = () => {
           const request = buildVideoRequest(effectivePrompt);
           const id = await submitVideoJob(request);
           setJobId(id);
-          setStatusMessage("Waiting for GPU node…");
+          setStatusMessage("Waiting for available GPU capacity...");
           await pollJob(id, effectivePrompt, 2400);
         }
       }
@@ -1011,9 +1014,9 @@ const TestPage: React.FC = () => {
         if (code === "insufficient_credits") {
           const bal = err?.data?.balance ?? "?";
           const cost = err?.data?.cost ?? "?";
-          setStatusMessage(`Not enough credits — need ${cost} but you have ${bal}.`);
+          setStatusMessage(`Not enough credits for this request. Need ${cost}, available ${bal}.`);
         } else if (code === "invite_required") {
-          setStatusMessage("A Public Alpha access code is required to submit jobs.");
+          setStatusMessage("This generation path currently requires a Public Alpha access code.");
           setInviteOpen(true);
         } else if (code === "rate_limited") {
           const resetLabel = formatResetAt(err?.data?.reset_at);
@@ -1082,7 +1085,7 @@ const TestPage: React.FC = () => {
     }
     setRuntimeSeconds(runtime);
     setModel(job.model);
-    setStatusMessage("Done.");
+    setStatusMessage("Output ready.");
     setPollTimedOut(false);
 
     if (resolvedImage || resolvedVideo) {
@@ -1116,11 +1119,11 @@ const TestPage: React.FC = () => {
         if (event.job_id !== id) return;
         const status = (event.lifecycle_status || event.status || "").toUpperCase();
         if (status === "QUEUED") {
-          setStatusMessage("Job queued...");
+          setStatusMessage("Queued on the grid...");
         } else if (status === "RUNNING") {
-          setStatusMessage("Rendering on HavnAI node...");
+          setStatusMessage("Rendering on a HavnAI node...");
         } else if (status === "SUCCEEDED" || status === "SUCCESS" || status === "COMPLETED") {
-          setStatusMessage("Finalizing output...");
+          setStatusMessage("Finalizing your output...");
           sseResolved = true;
           clearTimeout(timeout);
           unsub();
@@ -1149,19 +1152,19 @@ const TestPage: React.FC = () => {
           if (status === "QUEUED") {
             const elapsed = (Date.now() - start) / 1000;
             if (elapsed > 120) {
-              setStatusMessage("Still waiting in queue... The system will auto-retry if needed.");
+              setStatusMessage("This render is still queued. The system will retry automatically if needed.");
             } else {
-              setStatusMessage("Job queued...");
+              setStatusMessage("Queued on the grid...");
             }
           } else if (status === "RUNNING") {
             const elapsed = (Date.now() - start) / 1000;
             if (elapsed > 300) {
-              setStatusMessage("Still rendering... If the worker is unresponsive, it will be automatically requeued.");
+              setStatusMessage("This render is still running. If the worker stalls, it will be requeued automatically.");
             } else {
-              setStatusMessage("Rendering on HavnAI node...");
+              setStatusMessage("Rendering on a HavnAI node...");
             }
           } else if (status === "SUCCESS" || status === "COMPLETED") {
-            setStatusMessage("Finalizing output...");
+            setStatusMessage("Finalizing your output...");
             return "completed";
           } else if (status === "FAILED" || status === "CANCELLED") {
             return "failed";
@@ -1241,7 +1244,7 @@ const TestPage: React.FC = () => {
         };
         const next = [item, ...history].slice(0, 5);
         saveHistory(next);
-        setStatusMessage("Done.");
+        setStatusMessage("Output ready.");
         setPollTimedOut(false);
         return { videoUrl: resolvedVideo, imageUrl: resolvedImage, job: job || undefined };
       }
@@ -1251,9 +1254,9 @@ const TestPage: React.FC = () => {
 
     setPollTimedOut(true);
     setStatusMessage(
-      `Still running after ${elapsed.toFixed(
+      `This render is still in progress after ${elapsed.toFixed(
         1
-      )} seconds. Click "Check status" to keep waiting.`
+      )} seconds. Select "Check status" to keep waiting.`
     );
     return null;
   };
@@ -1279,7 +1282,7 @@ const TestPage: React.FC = () => {
     setModel(item.model);
     setRuntimeSeconds(null);
     setJobId(item.jobId);
-    setStatusMessage("Showing a saved result from this browser. Generate again to request a fresh render.");
+    setStatusMessage("Showing a saved result from this browser. Generate again when you want a fresh render.");
     const summary: JobSummary = {
       job_id: item.jobId,
       model: item.model,
@@ -1349,8 +1352,8 @@ const TestPage: React.FC = () => {
             <p className="hero-kicker">{PUBLIC_ALPHA_LABEL} Generator</p>
             <h1 className="generator-hero-title">Create on the Grid.</h1>
             <p className="generator-hero-subtitle">
-              Write a prompt, choose a model if you want, and render through the live HavnAI network
-              using the same weighted routing as the rest of Public Alpha.
+              Write a prompt, choose from the live models on the network, and render images, face
+              swaps, or video through HavnAI Public Alpha.
             </p>
           </div>
         </section>
@@ -1361,7 +1364,7 @@ const TestPage: React.FC = () => {
               <div className="generator-left">
                 <div className="invite-panel">
                   <div className={`invite-badge${inviteSaved ? " is-ok" : " is-missing"}`}>
-                    {inviteSaved ? "Access code active" : "Access code required"}
+                    {inviteSaved ? "Access code saved" : "No access code added"}
                   </div>
                   {quota && (
                     <div className="quota-bars">
@@ -1441,13 +1444,16 @@ const TestPage: React.FC = () => {
                     className="invite-toggle"
                     onClick={() => setInviteOpen((prev) => !prev)}
                   >
-                    {inviteSaved ? "Manage access code" : "Add access code"}
+                    {inviteSaved ? "Edit access code" : "Add access code"}
                   </button>
+                  <p className="generator-help" style={{ marginTop: "0.75rem" }}>
+                    Add an access code here if your Public Alpha invite included one.
+                  </p>
                 </div>
                 {inviteOpen && (
                   <div className="invite-form">
                     <label className="generator-label" htmlFor="invite-code">
-                      Public Alpha access code
+                      Public Alpha access code (if provided)
                     </label>
                     <input
                       id="invite-code"
@@ -1473,7 +1479,7 @@ const TestPage: React.FC = () => {
                         Clear
                       </button>
                     </div>
-                    <p className="generator-help">Stored locally in your browser only.</p>
+                    <p className="generator-help">Only stored in this browser.</p>
                   </div>
                 )}
                 <div className="generator-mode-tabs">
@@ -1510,7 +1516,7 @@ const TestPage: React.FC = () => {
                 />
                 {mode === "image" && (
                   <p className="generator-help">
-                    Add <code>[IDENTITY ANCHOR: slug]</code> to an image prompt when you want consistent facial identity across runs.
+                    Add <code>[IDENTITY ANCHOR: slug]</code> to an image prompt when you want a stable facial identity across multiple renders.
                   </p>
                 )}
 
@@ -1650,11 +1656,11 @@ const TestPage: React.FC = () => {
                     </select>
                     {selectedFaceSwapModelMeta?.face_swap_defaults && (
                       <p className="generator-help">
-                        Using recommended defaults for this model (source: {faceSwapDefaultsBadge}). Leave fields blank to apply them automatically.
+                        This model includes recommended Public Alpha defaults (source: {faceSwapDefaultsBadge}). Leave those fields blank to use them automatically.
                       </p>
                     )}
                     <p className="generator-help">
-                      LoRA controls stay hidden in Public Alpha for more predictable face-swap output.
+                      LoRA controls stay hidden in Public Alpha so face-swap output stays predictable.
                     </p>
                   </div>
                 )}
@@ -1724,7 +1730,7 @@ const TestPage: React.FC = () => {
                         ))}
                       </select>
                       <p className="generator-help">
-                        Pick a specific model or keep Auto for weighted routing.
+                        Pick the image model you want to run for this render.
                       </p>
                       <span className="adv-group-title">Generation settings</span>
                       <label className="generator-label" htmlFor="image-steps">

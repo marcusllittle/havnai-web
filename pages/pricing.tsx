@@ -431,9 +431,9 @@ const PricingPage: NextPage = () => {
           <div className="section-header">
             <h2>Buy Credits</h2>
             <p>
-              Credits power every generation across HavnAI {PUBLIC_ALPHA_LABEL}. Sepolia HAI funding
-              is the primary live path today. Card checkout appears only on deployments where it has
-              been enabled.
+              Credits are the main usage currency across HavnAI {PUBLIC_ALPHA_LABEL}. Sepolia HAI
+              funding is the primary live path today, while card checkout appears only on
+              deployments where it has been enabled.
             </p>
           </div>
 
@@ -442,7 +442,7 @@ const PricingPage: NextPage = () => {
               <span className="pricing-balance-label">Your Balance</span>
               <span className="pricing-balance-value">{balance.balance.toFixed(1)} credits</span>
               {balance.credits_enabled === false && (
-                <span className="pricing-balance-note">Credits are currently open access on this coordinator during Public Alpha.</span>
+                <span className="pricing-balance-note">This deployment is currently running without credit gating, so the balance above is informational during Public Alpha.</span>
               )}
             </div>
           )}
@@ -484,8 +484,8 @@ const PricingPage: NextPage = () => {
               Active funding destination: <code>{packageDestination}</code>
             </p>
             <p className="pricing-wallet-note">
-              New credits attach to the active identity shown above. Guest browsing can review
-              pricing, but checkout and wallet-based funding require an active identity.
+              New credits attach to the active identity shown above. Guest mode can compare
+              plans, while checkout and funding actions follow that identity.
             </p>
           </div>
 
@@ -521,10 +521,10 @@ const PricingPage: NextPage = () => {
                       {buyingId === pkg.id
                         ? "Redirecting..."
                         : !activeWallet
-                        ? "Connect wallet"
+                        ? "Connect wallet to buy"
                         : !stripeEnabled
-                        ? "Card checkout not live"
-                        : "Checkout"}
+                        ? "Unavailable in alpha"
+                        : "Buy with card"}
                     </button>
                   </article>
                 ))}
@@ -534,10 +534,10 @@ const PricingPage: NextPage = () => {
 
           {haiFundingConfigured && (
             <div className="pricing-convert">
-              <h3>Fund Credits with $HAI</h3>
+              <h3>Fund Credits with testnet HAI</h3>
               <p className="pricing-convert-desc">
-                Transfer testnet HAI from your connected wallet to add credits at the current
-                Public Alpha rate of 1 HAI = 1 credit.
+                Sepolia HAI funding is the primary live credit path in Public Alpha. Transfers are
+                credited at the current 1 HAI = 1 credit alpha rate.
               </p>
               {haiBalance !== null && (
                 <p className="convert-note">
@@ -576,8 +576,8 @@ const PricingPage: NextPage = () => {
           <div className="pricing-costs">
             <h3>What Credits Get You</h3>
             <p className="pricing-wallet-note" style={{ marginBottom: "0.9rem" }}>
-              This table is derived from the coordinator&apos;s current default credit costs and may
-              change during Public Alpha.
+              Estimated output counts from the coordinator&apos;s current default credit costs. Rates
+              may change during Public Alpha.
             </p>
             {creditReferenceLoading ? (
               <div className="pricing-loading">Loading credit cost reference...</div>
@@ -648,8 +648,8 @@ const PricingPage: NextPage = () => {
           )}
 
           <div className="pricing-convert">
-            <h3>Convert credits to $HAI</h3>
-            <p className="pricing-convert-desc">Convert unused Public Alpha credits back into testnet HAI.</p>
+            <h3>Convert credits back to testnet HAI</h3>
+            <p className="pricing-convert-desc">Connected wallets can convert unused Public Alpha credits back into testnet HAI.</p>
             <div className="convert-row">
               <button
                 type="button"
@@ -683,8 +683,8 @@ const PricingPage: NextPage = () => {
             </div>
             {!connectedWallet && (
               <p className="convert-note">
-                Connect your wallet to sign credit-to-HAI conversions. Site sessions can view balances
-                but cannot approve conversions.
+                Connect your wallet to approve credit-to-HAI conversions. Site sessions can review
+                balances, but conversions always require wallet approval.
               </p>
             )}
             {convertMessage && <p className="convert-message">{convertMessage}</p>}
@@ -695,7 +695,7 @@ const PricingPage: NextPage = () => {
 
       <footer className="site-footer">
         <div className="footer-inner">
-          <p className="footer-copy">© 2026 HavnAI Network</p>
+          <p className="footer-copy">&copy; 2025 HavnAI Network</p>
         </div>
       </footer>
     </>

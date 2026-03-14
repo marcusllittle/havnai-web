@@ -116,16 +116,17 @@ const NodesPage: NextPage = () => {
           <div className="page-hero-inner">
             <p className="hero-kicker">Network</p>
             <h1 className="hero-title">GPU Nodes</h1>
-            <p className="hero-subtitle">Live Public Alpha view of the GPU nodes powering the HavnAI network.</p>
+            <p className="hero-subtitle">Live Public Alpha view of the GPU operators and machines currently powering the HavnAI network.</p>
           </div>
         </section>
 
         <section className="page-container">
           <div className="chart-section">
             <p style={{ margin: 0, color: "var(--text-muted)", lineHeight: 1.6 }}>
-              Live node telemetry comes directly from the coordinator. Reward totals reflect Public
+              Live node telemetry comes directly from the coordinator. Use this page to track current
+              capacity, uptime, and operator visibility across the grid. Reward totals reflect Public
               Alpha tracking and may include Sepolia or testnet-era activity while settlement rails
-              continue to evolve.
+              continue to evolve. Want to appear here? <a href="/join" style={{ color: "var(--accent)" }}>Open the install guide</a>.
             </p>
           </div>
 
@@ -276,7 +277,7 @@ const NodesPage: NextPage = () => {
               ))}
               {filteredNodes.length === 0 && !loading && (
                 <div className="library-empty">
-                  <p>No nodes match this view yet. Clear your search or check back as more Public Alpha operators come online.</p>
+                  <p>No nodes match this view right now. Clear your search or check back as more Public Alpha operators come online.</p>
                 </div>
               )}
             </div>
@@ -316,7 +317,7 @@ const NodesPage: NextPage = () => {
               </table>
               {leaderboard.length === 0 && (
                 <p style={{ textAlign: "center", color: "var(--text-muted)", padding: "1rem" }}>
-                  Leaderboard data will appear here as Public Alpha reward tracking accumulates.
+                  Leaderboard data will appear here as tracked Public Alpha reward activity accumulates.
                 </p>
               )}
             </div>

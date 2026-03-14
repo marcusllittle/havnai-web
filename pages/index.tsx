@@ -174,10 +174,18 @@ const HomePage: NextPage = () => {
               <p className="hero-kicker">{PUBLIC_ALPHA_LABEL} • Decentralized GPU Intelligence</p>
               <h1 className="hero-title">OWN YOUR INTELLIGENCE</h1>
               <p className="hero-subtitle">
-                HavnAI is a decentralized GPU network for AI creation in Public Alpha. Node operators
-                serve SDXL image jobs, SDXL face-swap jobs, and video jobs whenever compatible video
-                capacity is online.
+                HavnAI is a decentralized GPU network for creators and GPU operators in Public Alpha.
+                Generate images, face swaps, and video when compatible capacity is online, or connect
+                a GPU and earn tracked HAI rewards for serving live jobs.
               </p>
+              <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginTop: "1.4rem" }}>
+                <a href="/generator" className="btn primary">
+                  Start Generating
+                </a>
+                <a href="/pricing" className="btn tertiary">
+                  Buy Credits
+                </a>
+              </div>
               <div className="hero-install-note">
                 <h3>Run a HavnAI Node</h3>
                 <p>Run this on your GPU machine to install the node:</p>
@@ -185,14 +193,14 @@ const HomePage: NextPage = () => {
                   <code>{`curl -fsSL ${installBase}/installers/install-node.sh \n  | bash -s -- --server ${installBase}`}</code>
                 </pre>
                 <p>
-                  Full prerequisites, video setup, service management, and troubleshooting live in the
-                  node install guide.
+                  Full prerequisites, wallet setup, video capacity guidance, service management, and
+                  troubleshooting live in the node install guide.
                 </p>
                 <a
                   href="/join"
                   className="btn tertiary wide"
                 >
-                  Open full node install guide
+                  Open Node Install Guide
                 </a>
               </div>
             </div>
@@ -234,7 +242,7 @@ const HomePage: NextPage = () => {
         <section id="how" className="section">
           <div className="section-header">
             <h2>How It Works</h2>
-            <p>From GPU availability to tracked $HAI rewards in four steps.</p>
+            <p>From creator prompt to tracked operator rewards in four steps.</p>
           </div>
           <div className="steps-grid">
             <article className="step-card">
@@ -249,25 +257,25 @@ const HomePage: NextPage = () => {
               <div className="step-icon">2</div>
               <h3>Jobs Get Routed</h3>
               <p>
-                Users submit prompts through the Generator. The coordinator picks the best available
-                model and sends the job to a healthy node.
+                Creators submit prompts through the Generator. The coordinator matches each request
+                to a healthy node with compatible live capacity.
               </p>
             </article>
             <article className="step-card">
               <div className="step-icon">3</div>
               <h3>Your GPU Generates</h3>
               <p>
-                Your node runs available models from the live registry and returns outputs. The
-                current Public Alpha focuses on SDXL image + face swap, with video jobs routed when LTX2
-                capacity is online.
+                Your node runs the assigned model, returns the output, and helps keep creator jobs
+                moving. Public Alpha currently centers on SDXL image and face swap, with video jobs
+                routed whenever LTX2 capacity is online.
               </p>
             </article>
             <article className="step-card">
               <div className="step-icon">4</div>
               <h3>Earn $HAI</h3>
               <p>
-                Every completed job earns tracked $HAI rewards. Reward weighting scales with model
-                tier, pipeline cost, and runtime throughout Public Alpha.
+                Completed jobs add tracked HAI rewards to the operator identity behind that node.
+                Reward weighting scales with model tier, pipeline cost, and runtime throughout Public Alpha.
               </p>
             </article>
           </div>
@@ -278,8 +286,8 @@ const HomePage: NextPage = () => {
           <div className="section-header">
             <h2>Smart Routing · Weighted Models</h2>
             <p>
-              Every generation job goes through the coordinator, which picks the best available node
-              and model in real time.
+              Every generation request goes through the coordinator, which picks a healthy node and
+              a compatible live model in real time.
             </p>
           </div>
           <div className="routing-layout">
@@ -387,7 +395,7 @@ const HomePage: NextPage = () => {
         <section className="section live-section">
           <div className="section-header">
             <h2>Live Jobs Snapshot</h2>
-            <p>Recent public jobs flowing through the grid right now.</p>
+            <p>Recent public jobs flowing through the grid as they complete.</p>
           </div>
           <div className="live-layout">
             <div className="table-wrapper">
@@ -479,7 +487,7 @@ const HomePage: NextPage = () => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={5}>No recent Public Alpha jobs are visible yet. This feed updates automatically as new work completes.</td>
+                      <td colSpan={5}>No public jobs are visible yet. This feed updates automatically as new work completes.</td>
                     </tr>
                   )}
                 </tbody>
@@ -512,8 +520,8 @@ const HomePage: NextPage = () => {
               <h2>Join Public Alpha</h2>
               <p>
                 HavnAI Public Alpha is live for SDXL image generation, face swap, and video whenever
-                compatible nodes are online. If you have a capable NVIDIA GPU and want to power the
-                network, operator onboarding is open now.
+                compatible nodes are online. If you have a capable NVIDIA GPU, you can serve live
+                creator traffic, appear on the network dashboard, and build tracked reward history now.
               </p>
               <ul>
                 <li>12&nbsp;GB+ NVIDIA GPU (3060 / 3080 / 4090 class).</li>
@@ -529,8 +537,8 @@ const HomePage: NextPage = () => {
                 View Live Dashboard
               </a>
               <p className="join-note">
-                The install guide covers prerequisites, reward address setup, optional access tokens,
-                GPU setup, video prerequisites, and service management.
+                The install guide covers prerequisites, wallet setup, optional operator access
+                tokens, video requirements, and service management.
               </p>
             </div>
           </div>
@@ -545,10 +553,10 @@ const HomePage: NextPage = () => {
               <img src="/HavnAI-logo.png" alt="HavnAI" className="footer-logo" />
               <div>
                 <div className="footer-brand-name">HavnAI</div>
-                <p className="footer-tagline">Public Alpha decentralized GPU network for AI creators.</p>
+                <p className="footer-tagline">Public Alpha decentralized GPU network for creators and GPU operators.</p>
               </div>
             </div>
-            <p className="footer-copy">© 2026 HavnAI Network</p>
+            <p className="footer-copy">&copy; 2025 HavnAI Network</p>
           </div>
 
           <div className="footer-col footer-col-center">

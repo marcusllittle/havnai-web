@@ -38,21 +38,32 @@ const JoinPage: NextPage = () => {
             <p className="hero-kicker">Join the Grid</p>
             <h1 className="hero-title">Install a HavnAI Node</h1>
             <p className="hero-subtitle">
-              Connect your GPU to HavnAI Public Alpha and start serving generation jobs across the
-              live network.
+              Connect your GPU to HavnAI Public Alpha, serve live generation jobs, and build visible
+              operator history on the network.
             </p>
           </div>
         </section>
 
         <section className="page-container">
+          <div className="chart-section">
+            <div className="chart-header">
+              <h3 className="chart-title">Why Operators Join</h3>
+            </div>
+            <ul style={{ margin: 0, paddingLeft: "1.2rem", color: "var(--text-muted)", lineHeight: 1.7 }}>
+              <li>Serve real creator and tester traffic across image, face swap, and video capacity when your hardware supports it.</li>
+              <li>Build visible operator history on the Nodes and Analytics pages with live telemetry, job counts, and tracked HAI activity.</li>
+              <li>Help shape routing quality, capacity, and reward tuning while the network continues to mature in Public Alpha.</li>
+            </ul>
+          </div>
+
           {/* Quick install */}
           <div className="chart-section">
             <div className="chart-header">
               <h3 className="chart-title">Quick Install</h3>
             </div>
             <p style={{ color: "var(--text-muted)", marginBottom: "1rem", lineHeight: 1.6 }}>
-              Run this single command on your GPU machine. It downloads the installer, sets up a
-              Python virtual environment, and registers your node with the coordinator.
+              Run this command on your GPU machine. It downloads the installer, sets up the runtime,
+              and registers your node with the coordinator.
             </p>
             <div style={{ position: "relative" }}>
               <pre style={{ padding: "1rem", borderRadius: "12px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.85rem", lineHeight: 1.5 }}>
@@ -79,8 +90,8 @@ const JoinPage: NextPage = () => {
             </div>
             <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.75rem" }}>
               Optional flags: <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>--token TOKEN</code> if
-              your coordinator issued an operator access token, and <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>--wallet 0x...</code> to
-              pre-fill the reward address you want the node to report under.
+              you were issued an operator access token, and <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>--wallet 0x...</code> to
+              pre-fill the wallet address used for Public Alpha reward tracking.
             </p>
           </div>
 
@@ -117,7 +128,7 @@ const JoinPage: NextPage = () => {
                   </tr>
                   <tr>
                     <td>Wallet</td>
-                    <td>An EVM-compatible wallet address (for example MetaMask). Public Alpha reward tracking is tied to this address, with Sepolia settlement flows continuing to mature.</td>
+                    <td>An EVM-compatible wallet address (for example MetaMask). Tracked Public Alpha rewards are attributed to this address while Sepolia settlement flows continue to mature.</td>
                   </tr>
                 </tbody>
               </table>
@@ -135,7 +146,7 @@ const JoinPage: NextPage = () => {
                 <li>Sets up a Python virtual environment at <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>~/.havnai/venv</code></li>
                 <li>Downloads the node client and model registry from the coordinator</li>
                 <li>Installs Python dependencies (PyTorch, diffusers, etc.)</li>
-                <li>Creates a <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>~/.havnai/.env</code> config file where you set your wallet and any access token your coordinator requires</li>
+                <li>Creates a <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>~/.havnai/.env</code> file where you can set your wallet address and any operator access token you were issued</li>
                 <li>Optionally sets up a systemd service (Linux) or launchd agent (macOS) so your node runs on boot</li>
               </ol>
             </div>
@@ -152,7 +163,7 @@ const JoinPage: NextPage = () => {
               <pre style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
                 <code>{`# Edit ~/.havnai/.env\nWALLET=0xYourWalletAddressHere`}</code>
               </pre>
-              <p style={{ marginBottom: "0.5rem" }}><strong style={{ color: "var(--text)" }}>2. Add your operator access token if one was issued</strong></p>
+              <p style={{ marginBottom: "0.5rem" }}><strong style={{ color: "var(--text)" }}>2. Add your operator access token if you were issued one</strong></p>
               <pre style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
                 <code>{`# In ~/.havnai/.env\nJOIN_TOKEN=your-token-here`}</code>
               </pre>
@@ -164,7 +175,7 @@ const JoinPage: NextPage = () => {
               <p>
                 Check the <a href="/nodes" style={{ color: "var(--accent)" }}>Nodes</a> page or
                 the <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>Dashboard</a> to
-                confirm your node appears as online.
+                confirm that your operator appears online.
               </p>
             </div>
           </div>
@@ -176,7 +187,7 @@ const JoinPage: NextPage = () => {
             </div>
             <div style={{ color: "var(--text-muted)", lineHeight: 1.7 }}>
               <p style={{ marginBottom: "0.75rem" }}>
-                If your GPU has 16 GB+ VRAM, you can run video generation jobs using LTX-Video.
+                If your GPU has 16 GB+ VRAM, you can opt into video generation jobs using LTX-Video.
                 Video jobs carry higher reward weighting during Public Alpha.
               </p>
               <p style={{ marginBottom: "0.5rem" }}>
