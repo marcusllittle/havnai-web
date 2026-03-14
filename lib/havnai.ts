@@ -273,7 +273,7 @@ const WALLET_SIGN_TIMEOUT_MS = Number.parseInt(
   10
 );
 const WALLET_PROVIDER_TIMEOUT_MS = Number.parseInt(
-  String(process.env.NEXT_PUBLIC_WALLET_PROVIDER_TIMEOUT_MS || "20000"),
+  String(process.env.NEXT_PUBLIC_WALLET_PROVIDER_TIMEOUT_MS || "30000"),
   10
 );
 const ENABLE_LEGACY_WAN_STATUS =
@@ -896,6 +896,11 @@ async function signWalletNonce(
       };
     } catch (error) {
       lastError = error;
+      // If MetaMask itself timed out, don't try other providers — they share
+      // the same stuck state and will just cascade more timeouts.
+      if (error instanceof HavnaiApiError && error.code === "wallet_request_timeout") {
+        break;
+      }
     }
   }
 
