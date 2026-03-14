@@ -806,6 +806,8 @@ type WalletNoncePurpose =
   | "convert_credits_to_hai"
   | "gallery_purchase"
   | "gallery_list"
+  | "gallery_relist"
+  | "gallery_delist"
   | "identity_anchor_create"
   | "identity_anchor_delete";
 
