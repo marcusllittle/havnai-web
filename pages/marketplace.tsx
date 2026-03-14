@@ -19,10 +19,12 @@ import {
   GalleryPurchaseRecord,
   HavnaiApiError,
   delistGalleryListing,
+  getGalleryDownloadUrl,
   purchaseGalleryListing,
   relistGalleryAsset,
   Workflow,
 } from "../lib/havnai";
+import { downloadAsset } from "../lib/download";
 import { getConnectButtonLabel, isUsableWallet } from "../lib/wallet";
 import { getWalletIdentityLabel, getWalletSourceLabel, getWalletStatusCopy, PUBLIC_ALPHA_LABEL } from "../lib/publicAlpha";
 
@@ -1266,6 +1268,18 @@ const MarketplacePage: NextPage = () => {
                           }}
                         >
                           Re-list on Marketplace
+                        </button>
+                      )}
+                      {userIsCurrentOwner && (
+                        <button
+                          type="button"
+                          className="job-action-button secondary"
+                          onClick={() => {
+                            const url = getGalleryDownloadUrl(selectedListing.id, activeWallet || "");
+                            downloadAsset(url, `havnai-${selectedListing.job_id.slice(0, 8)}.${selectedListing.asset_type === "video" ? "mp4" : "png"}`);
+                          }}
+                        >
+                          &#x2913; Download
                         </button>
                       )}
                       {userIsCurrentOwner && selectedListing.status !== "active" && !relistModalOpen && (

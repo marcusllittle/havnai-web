@@ -1859,6 +1859,10 @@ export async function purchaseGalleryListing(
   return (await res.json()) as GalleryPurchaseResponse;
 }
 
+export function getGalleryDownloadUrl(listingId: number, wallet: string = WALLET): string {
+  return apiUrl(`/gallery/listings/${listingId}/download?wallet=${encodeURIComponent(wallet)}`);
+}
+
 export async function delistGalleryListing(listingId: number, wallet: string = WALLET): Promise<{ ok: boolean }> {
   const signed = await signWalletNonce({
     wallet,
