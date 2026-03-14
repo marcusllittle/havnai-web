@@ -862,6 +862,18 @@ async function signWalletNonce(
   let lastError: unknown = null;
   for (const candidate of candidates) {
     try {
+      // Fast health check: skip providers that don't respond to a basic RPC
+      // call within 3s. This avoids waiting 30s on a provider that will never
+      // show a popup (e.g. Coinbase Wallet pretending to be MetaMask).
+      try {
+        await withWalletTimeout(
+          Promise.resolve((candidate as any).request({ method: "eth_chainId" })),
+          "Provider did not respond to health check.",
+          3000
+        );
+      } catch {
+        continue;
+      }
       const provider = new BrowserProvider(candidate as any);
       const signer = await withWalletTimeout(
         provider.getSigner(),

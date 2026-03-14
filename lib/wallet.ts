@@ -220,10 +220,34 @@ function isProviderHealthy(provider: InjectedProvider): boolean {
   }
 }
 
+function isRealMetaMask(provider: InjectedProvider): boolean {
+  // Coinbase Wallet and others set isMetaMask=true for compat.
+  // Real MetaMask has _metamask, and does NOT have isCoinbaseWallet/isBraveWallet/etc.
+  if (!provider.isMetaMask) return false;
+  if ((provider as any).isCoinbaseWallet) return false;
+  if ((provider as any).isBraveWallet) return false;
+  if ((provider as any).isPhantom) return false;
+  if ((provider as any).isRabby) return false;
+  // Real MetaMask typically exposes _metamask object
+  if ((provider as any)._metamask) return true;
+  return true;
+}
+
 function choosePreferredProvider(
   root: InjectedProvider | undefined,
   providers: InjectedProvider[]
 ): { provider: InjectedProvider | null; providerName?: string } {
+  // Prefer a provider that is genuinely MetaMask (not an impersonator)
+  if (isProviderUsable(root) && isRealMetaMask(root)) {
+    return { provider: root, providerName: "MetaMask" };
+  }
+
+  const realMetaMask = providers.find((provider) => isRealMetaMask(provider) && isProviderUsable(provider));
+  if (realMetaMask) {
+    return { provider: realMetaMask, providerName: "MetaMask" };
+  }
+
+  // Fallback: any provider claiming isMetaMask (might be impersonator but better than nothing)
   if (isProviderUsable(root) && root.isMetaMask) {
     return { provider: root, providerName: "MetaMask" };
   }
