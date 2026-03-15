@@ -1859,8 +1859,10 @@ export async function purchaseGalleryListing(
   return (await res.json()) as GalleryPurchaseResponse;
 }
 
-export function getGalleryDownloadUrl(listingId: number, wallet: string = WALLET): string {
-  return apiUrl(`/gallery/listings/${listingId}/download?wallet=${encodeURIComponent(wallet)}`);
+export function getGalleryDownloadUrl(listingId: number, wallet: string = WALLET, original = false): string {
+  const params = new URLSearchParams({ wallet });
+  if (original) params.set("original", "true");
+  return apiUrl(`/gallery/listings/${listingId}/download?${params.toString()}`);
 }
 
 export async function delistGalleryListing(listingId: number, wallet: string = WALLET): Promise<{ ok: boolean }> {
