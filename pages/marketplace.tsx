@@ -1271,16 +1271,30 @@ const MarketplacePage: NextPage = () => {
                         </button>
                       )}
                       {userIsCurrentOwner && (
-                        <button
-                          type="button"
-                          className="job-action-button secondary"
-                          onClick={() => {
-                            const url = getGalleryDownloadUrl(selectedListing.id, activeWallet || "");
-                            downloadAsset(url, `havnai-${selectedListing.job_id.slice(0, 8)}.${selectedListing.asset_type === "video" ? "mp4" : "png"}`);
-                          }}
-                        >
-                          &#x2913; Download
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="job-action-button"
+                            onClick={() => {
+                              const ext = selectedListing.asset_type === "video" ? "mp4" : "png";
+                              const url = getGalleryDownloadUrl(selectedListing.id, activeWallet || "", true);
+                              downloadAsset(url, `havnai-${selectedListing.job_id.slice(0, 8)}-original.${ext}`);
+                            }}
+                          >
+                            &#x2913; Download (No Watermark)
+                          </button>
+                          <button
+                            type="button"
+                            className="job-action-button secondary"
+                            onClick={() => {
+                              const ext = selectedListing.asset_type === "video" ? "mp4" : "png";
+                              const url = getGalleryDownloadUrl(selectedListing.id, activeWallet || "", false);
+                              downloadAsset(url, `havnai-${selectedListing.job_id.slice(0, 8)}.${ext}`);
+                            }}
+                          >
+                            &#x2913; Download (With Watermark)
+                          </button>
+                        </>
                       )}
                       {userIsCurrentOwner && selectedListing.status !== "active" && !relistModalOpen && (
                         <span className="marketplace-status-badge status-sold" style={{ padding: "0.4rem 0.8rem" }}>
