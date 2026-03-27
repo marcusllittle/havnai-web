@@ -100,6 +100,32 @@ type ModelListEntry = {
 };
 
 type GeneratorMode = "image" | "face_swap" | "video";
+type ImageQualityPreset = "fastest" | "balanced" | "best";
+
+const clampStepValue = (value: number): number => {
+  if (!Number.isFinite(value)) return 30;
+  return Math.max(5, Math.min(50, Math.round(value)));
+};
+
+const resolveImageStepPresets = (defaults?: RuntimeDefaults | null): Record<ImageQualityPreset, number> => {
+  const balanced = clampStepValue(Number(defaults?.steps ?? 30));
+  return {
+    fastest: clampStepValue(balanced - 4),
+    balanced,
+    best: clampStepValue(balanced + 4),
+  };
+};
+
+const formatImageDefaultsSummary = (defaults?: RuntimeDefaults | null): string => {
+  if (!defaults) return "";
+  const parts: string[] = [];
+  if (defaults.guidance != null) parts.push(`${defaults.guidance} CFG`);
+  if (defaults.width != null && defaults.height != null) {
+    parts.push(`${defaults.width}x${defaults.height}`);
+  }
+  if (defaults.sampler) parts.push(String(defaults.sampler));
+  return parts.join(" · ");
+};
 
 const pickPreferredVideoModel = (models: { id: string; label: string }[]): string => {
   const animatediff = models.find((item) => item.id.toLowerCase() === "animatediff");
@@ -192,6 +218,7 @@ const TestPage: React.FC = () => {
   const [videoModels, setVideoModels] = useState<{ id: string; label: string }[]>([]);
   const [faceSwapModels, setFaceSwapModels] = useState<{ id: string; label: string }[]>([]);
   const [modelRuntimeDefaults, setModelRuntimeDefaults] = useState<Record<string, ModelListEntry>>({});
+  const [imageQualityPreset, setImageQualityPreset] = useState<ImageQualityPreset>("balanced");
   const [steps, setSteps] = useState("30");
   const [guidance, setGuidance] = useState("");
   const [width, setWidth] = useState("");
@@ -294,6 +321,8 @@ const TestPage: React.FC = () => {
   const imageDefaultsBadge = summarizeDefaultsSource(selectedImageModelMeta?.defaults_source?.image);
   const videoDefaultsBadge = summarizeDefaultsSource(selectedVideoModelMeta?.defaults_source?.video);
   const faceSwapDefaultsBadge = summarizeDefaultsSource(selectedFaceSwapModelMeta?.defaults_source?.face_swap);
+  const imageStepPresets = resolveImageStepPresets(selectedImageModelMeta?.image_defaults);
+  const imageDefaultsSummary = formatImageDefaultsSummary(selectedImageModelMeta?.image_defaults);
 
   useEffect(() => {
     let active = true;
@@ -450,7 +479,12 @@ const TestPage: React.FC = () => {
       setFaceSourceData(undefined);
       setFaceSourceName(undefined);
       setFaceswapGuidance("");
-      setSteps("30");
+      setSteps("");
+      setGuidance("");
+      setWidth("");
+      setHeight("");
+      setSampler("");
+      setImageQualityPreset("balanced");
       // Default image mode to the first live model when available.
       setSelectedModel(imageModels.length > 0 ? imageModels[0].id : "");
     } else if (mode === "video") {
@@ -737,12 +771,18 @@ const TestPage: React.FC = () => {
 
   const buildOptions = (): SubmitJobOptions | undefined => {
     const options: SubmitJobOptions = {};
-    const stepsValue = parseOptionalInt(steps);
     const seedValue = parseOptionalInt(seed);
+    const modelDefaults = selectedImageModelMeta?.image_defaults || undefined;
+    const requestedLoras = buildLoraPayload();
 
     if (activeWallet) options.wallet = activeWallet;
-    if (stepsValue !== undefined) options.steps = stepsValue;
+    options.steps = imageStepPresets[imageQualityPreset];
+    if (modelDefaults?.guidance != null) options.guidance = modelDefaults.guidance;
+    if (modelDefaults?.width != null) options.width = modelDefaults.width;
+    if (modelDefaults?.height != null) options.height = modelDefaults.height;
+    if (modelDefaults?.sampler) options.sampler = String(modelDefaults.sampler);
     if (seedValue !== undefined) options.seed = seedValue;
+    if (requestedLoras.length > 0) options.loras = requestedLoras;
     if (sfwMode) options.sfwMode = true;
 
     return Object.keys(options).length > 0 ? options : undefined;
@@ -1732,6 +1772,12 @@ const TestPage: React.FC = () => {
                       <p className="generator-help">
                         Pick the image model you want to run for this render.
                       </p>
+                      {selectedImageModelMeta?.image_defaults && (
+                        <p className="generator-help">
+                          Using recommended defaults for this model (source: {imageDefaultsBadge})
+                          {imageDefaultsSummary ? `: ${imageDefaultsSummary}.` : "."}
+                        </p>
+                      )}
                       <span className="adv-group-title">Generation settings</span>
                       <label className="generator-label" htmlFor="image-steps">
                         Steps
@@ -1739,15 +1785,15 @@ const TestPage: React.FC = () => {
                       <select
                         id="image-steps"
                         className="generator-select"
-                        value={steps}
-                        onChange={(e) => setSteps(e.target.value)}
+                        value={imageQualityPreset}
+                        onChange={(e) => setImageQualityPreset(e.target.value as ImageQualityPreset)}
                       >
-                        <option value="25">25 · Fastest</option>
-                        <option value="30">30 · Balanced</option>
-                        <option value="40">40 · Best quality</option>
+                        <option value="fastest">{imageStepPresets.fastest} steps · Fastest</option>
+                        <option value="balanced">{imageStepPresets.balanced} steps · Balanced</option>
+                        <option value="best">{imageStepPresets.best} steps · Best quality</option>
                       </select>
                       <p className="generator-help">
-                        25 is fastest, 30 is balanced, and 40 is best quality.
+                        Step presets now adapt to the selected model's recommended baseline.
                       </p>
                       <label className="generator-label" htmlFor="image-seed">
                         Seed (optional)
