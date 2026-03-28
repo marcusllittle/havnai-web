@@ -1859,8 +1859,7 @@ const TestPage: React.FC = () => {
                               className="generator-select"
                             >
                               <option value="">None</option>
-                              <option value="spatial_upscaler_x2">x2 upscale</option>
-                              <option value="spatial_upscaler_x1_5">x1.5 upscale</option>
+                              <option value="spatial_upscaler_x2">Spatial upscale</option>
                             </select>
                           </div>
                           <div>
