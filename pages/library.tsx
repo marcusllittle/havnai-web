@@ -426,7 +426,7 @@ const LibraryPage: NextPage = () => {
         </section>
 
         {!emptyState && (
-          <section className="library-toolbar">
+          <section className="library-toolbar flagship-library-toolbar">
             <div className="library-toolbar-inner">
               {/* Search */}
               <div className="library-search-wrapper">
@@ -602,7 +602,7 @@ const LibraryPage: NextPage = () => {
             </div>
           )}
           {!loading && filteredItems.length > 0 && (
-            <div className="library-grid">
+            <div className="library-grid flagship-library-grid">
               {filteredItems.map((item) => {
                 const downloadUrl = resolveAssetUrl(
                   item.result?.video_url ||
@@ -616,7 +616,7 @@ const LibraryPage: NextPage = () => {
                 return (
                   <article
                     key={item.entry.job_id}
-                    className={`library-card ${
+                    className={`library-card flagship-library-card ${
                       bulkMode && isSelected ? "is-selected" : ""
                     }`}
                     onClick={
@@ -634,7 +634,7 @@ const LibraryPage: NextPage = () => {
                         />
                       </div>
                     )}
-                    <div className="library-preview">
+                    <div className="library-preview flagship-library-preview">
                       {item.previewUrl ? (
                         item.type === "video" ? (
                           <video src={item.previewUrl} muted playsInline />
@@ -654,7 +654,7 @@ const LibraryPage: NextPage = () => {
                         {item.type}
                       </span>
                     </div>
-                    <div className="library-body">
+                    <div className="library-body flagship-library-body">
                       {item.model && (
                         <div className="library-model">{item.model}</div>
                       )}
