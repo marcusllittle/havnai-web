@@ -1390,7 +1390,7 @@ const TestPage: React.FC = () => {
 
         <section className="generator-section">
           <div className="generator-card">
-            <div className="generator-grid">
+            <div className="generator-grid generator-grid-flagship">
               <div className="generator-left">
                 <div className="invite-panel">
                   <div className={`invite-badge${inviteSaved ? " is-ok" : " is-missing"}`}>
