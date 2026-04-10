@@ -1150,3 +1150,75 @@ body {
     text-align: center;
   }
 }
+
+.flagship-library-hero {
+  position: relative;
+  padding: 98px 24px 28px;
+}
+
+.flagship-library-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(103, 217, 255, 0.1), transparent 24%),
+    radial-gradient(circle at 78% 14%, rgba(143, 125, 255, 0.1), transparent 22%);
+  pointer-events: none;
+}
+
+.flagship-library-hero-inner,
+.flagship-library-status-wrap {
+  width: min(100%, var(--max-width));
+  margin-left: auto;
+  margin-right: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.flagship-library-hero-inner .hero-title {
+  margin: 14px 0 14px;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  max-width: 12ch;
+}
+
+.flagship-library-hero-inner .hero-subtitle {
+  max-width: 66ch;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.flagship-library-page .chart-section,
+.flagship-library-page .library-card,
+.flagship-library-page .empty-state,
+.flagship-library-page .job-details-drawer,
+.flagship-library-page .library-toolbar,
+.flagship-library-page .table-wrap {
+  border-radius: 24px;
+  border: 1px solid rgba(151, 220, 255, 0.1);
+  background: linear-gradient(180deg, rgba(10, 17, 29, 0.9), rgba(6, 11, 20, 0.84));
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(12px);
+}
+
+.flagship-library-page .chart-section {
+  padding: 20px;
+}
+
+.flagship-library-page .chart-title,
+.flagship-library-page .section-title {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+@media (max-width: 720px) {
+  .flagship-library-hero {
+    padding: 88px 16px 20px;
+  }
+
+  .flagship-library-hero-inner .hero-title {
+    font-size: 2.1rem;
+  }
+}
