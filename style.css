@@ -1080,3 +1080,73 @@ body {
   background: rgba(255,255,255,0.04);
   color: var(--text);
 }
+
+@media (max-width: 720px) {
+  .generator-hero-copy-flagship,
+  .generator-hero-status-flagship,
+  .generator-panel-shell {
+    width: 100%;
+  }
+
+  .generator-hero-status-flagship > * {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .generator-panel-shell > section,
+  .generator-panel-shell > div,
+  .generator-panel-shell > aside,
+  .generator-panel-shell .chart-section,
+  .generator-panel-shell .invite-panel {
+    border-radius: 18px;
+  }
+
+  .generator-controls-flagship textarea,
+  .generator-controls-flagship input,
+  .generator-controls-flagship select,
+  .generator-advanced-flagship textarea,
+  .generator-advanced-flagship input,
+  .generator-advanced-flagship select {
+    padding: 12px 14px;
+    border-radius: 16px;
+    font-size: 0.95rem;
+  }
+
+  .generator-output-body {
+    padding: 16px;
+  }
+
+  .generator-output-meta {
+    gap: 8px;
+  }
+
+  .output-meta-badge,
+  .output-meta-model,
+  .output-meta-time,
+  .output-meta-id {
+    font-size: 0.74rem;
+    padding: 7px 10px;
+  }
+
+  .generator-output-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .generator-download {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .generator-mode-tabs {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-radius: 22px;
+  }
+
+  .generator-mode-tabs button {
+    width: 100%;
+    text-align: center;
+  }
+}
