@@ -674,3 +674,112 @@ body {
     font-size: 0.86rem;
   }
 }
+
+
+.jh-stage-panel-main {
+  position: relative;
+}
+
+.jh-stage-visual-main {
+  min-height: 420px;
+}
+
+.jh-stage-gridline {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 42px 42px;
+  opacity: 0.28;
+  mask-image: radial-gradient(circle at center, black 32%, transparent 82%);
+}
+
+.jh-hero-sideband {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.jh-sideband-card {
+  border-radius: 18px;
+  border: 1px solid rgba(151, 220, 255, 0.12);
+  background: rgba(255,255,255,0.03);
+  padding: 14px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.jh-sideband-card strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--text);
+}
+
+.jh-highlight-media {
+  position: relative;
+  overflow: hidden;
+}
+
+.jh-highlight-media::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 28% 30%, rgba(103, 217, 255, 0.24), transparent 22%),
+    radial-gradient(circle at 74% 42%, rgba(143, 125, 255, 0.22), transparent 26%),
+    linear-gradient(180deg, rgba(8, 14, 26, 0.28), rgba(3, 7, 14, 0.74));
+}
+
+.jh-highlight-overlay-card {
+  position: absolute;
+  z-index: 2;
+  max-width: 240px;
+  border-radius: 18px;
+  border: 1px solid rgba(151, 220, 255, 0.14);
+  background: rgba(7, 13, 24, 0.72);
+  backdrop-filter: blur(12px);
+  padding: 14px;
+  box-shadow: var(--shadow-panel);
+}
+
+.jh-highlight-overlay-card.top {
+  top: 18px;
+  left: 18px;
+}
+
+.jh-highlight-overlay-card.bottom {
+  right: 18px;
+  bottom: 18px;
+}
+
+.jh-highlight-overlay-card strong {
+  display: block;
+  margin-top: 8px;
+}
+
+@media (max-width: 1080px) {
+  .jh-hero-sideband {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .jh-stage-visual-main {
+    min-height: 300px;
+  }
+
+  .jh-highlight-overlay-card {
+    position: static;
+    max-width: none;
+    margin: 14px;
+  }
+
+  .jh-highlight-media {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding-bottom: 8px;
+  }
+}
