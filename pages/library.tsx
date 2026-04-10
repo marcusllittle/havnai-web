@@ -388,19 +388,19 @@ const LibraryPage: NextPage = () => {
       </Head>
       <SiteHeader />
 
-      <main className="library-page">
-        <section className="library-hero">
-          <div className="library-hero-inner">
-            <p className="hero-kicker">My Library</p>
-            <h1 className="hero-title">Saved creations</h1>
+      <main className="library-page flagship-library-page">
+        <section className="library-hero flagship-library-hero">
+          <div className="library-hero-inner flagship-library-hero-inner">
+            <p className="hero-kicker">Ownership Hub</p>
+            <h1 className="hero-title">Your collected outputs, ready to keep, use, and list.</h1>
             <p className="hero-subtitle">
-              Saved outputs from this browser stay local until you choose to publish them to the
-              Public Alpha marketplace.
+              Library should feel like your premium inventory layer, the place where generated work becomes
+              part of your owned ecosystem and can move into collection, download, or marketplace flow.
             </p>
           </div>
         </section>
 
-        <section className="page-container">
+        <section className="page-container flagship-library-status-wrap">
           <div className="wallet-status-card wallet-status-card-inline">
             <div className="wallet-status-copy-block">
               <div className="wallet-status-heading-row">
