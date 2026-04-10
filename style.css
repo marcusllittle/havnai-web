@@ -1009,3 +1009,74 @@ body {
   border-color: rgba(255,255,255,0.12);
   background: rgba(255,255,255,0.04);
 }
+
+.generator-controls-flagship,
+.generator-advanced-flagship {
+  display: grid;
+  gap: 14px;
+}
+
+.generator-controls-flagship textarea,
+.generator-controls-flagship input,
+.generator-controls-flagship select,
+.generator-advanced-flagship textarea,
+.generator-advanced-flagship input,
+.generator-advanced-flagship select {
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid rgba(151, 220, 255, 0.12);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  padding: 14px 16px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+.generator-controls-flagship textarea,
+.generator-advanced-flagship textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+
+.generator-controls-flagship label,
+.generator-advanced-flagship label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+.generator-controls-flagship .generator-help,
+.generator-advanced-flagship .generator-help {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.generator-controls-flagship button,
+.generator-advanced-flagship button,
+.generator-panel-shell button.primary,
+.generator-panel-shell button.secondary {
+  border-radius: 16px;
+  border: 1px solid rgba(151, 220, 255, 0.14);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.generator-controls-flagship button:hover,
+.generator-advanced-flagship button:hover,
+.generator-panel-shell button.primary:hover,
+.generator-panel-shell button.secondary:hover {
+  transform: translateY(-1px);
+}
+
+.generator-panel-shell button.primary {
+  background: linear-gradient(135deg, var(--accent), #9de7ff);
+  color: #031018;
+  border-color: transparent;
+  box-shadow: 0 14px 34px rgba(103, 217, 255, 0.2);
+}
+
+.generator-panel-shell button.secondary {
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+}
