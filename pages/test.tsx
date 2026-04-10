@@ -1551,7 +1551,7 @@ const TestPage: React.FC = () => {
                 )}
 
                 {mode === "face_swap" && (
-                  <div className="generator-advanced">
+                  <div className="generator-advanced generator-advanced-flagship">
                     <span className="generator-label">Face swap inputs</span>
                     <label className="generator-label" htmlFor="base-image-url">
                       Base image URL
@@ -1695,7 +1695,7 @@ const TestPage: React.FC = () => {
                   </div>
                 )}
 
-                <div className="generator-controls">
+                <div className="generator-controls generator-controls-flagship">
                   <HavnAIButton
                     label={
                       mode === "face_swap"
@@ -1742,7 +1742,7 @@ const TestPage: React.FC = () => {
                 </div>
 
                 {advancedOpen && mode === "image" && (
-                  <div className="generator-advanced">
+                  <div className="generator-advanced generator-advanced-flagship">
                     <div className="adv-group">
                       <label className="generator-label" htmlFor="image-model">
                         Model
@@ -1800,7 +1800,7 @@ const TestPage: React.FC = () => {
                 )}
 
                 {advancedOpen && mode === "video" && (
-                  <div className="generator-advanced">
+                  <div className="generator-advanced generator-advanced-flagship">
                     <span className="generator-label">Video settings</span>
                     <p className="generator-help">
                       {isLtxVideoModel
