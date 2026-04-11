@@ -1693,3 +1693,69 @@ body {
     font-size: 2.1rem;
   }
 }
+
+
+:root {
+  --section-y: 42px;
+  --section-y-mobile: 28px;
+  --hero-top: 98px;
+  --hero-top-mobile: 88px;
+}
+
+.flagship-library-hero,
+.flagship-marketplace-hero,
+.flagship-pricing-hero,
+.flagship-join-hero,
+.flagship-ops-page .page-hero {
+  padding-top: var(--hero-top);
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.flagship-library-page .page-container,
+.flagship-marketplace-page .page-container,
+.flagship-pricing-page .page-container,
+.flagship-ops-page .page-container {
+  width: min(100%, var(--max-width));
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.flagship-library-page .chart-section,
+.flagship-marketplace-page .chart-section,
+.flagship-pricing-page .chart-section,
+.flagship-ops-page .chart-section,
+.generator-panel-shell > section,
+.generator-panel-shell > div,
+.generator-panel-shell > aside,
+.generator-panel-shell .chart-section,
+.generator-panel-shell .invite-panel {
+  border-color: rgba(151, 220, 255, 0.1);
+  background: linear-gradient(180deg, rgba(10, 17, 29, 0.9), rgba(6, 11, 20, 0.84));
+}
+
+.flagship-library-page button,
+.flagship-marketplace-page button,
+.flagship-pricing-page button,
+.flagship-ops-page button,
+.generator-panel-shell button {
+  border-radius: 16px;
+}
+
+@media (max-width: 720px) {
+  .flagship-library-hero,
+  .flagship-marketplace-hero,
+  .flagship-pricing-hero,
+  .flagship-join-hero,
+  .flagship-ops-page .page-hero {
+    padding-top: var(--hero-top-mobile);
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .jh-section,
+  .jh-final-cta {
+    padding-top: var(--section-y-mobile);
+    padding-bottom: var(--section-y-mobile);
+  }
+}
