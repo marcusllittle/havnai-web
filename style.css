@@ -1438,3 +1438,68 @@ body {
     padding: 16px;
   }
 }
+
+.flagship-pricing-hero {
+  position: relative;
+  padding: 98px 24px 28px;
+}
+
+.flagship-pricing-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(103, 217, 255, 0.1), transparent 24%),
+    radial-gradient(circle at 78% 14%, rgba(143, 125, 255, 0.1), transparent 22%),
+    linear-gradient(180deg, rgba(4, 7, 13, 0.16), rgba(4, 7, 13, 0));
+  pointer-events: none;
+}
+
+.flagship-pricing-hero-inner {
+  width: min(100%, var(--max-width));
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.flagship-pricing-hero-inner .hero-title {
+  margin: 14px 0 14px;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  max-width: 13ch;
+}
+
+.flagship-pricing-hero-inner .hero-subtitle {
+  max-width: 66ch;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.flagship-pricing-page .pricing-card,
+.flagship-pricing-page .pricing-pack,
+.flagship-pricing-page .pricing-summary,
+.flagship-pricing-page .pricing-info,
+.flagship-pricing-page .chart-section,
+.flagship-pricing-page .empty-state {
+  border-radius: 24px;
+  border: 1px solid rgba(151, 220, 255, 0.1);
+  background: linear-gradient(180deg, rgba(10, 17, 29, 0.9), rgba(6, 11, 20, 0.84));
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(12px);
+}
+
+.flagship-pricing-page .chart-section {
+  padding: 20px;
+}
+
+@media (max-width: 720px) {
+  .flagship-pricing-hero {
+    padding: 88px 16px 20px;
+  }
+
+  .flagship-pricing-hero-inner .hero-title {
+    font-size: 2.1rem;
+  }
+}
