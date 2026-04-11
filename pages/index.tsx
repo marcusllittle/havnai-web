@@ -302,6 +302,48 @@ const HomePage: NextPage = () => {
           </div>
         </section>
       </main>
+
+      <footer className="site-footer">
+        <div className="footer-inner footer-layout">
+          <div className="footer-col footer-col-left">
+            <div className="footer-brand">
+              <img src="/HavnAI-logo.png" alt="JoinHavn" className="footer-logo" />
+              <div>
+                <div className="footer-brand-name">JoinHavn</div>
+                <p className="footer-tagline">Decentralized GPU network for AI creators.</p>
+              </div>
+            </div>
+            <p className="footer-copy">&copy; 2025 JoinHavn</p>
+          </div>
+
+          <div className="footer-col footer-col-center">
+            <h4>Follow</h4>
+            <ul>
+              <li>
+                <a href="https://x.com/joinHAVNAI" target="_blank" rel="noreferrer">
+                  Twitter / X
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://www.patreon.com/cw/u38989793"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Patreon
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div className="footer-col footer-col-right">
+            <h4>Contact</h4>
+            <a className="footer-email" href="mailto:team@joinhavn.io">
+              team@joinhavn.io
+            </a>
+          </div>
+        </div>
+      </footer>
     </>
   );
 };
