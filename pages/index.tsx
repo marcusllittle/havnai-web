@@ -1,7 +1,13 @@
 import type { NextPage } from "next";
 import Head from "next/head";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { SiteHeader } from "../components/SiteHeader";
+import {
+  fetchAnalyticsOverview,
+  fetchGalleryBrowse,
+  AnalyticsOverview,
+} from "../lib/havnai";
 
 const pilots = [
   {
@@ -51,7 +57,7 @@ const showcaseItems = [
   },
   {
     label: "Collection",
-    desc: "Everything you earn, you keep.",
+    desc: "Track what you've created and collected.",
     img: "/astra/outfits/void_reaper.webp",
     contain: true,
   },
@@ -65,34 +71,44 @@ const pipelineSteps = [
   },
   {
     step: "Save",
-    desc: "Assets go to your Library",
+    desc: "Outputs go to your Library",
     icon: "\u2193",
   },
   {
-    step: "Claim",
-    desc: "Mint to establish ownership",
-    icon: "\u2b22",
-  },
-  {
-    step: "Own",
-    desc: "Stored in your Collection",
+    step: "Collect",
+    desc: "Claim and build your collection",
     icon: "\u25c7",
   },
   {
-    step: "Use",
-    desc: "Assets gain meaning in Astra",
+    step: "Trade",
+    desc: "List on the Marketplace",
     icon: "\u2192",
   },
 ];
 
 const HomePage: NextPage = () => {
+  const [networkStats, setNetworkStats] = useState<AnalyticsOverview | null>(null);
+  const [featuredImg, setFeaturedImg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchAnalyticsOverview()
+      .then(setNetworkStats)
+      .catch(() => {});
+    fetchGalleryBrowse({ asset_type: "image", sort: "newest", limit: 1 })
+      .then((res) => {
+        const listing = res.listings[0];
+        if (listing?.image_url) setFeaturedImg(listing.image_url);
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <>
       <Head>
         <title>JoinHavn | Enter the World</title>
         <meta
           name="description"
-          content="JoinHavn is a sci-fi ecosystem where you create with AI, own what you make, and use it in Astra Valkyries — a living world with combat, pilots, progression, and rewards."
+          content="JoinHavn — create with AI, collect what you make, and enter Astra Valkyries, a sci-fi world with combat, pilots, and progression."
         />
       </Head>
 
@@ -115,8 +131,8 @@ const HomePage: NextPage = () => {
               Enter the world.<br />Own what you create.
             </h1>
             <p className="jh-hero-subtitle">
-              Astra Valkyries is a living sci-fi world with combat, pilots, progression, and
-              rewards&mdash;powered by HavnAI, a creator-owned AI platform built on decentralized compute.
+              Astra Valkyries is a sci-fi world with combat, pilots, and progression.
+              Create with HavnAI. Collect what you make.
             </p>
             <div className="jh-hero-actions">
               <a
@@ -129,9 +145,6 @@ const HomePage: NextPage = () => {
               </a>
               <Link href="/generator" className="jh-btn jh-btn-secondary">
                 Start Creating
-              </Link>
-              <Link href="/join" className="jh-btn jh-btn-tertiary">
-                Run a Node
               </Link>
             </div>
           </div>
@@ -146,6 +159,50 @@ const HomePage: NextPage = () => {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* ── Entry Points ── */}
+        <section className="jh-entry">
+          <div className="jh-entry-grid">
+            <a
+              href="https://play.joinhavn.io/"
+              className="jh-entry-card"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <img
+                src="/astra/pilots/nova_starling.png"
+                alt="Play Astra"
+                className="jh-entry-img"
+              />
+              <div className="jh-entry-overlay">
+                <strong>Play</strong>
+                <span>Enter Astra Valkyries</span>
+              </div>
+            </a>
+            <Link href="/generator" className="jh-entry-card">
+              <img
+                src={featuredImg || "/astra/scenes/abyss_crown_briefing.png"}
+                alt="Create"
+                className="jh-entry-img"
+              />
+              <div className="jh-entry-overlay">
+                <strong>Create</strong>
+                <span>Generate with HavnAI</span>
+              </div>
+            </Link>
+            <Link href="/join" className="jh-entry-card">
+              <img
+                src="/astra/scenes/solar_rift_briefing.png"
+                alt="Operate"
+                className="jh-entry-img"
+              />
+              <div className="jh-entry-overlay">
+                <strong>Operate</strong>
+                <span>Power the Network</span>
+              </div>
+            </Link>
           </div>
         </section>
 
@@ -187,11 +244,11 @@ const HomePage: NextPage = () => {
           </div>
         </section>
 
-        {/* ── HavnAI Pipeline ── */}
+        {/* ── How It Works ── */}
         <section className="jh-pipeline">
           <div className="jh-pipeline-header">
-            <span className="jh-eyebrow">HavnAI Engine</span>
-            <h2>Create with AI. Claim what&rsquo;s yours. Use it in the world.</h2>
+            <span className="jh-eyebrow">How It Works</span>
+            <h2>Create with AI. Collect what you make. Trade on the Marketplace.</h2>
           </div>
           <div className="jh-pipeline-flow">
             {pipelineSteps.map((s, i) => (
@@ -216,60 +273,29 @@ const HomePage: NextPage = () => {
         <section className="jh-network">
           <div className="jh-network-inner">
             <div className="jh-network-copy">
-              <span className="jh-eyebrow">Decentralized Compute</span>
+              <span className="jh-eyebrow">The Network</span>
               <h2>Run a node. Power the engine.</h2>
               <p>
                 JoinHavn runs on a decentralized compute network. Contribute your GPU, serve
                 live AI jobs, and earn rewards for powering the system.
               </p>
+              {networkStats && (
+                <div className="jh-network-stats">
+                  <span className="jh-network-stat">
+                    <strong>{networkStats.online_nodes ?? networkStats.active_nodes}</strong> nodes online
+                  </span>
+                  <span className="jh-network-stat">
+                    <strong>{networkStats.total_jobs.toLocaleString()}</strong> jobs served
+                  </span>
+                  <span className="jh-network-stat">
+                    <strong>{(networkStats.success_rate * 100).toFixed(0)}%</strong> success rate
+                  </span>
+                </div>
+              )}
               <Link href="/join" className="jh-btn jh-btn-tertiary">
                 Become an Operator
               </Link>
             </div>
-          </div>
-        </section>
-
-        {/* ── Entry Points ── */}
-        <section className="jh-entry">
-          <div className="jh-entry-grid">
-            <a
-              href="https://play.joinhavn.io/"
-              className="jh-entry-card"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <img
-                src="/astra/pilots/nova_starling.png"
-                alt="Play Astra"
-                className="jh-entry-img"
-              />
-              <div className="jh-entry-overlay">
-                <strong>Play</strong>
-                <span>Enter Astra Valkyries</span>
-              </div>
-            </a>
-            <Link href="/generator" className="jh-entry-card">
-              <img
-                src="/astra/scenes/abyss_crown_briefing.png"
-                alt="Create"
-                className="jh-entry-img"
-              />
-              <div className="jh-entry-overlay">
-                <strong>Create</strong>
-                <span>Generate with HavnAI</span>
-              </div>
-            </Link>
-            <Link href="/join" className="jh-entry-card">
-              <img
-                src="/astra/ships/valkyrie_lancer.png"
-                alt="Build"
-                className="jh-entry-img"
-              />
-              <div className="jh-entry-overlay">
-                <strong>Build</strong>
-                <span>Run a Node</span>
-              </div>
-            </Link>
           </div>
         </section>
       </main>

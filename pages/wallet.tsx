@@ -203,7 +203,7 @@ const WalletPage: NextPage = () => {
 
   return (
     <>
-      <Head><title>HavnAI Wallet</title></Head>
+      <Head><title>Wallet — JoinHavn</title></Head>
       <SiteHeader />
 
       <main className="library-page">
@@ -211,7 +211,7 @@ const WalletPage: NextPage = () => {
           <div className="page-hero-inner">
             <p className="hero-kicker">Wallet</p>
             <h1 className="hero-title">Your Wallet</h1>
-            <p className="hero-subtitle">View your Public Alpha credits, tracked HAI, Sepolia balance, and funding history in one place.</p>
+            <p className="hero-subtitle">Credits, tracked HAI, Sepolia balance, and funding history in one place.</p>
           </div>
         </section>
 
