@@ -395,7 +395,7 @@ const LibraryPage: NextPage = () => {
           eyebrow="Collection"
           title="Own the renders you keep."
           description="Your library is the private ownership hub for browser-saved outputs, finished jobs, and the pieces you want to move into the marketplace on your terms."
-          imageSrc="/astra/scenes/nebula_runway_debrief.png"
+          mediaVariant="library"
           panelEyebrow="Ownership Hub"
           panelTitle="Local first. Publish when ready."
           panelDescription="Every saved result stays staged in this browser until you decide to download it, inspect it, or list it for sale."

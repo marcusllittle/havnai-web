@@ -574,7 +574,7 @@ const MarketplacePage: NextPage = () => {
           eyebrow="Marketplace"
           title="Trade the outputs. Reuse the systems."
           description={`The ${PUBLIC_ALPHA_LABEL.toLowerCase()} exchange layer for collectible media, exclusive ownership transfer, and reusable workflow setups that can route back into the generator.`}
-          imageSrc="/astra/scenes/solar_rift_briefing.png"
+          mediaVariant="marketplace"
           panelEyebrow="Exchange Floor"
           panelTitle="Gallery ownership + workflow distribution"
           panelDescription="Browse public listings without a wallet, then connect when you want to buy, list, or relist assets tied to your active identity."

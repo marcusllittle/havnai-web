@@ -1403,7 +1403,7 @@ const TestPage: React.FC = () => {
           eyebrow={`${PUBLIC_ALPHA_LABEL} Generator`}
           title="Create on the grid."
           description="Write a prompt, route into live network capacity, and generate images, face swaps, or video without leaving the JoinHavn creation stack."
-          imageSrc="/astra/pilots/rex_thunderbolt.png"
+          mediaVariant="creation"
           panelEyebrow="Creation Deck"
           panelTitle={`${totalVisibleModels.toLocaleString()} visible model slots`}
           panelDescription={`Current mode: ${modeSummary}. Use the generator to render, inspect job status, and push finished outputs into your library or marketplace flow.`}

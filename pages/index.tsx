@@ -111,7 +111,6 @@ const HomePage: NextPage = () => {
           </div>
 
           <div className="jh-hero-inner">
-            <span className="jh-eyebrow">JoinHavn</span>
             <h1 className="jh-hero-title">
               Enter the world.<br />Own what you create.
             </h1>

@@ -39,8 +39,7 @@ const JoinPage: NextPage = () => {
           eyebrow="Join the Grid"
           title="Bring your GPU onto the network."
           description="Install the node client, register your operator identity, and start serving live generation jobs into the JoinHavn ecosystem with visible uptime and reward history."
-          imageSrc="/astra/ships/seraph_guard.png"
-          imageContain
+          mediaVariant="join"
           panelEyebrow="Operator Onboarding"
           panelTitle="Fast install. Clear prerequisites. Live visibility."
           panelDescription="The onboarding path is built for Public Alpha operators who want to move from setup to live node telemetry without guesswork."

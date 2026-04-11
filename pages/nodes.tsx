@@ -126,8 +126,7 @@ const NodesPage: NextPage = () => {
           eyebrow="Network"
           title="Watch the grid in real time."
           description="Live operator telemetry from the coordinator shows which machines are online, what capacity they expose, and how Public Alpha activity is flowing through the network."
-          imageSrc="/astra/ships/astra_interceptor.png"
-          imageContain
+          mediaVariant="network"
           panelEyebrow="Node Telemetry"
           panelTitle="Capacity, uptime, trust, rewards"
           panelDescription="Use this view to monitor the machines powering image, face swap, and video jobs, then jump into onboarding when you are ready to add your own hardware."

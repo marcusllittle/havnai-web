@@ -11,7 +11,7 @@ interface NavItem {
 }
 
 const PRIMARY_NAV: NavItem[] = [
-  { href: "https://play.joinhavn.io/", label: "Astra", external: true, accent: true },
+  { href: "https://astra.joinhavn.io", label: "Astra", external: true, accent: true },
   { href: "/generator", label: "Create" },
   { href: "/library", label: "Collection" },
   { href: "/marketplace", label: "Marketplace" },
@@ -36,9 +36,8 @@ export function SiteHeader() {
   return (
     <header className="site-header">
       <div className="header-inner">
-        <Link href="/" className="brand" onClick={() => setNavOpen(false)}>
+        <Link href="/" className="brand" aria-label="JoinHavn home" onClick={() => setNavOpen(false)}>
           <img src="/HavnAI-logo.png" alt="JoinHavn" className="brand-logo" />
-          <span className="brand-name">JoinHavn</span>
         </Link>
 
         <button

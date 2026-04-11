@@ -433,8 +433,7 @@ const PricingPage: NextPage = () => {
           eyebrow="Credits"
           title="Fund creation on the grid."
           description="Credits are the usage rail behind image, face swap, and video generation across JoinHavn. This page tracks live funding routes, package availability, and the current cost profile for outputs."
-          imageSrc="/astra/outfits/starfall_armor.webp"
-          imageContain
+          mediaVariant="credits"
           panelEyebrow="Funding Rails"
           panelTitle={haiFundingConfigured ? "Sepolia HAI is live now" : "Wallet-linked credit funding"}
           panelDescription="Card checkout appears only on deployments where it has been enabled, while wallet flows stay tied to the identity shown below."
