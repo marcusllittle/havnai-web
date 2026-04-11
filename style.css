@@ -1392,3 +1392,49 @@ body {
     font-size: 2.1rem;
   }
 }
+
+.flagship-marketplace-owned-list,
+.flagship-marketplace-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.flagship-marketplace-owned-row {
+  overflow: hidden;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.flagship-marketplace-owned-row:hover {
+  transform: translateY(-4px);
+  border-color: rgba(151, 220, 255, 0.18);
+  box-shadow: 0 24px 80px rgba(103, 217, 255, 0.08);
+}
+
+.flagship-marketplace-owned-preview {
+  background: linear-gradient(180deg, rgba(5, 10, 20, 0.84), rgba(4, 7, 14, 0.98));
+  border-bottom: 1px solid rgba(151, 220, 255, 0.08);
+}
+
+.flagship-marketplace-owned-preview img,
+.flagship-marketplace-owned-preview video {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+  aspect-ratio: 3 / 4;
+}
+
+.flagship-marketplace-owned-copy {
+  padding: 18px;
+}
+
+.flagship-marketplace-owned-copy h3,
+.flagship-marketplace-owned-copy h4,
+.flagship-marketplace-owned-copy strong {
+  font-family: "Space Grotesk", Inter, sans-serif;
+}
+
+@media (max-width: 720px) {
+  .flagship-marketplace-owned-copy {
+    padding: 16px;
+  }
+}
