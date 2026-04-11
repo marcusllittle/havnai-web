@@ -43,7 +43,7 @@ export function SiteHeader() {
 
         <button
           type="button"
-          className={`nav-toggle flagship-nav-toggle ${navOpen ? "nav-open" : ""}`}
+          className={`nav-toggle ${navOpen ? "nav-open" : ""}`}
           aria-label="Toggle navigation"
           onClick={() => setNavOpen((o) => !o)}
         >
@@ -52,8 +52,9 @@ export function SiteHeader() {
         </button>
 
         <nav
-          className={`nav-links flagship-nav-links ${navOpen ? "nav-open" : ""}`}
+          className={`nav-links ${navOpen ? "nav-open" : ""}`}
           aria-label="Primary navigation"
+          onClick={() => setNavOpen(false)}
         >
           {PRIMARY_NAV.map((item) => {
             const active = isActive(router.pathname, item.href);
@@ -62,7 +63,7 @@ export function SiteHeader() {
               return (
                 <a key={item.href} href={item.href} className={cls} target="_blank" rel="noreferrer">
                   {item.label}
-                </Link>
+                </a>
               );
             }
             return (
