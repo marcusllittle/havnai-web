@@ -19,8 +19,6 @@ import {
   fetchJobWithResult,
   fetchQuota,
   fetchCredits,
-  fetchNodes,
-  fetchOperatorWorkers,
   stitchVideos,
   HavnaiApiError,
   JobDetailResponse,
@@ -35,12 +33,6 @@ import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 import { getJobSSE, SSEEvent } from "../lib/sse";
 import { getApiBase } from "../lib/apiBase";
 import { getConnectButtonLabel } from "../lib/wallet";
-import {
-  deriveCatalogModelsFromWorkers,
-  mergeGeneratorCatalogModels,
-  normalizeGeneratorCatalogModels,
-  partitionGeneratorModels,
-} from "../lib/generatorModelCatalog";
 import { buildModelOptionLabel } from "../lib/modelMetadata";
 import {
   getWalletIdentityLabel,
@@ -389,22 +381,30 @@ const TestPage: React.FC = () => {
         const res = await fetch(`${getApiBase()}/models/list`, { credentials: "same-origin" });
         if (!res.ok) throw new Error(`models HTTP ${res.status}`);
         const data = await res.json();
-        const baseModels = normalizeGeneratorCatalogModels(data?.models ?? data) as ModelListEntry[];
-
-        const operatorPayload = await fetchOperatorWorkers(300, "online").catch(() => null);
-        const liveWorkers = operatorPayload?.workers?.length
-          ? operatorPayload.workers
-          : await fetchNodes().catch(() => []);
-        const liveWorkerModels = deriveCatalogModelsFromWorkers(liveWorkers) as ModelListEntry[];
-        const models = mergeGeneratorCatalogModels(baseModels, liveWorkerModels) as ModelListEntry[];
+        const models: ModelListEntry[] = Array.isArray(data?.models) ? data.models : [];
 
         if (!active) return;
 
-        const {
-          imageModels: imageModelsData,
-          videoModels: videoModelsData,
-          faceSwapModels: faceSwapModelsData,
-        } = partitionGeneratorModels(models);
+        // Separate models by task type
+        const imageModelsData = models.filter((m) => {
+          const taskType = String(m.task_type || "").toUpperCase();
+          const pipeline = String(m.pipeline || "").toLowerCase();
+          if (!(taskType === "IMAGE_GEN" || !taskType)) return false;
+          // Keep generator image model list focused on SDXL models only.
+          if (m.available !== true) return false;
+          if (!pipeline.includes("sdxl")) return false;
+          return true;
+        });
+        const videoModelsData = models.filter((m) => {
+          const taskType = String(m.task_type || "").toUpperCase();
+          return (taskType === "VIDEO_GEN" || taskType === "ANIMATEDIFF" || taskType === "LTX_VIDEO_GEN") && m.available === true;
+        });
+
+        // Face swap models: only currently available SDXL entries.
+        const faceSwapModelsData = imageModelsData.filter((m) => {
+          const pipeline = String(m.pipeline || "").toLowerCase();
+          return pipeline.includes("sdxl") && m.face_swap_available === true;
+        });
 
         // Transform to dropdown format with tier badges and clean names
         const imageOptions = imageModelsData.map((m) => ({
