@@ -1438,7 +1438,7 @@ const TestPage: React.FC = () => {
 
         <section className="generator-section">
           <div className="generator-card">
-            <div className="generator-grid generator-grid-flagship">
+            <div className="generator-grid">
               <div className="generator-left">
                 <div className="invite-panel">
                   <div className={`invite-badge${inviteSaved ? " is-ok" : " is-missing"}`}>
@@ -1599,7 +1599,7 @@ const TestPage: React.FC = () => {
                 )}
 
                 {mode === "face_swap" && (
-                  <div className="generator-advanced generator-advanced-flagship">
+                  <div className="generator-advanced">
                     <span className="generator-label">Face swap inputs</span>
                     <label className="generator-label" htmlFor="base-image-url">
                       Base image URL
@@ -1743,7 +1743,7 @@ const TestPage: React.FC = () => {
                   </div>
                 )}
 
-                <div className="generator-controls generator-controls-flagship">
+                <div className="generator-controls">
                   <HavnAIButton
                     label={
                       mode === "face_swap"
@@ -1790,7 +1790,7 @@ const TestPage: React.FC = () => {
                 </div>
 
                 {advancedOpen && mode === "image" && (
-                  <div className="generator-advanced generator-advanced-flagship">
+                  <div className="generator-advanced">
                     <div className="adv-group">
                       <label className="generator-label" htmlFor="image-model">
                         Model
@@ -1848,7 +1848,7 @@ const TestPage: React.FC = () => {
                 )}
 
                 {advancedOpen && mode === "video" && (
-                  <div className="generator-advanced generator-advanced-flagship">
+                  <div className="generator-advanced">
                     <span className="generator-label">Video settings</span>
                     <p className="generator-help">
                       {isLtxVideoModel
