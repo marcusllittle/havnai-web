@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { partitionGeneratorModels } from "../generatorModelCatalog";
+import {
+  deriveCatalogModelsFromWorkers,
+  mergeGeneratorCatalogModels,
+  normalizeGeneratorCatalogModels,
+  partitionGeneratorModels,
+} from "../generatorModelCatalog";
 
 describe("partitionGeneratorModels", () => {
   it("prefers explicitly labeled SDXL image models when present", () => {
@@ -68,5 +73,49 @@ describe("partitionGeneratorModels", () => {
       "epicrealismXL_vxviiCrystalclear",
     ]);
     expect(result.videoModels.map((entry) => entry.name)).toEqual(["ltx_video_dev"]);
+  });
+
+  it("normalizes object-shaped catalogs and truthy string flags", () => {
+    const models = normalizeGeneratorCatalogModels({
+      perfect: {
+        model: "perfectdeliberate_v60",
+        available: "true",
+        task_type: "IMAGE_GEN",
+        pipeline: "sdxl",
+      },
+    });
+
+    const result = partitionGeneratorModels(models);
+
+    expect(result.imageModels.map((entry) => entry.name)).toEqual(["perfectdeliberate_v60"]);
+  });
+
+  it("merges live worker inventory when model metadata is incomplete", () => {
+    const primaryModels = normalizeGeneratorCatalogModels([
+      {
+        name: "perfectdeliberate_v60",
+        available: "false",
+      },
+    ]);
+    const workerModels = deriveCatalogModelsFromWorkers([
+      {
+        online: true,
+        supported_job_types: ["IMAGE_GEN", "FACE_SWAP"],
+        models: ["perfectdeliberate_v60", "epicrealismXL_vxviiCrystalclear"],
+        pipelines: ["sdxl", "sdxl"],
+      },
+    ]);
+
+    const merged = mergeGeneratorCatalogModels(primaryModels, workerModels);
+    const result = partitionGeneratorModels(merged);
+
+    expect(result.imageModels.map((entry) => entry.name)).toEqual([
+      "perfectdeliberate_v60",
+      "epicrealismXL_vxviiCrystalclear",
+    ]);
+    expect(result.faceSwapModels.map((entry) => entry.name)).toEqual([
+      "perfectdeliberate_v60",
+      "epicrealismXL_vxviiCrystalclear",
+    ]);
   });
 });

@@ -19,6 +19,8 @@ import {
   fetchJobWithResult,
   fetchQuota,
   fetchCredits,
+  fetchNodes,
+  fetchOperatorWorkers,
   stitchVideos,
   HavnaiApiError,
   JobDetailResponse,
@@ -33,7 +35,12 @@ import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 import { getJobSSE, SSEEvent } from "../lib/sse";
 import { getApiBase } from "../lib/apiBase";
 import { getConnectButtonLabel } from "../lib/wallet";
-import { partitionGeneratorModels } from "../lib/generatorModelCatalog";
+import {
+  deriveCatalogModelsFromWorkers,
+  mergeGeneratorCatalogModels,
+  normalizeGeneratorCatalogModels,
+  partitionGeneratorModels,
+} from "../lib/generatorModelCatalog";
 import { buildModelOptionLabel } from "../lib/modelMetadata";
 import {
   getWalletIdentityLabel,
@@ -382,7 +389,14 @@ const TestPage: React.FC = () => {
         const res = await fetch(`${getApiBase()}/models/list`, { credentials: "same-origin" });
         if (!res.ok) throw new Error(`models HTTP ${res.status}`);
         const data = await res.json();
-        const models: ModelListEntry[] = Array.isArray(data?.models) ? data.models : [];
+        const baseModels = normalizeGeneratorCatalogModels(data?.models ?? data) as ModelListEntry[];
+
+        const operatorPayload = await fetchOperatorWorkers(300, "online").catch(() => null);
+        const liveWorkers = operatorPayload?.workers?.length
+          ? operatorPayload.workers
+          : await fetchNodes().catch(() => []);
+        const liveWorkerModels = deriveCatalogModelsFromWorkers(liveWorkers) as ModelListEntry[];
+        const models = mergeGeneratorCatalogModels(baseModels, liveWorkerModels) as ModelListEntry[];
 
         if (!active) return;
 
