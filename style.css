@@ -1286,3 +1286,43 @@ body {
     padding: 16px;
   }
 }
+
+.flagship-job-drawer {
+  backdrop-filter: blur(10px);
+}
+
+.flagship-job-drawer-panel {
+  border-radius: 28px 0 0 28px;
+  border-left: 1px solid rgba(151, 220, 255, 0.12);
+  background: linear-gradient(180deg, rgba(10, 17, 29, 0.96), rgba(6, 11, 20, 0.96));
+  box-shadow: -24px 0 80px rgba(0, 0, 0, 0.35);
+}
+
+.flagship-job-drawer-header {
+  border-bottom: 1px solid rgba(151, 220, 255, 0.08);
+}
+
+.flagship-job-drawer-body {
+  color: var(--text-muted);
+}
+
+.flagship-job-drawer-body .job-action-button,
+.flagship-library-page button,
+.flagship-library-page .library-toolbar button {
+  border-radius: 16px;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.flagship-job-drawer-body .job-action-button:hover,
+.flagship-library-page button:hover,
+.flagship-library-page .library-toolbar button:hover {
+  transform: translateY(-1px);
+}
+
+@media (max-width: 720px) {
+  .flagship-job-drawer-panel {
+    border-radius: 22px 22px 0 0;
+    border-left: none;
+    border-top: 1px solid rgba(151, 220, 255, 0.12);
+  }
+}
