@@ -738,17 +738,17 @@ const LibraryPage: NextPage = () => {
 
       {/* Sell listing modal */}
       {sellItem && (
-        <div className="job-drawer" onClick={() => setSellItem(null)}>
+        <div className="job-drawer flagship-job-drawer" onClick={() => setSellItem(null)}>
           <div className="job-drawer-backdrop" />
-          <aside className="job-drawer-panel" role="dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="job-drawer-header">
+          <aside className="job-drawer-panel flagship-job-drawer-panel" role="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="job-drawer-header flagship-job-drawer-header">
               <div>
                 <p className="job-drawer-kicker">Marketplace Listing</p>
                 <h3>Publish to Marketplace</h3>
               </div>
               <button type="button" className="job-drawer-close" onClick={() => setSellItem(null)}>Close</button>
             </div>
-            <div className="job-drawer-body">
+            <div className="job-drawer-body flagship-job-drawer-body">
               {sellItem.previewUrl && (
                 <section className="job-section">
                   <div style={{ borderRadius: "12px", overflow: "hidden", background: "var(--bg-elevated)" }}>
