@@ -33,7 +33,7 @@ const JoinPage: NextPage = () => {
       <SiteHeader />
 
       <main className="library-page">
-        <section className="page-hero">
+        <section className="page-hero flagship-join-hero">
           <div className="page-hero-inner">
             <p className="hero-kicker">Join the Grid</p>
             <h1 className="hero-title">Install a HavnAI Node</h1>
