@@ -1,6 +1,8 @@
 import type { NextPage } from "next";
 import Head from "next/head";
+import Link from "next/link";
 import { useState } from "react";
+import { CinematicPageHero } from "../components/CinematicPageHero";
 import { SiteHeader } from "../components/SiteHeader";
 import { getApiBase } from "../lib/apiBase";
 
@@ -32,20 +34,47 @@ const JoinPage: NextPage = () => {
 
       <SiteHeader />
 
-      <main className="library-page">
-        <section className="page-hero">
-          <div className="page-hero-inner">
-            <p className="hero-kicker">Join the Grid</p>
-            <h1 className="hero-title">Install a HavnAI Node</h1>
-            <p className="hero-subtitle">
-              Connect your GPU to HavnAI Public Alpha, serve live generation jobs, and build visible
-              operator history on the network.
-            </p>
-          </div>
-        </section>
+      <main className="library-page jh-page-shell">
+        <CinematicPageHero
+          eyebrow="Join the Grid"
+          title="Bring your GPU onto the network."
+          description="Install the node client, register your operator identity, and start serving live generation jobs into the JoinHavn ecosystem with visible uptime and reward history."
+          imageSrc="/astra/ships/seraph_guard.png"
+          imageContain
+          panelEyebrow="Operator Onboarding"
+          panelTitle="Fast install. Clear prerequisites. Live visibility."
+          panelDescription="The onboarding path is built for Public Alpha operators who want to move from setup to live node telemetry without guesswork."
+          stats={[
+            {
+              label: "OS",
+              value: "Linux / macOS",
+              detail: "64-bit environments supported",
+            },
+            {
+              label: "Python",
+              value: "3.10+",
+              detail: "Required for the node runtime",
+            },
+            {
+              label: "GPU",
+              value: "12 GB+ VRAM",
+              detail: "Recommended for strong throughput",
+            },
+          ]}
+          actions={
+            <>
+              <a href="#quick-install" className="jh-btn jh-btn-primary">
+                View Install Command
+              </a>
+              <Link href="/nodes" className="jh-btn jh-btn-secondary">
+                Watch Live Nodes
+              </Link>
+            </>
+          }
+        />
 
         <section className="page-container">
-          <div className="chart-section">
+          <div className="chart-section" id="quick-install">
             <div className="chart-header">
               <h3 className="chart-title">Why Operators Join</h3>
             </div>

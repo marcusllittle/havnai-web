@@ -1,6 +1,8 @@
 import type { NextPage } from "next";
 import Head from "next/head";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { CinematicPageHero } from "../components/CinematicPageHero";
 import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
 import {
@@ -426,7 +428,45 @@ const PricingPage: NextPage = () => {
 
       <SiteHeader />
 
-      <main>
+      <main className="jh-page-shell">
+        <CinematicPageHero
+          eyebrow="Credits"
+          title="Fund creation on the grid."
+          description="Credits are the usage rail behind image, face swap, and video generation across JoinHavn. This page tracks live funding routes, package availability, and the current cost profile for outputs."
+          imageSrc="/astra/outfits/starfall_armor.webp"
+          imageContain
+          panelEyebrow="Funding Rails"
+          panelTitle={haiFundingConfigured ? "Sepolia HAI is live now" : "Wallet-linked credit funding"}
+          panelDescription="Card checkout appears only on deployments where it has been enabled, while wallet flows stay tied to the identity shown below."
+          stats={[
+            {
+              label: "Packages",
+              value: referencePackages.length.toLocaleString(),
+              detail: stripeEnabled ? "Card checkout catalog" : "Fallback pricing shown",
+            },
+            {
+              label: "Balance",
+              value: balance ? `${balance.balance.toFixed(1)} cr` : activeWallet ? "Syncing..." : "Guest",
+              detail: activeWallet ? "Wallet-linked credits" : "Connect to fund",
+            },
+            {
+              label: "Rate Table",
+              value: referenceRows.length.toLocaleString(),
+              detail: "Current workload cost references",
+            },
+          ]}
+          actions={
+            <>
+              <Link href="/generator" className="jh-btn jh-btn-primary">
+                Start Creating
+              </Link>
+              <Link href="/marketplace" className="jh-btn jh-btn-secondary">
+                Visit Marketplace
+              </Link>
+            </>
+          }
+        />
+
         <section className="section pricing-section">
           <div className="section-header">
             <h2>Buy Credits</h2>

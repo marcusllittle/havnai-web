@@ -5133,6 +5133,7 @@ details[open] .faq-icon {
   font-size: 0.92rem;
   letter-spacing: 0.02em;
   cursor: pointer;
+  text-decoration: none;
   transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
@@ -5594,6 +5595,242 @@ details[open] .faq-icon {
   margin-top: 0.25rem;
 }
 
+/* ── Shared Cinematic Interior Pages ── */
+
+.jh-page-shell {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.jh-page-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 50%;
+  width: 780px;
+  height: 780px;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(circle, rgba(0, 234, 255, 0.12) 0%, rgba(0, 234, 255, 0.02) 42%, transparent 70%);
+  filter: blur(24px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.jh-page-hero {
+  padding: 2.4rem 1.25rem 1.5rem;
+}
+
+.jh-page-hero-inner {
+  position: relative;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: clamp(1.35rem, 3vw, 1.9rem);
+  border-radius: 30px;
+  border: 1px solid rgba(120, 180, 255, 0.14);
+  background:
+    linear-gradient(135deg, rgba(10, 16, 27, 0.98) 0%, rgba(5, 9, 16, 0.92) 100%);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
+  gap: 1.25rem;
+  overflow: hidden;
+}
+
+.jh-page-hero-inner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(0, 234, 255, 0.16), transparent 34%),
+    radial-gradient(circle at 88% 4%, rgba(87, 211, 255, 0.12), transparent 28%);
+  pointer-events: none;
+}
+
+.jh-page-copy,
+.jh-page-media {
+  position: relative;
+  z-index: 1;
+}
+
+.jh-page-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.jh-page-title {
+  margin: 0;
+  font-family: "Orbitron", "Exo 2", system-ui, sans-serif;
+  font-size: clamp(2.2rem, 5.2vw, 4.25rem);
+  line-height: 0.96;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text);
+  max-width: 11ch;
+}
+
+.jh-page-description {
+  margin: 0;
+  max-width: 56ch;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.jh-page-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.3rem;
+}
+
+.jh-page-stat {
+  padding: 0.9rem 0.95rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px);
+}
+
+.jh-page-stat-label,
+.jh-page-panel-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.jh-page-stat-value {
+  display: block;
+  margin-top: 0.45rem;
+  font-family: "Orbitron", "Exo 2", system-ui, sans-serif;
+  font-size: 1.2rem;
+  color: var(--text);
+}
+
+.jh-page-stat-detail {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.jh-page-note {
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.jh-page-media {
+  min-height: 360px;
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: radial-gradient(circle at top, rgba(0, 234, 255, 0.14), rgba(5, 9, 16, 0.98));
+}
+
+.jh-page-media-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.jh-page-media-img.contain {
+  object-fit: contain;
+  padding: 1.5rem;
+}
+
+.jh-page-media-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(5, 8, 13, 0.08) 0%, rgba(5, 8, 13, 0.72) 100%),
+    radial-gradient(circle at 80% 18%, rgba(0, 234, 255, 0.14), transparent 34%);
+}
+
+.jh-page-panel {
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  padding: 1rem 1.05rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(4, 9, 17, 0.72);
+  backdrop-filter: blur(18px);
+}
+
+.jh-page-panel-title {
+  margin: 0.6rem 0 0.45rem;
+  font-family: "Orbitron", "Exo 2", system-ui, sans-serif;
+  font-size: 1.15rem;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.jh-page-panel-description {
+  margin: 0;
+  color: rgba(243, 251, 255, 0.78);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.jh-page-shell .generator-section,
+.jh-page-shell .pricing-section {
+  padding-top: 0;
+}
+
+.jh-page-shell .chart-section,
+.jh-page-shell .wallet-status-card,
+.jh-page-shell .library-toolbar-inner,
+.jh-page-shell .marketplace-wallet-strip,
+.jh-page-shell .pricing-balance,
+.jh-page-shell .pricing-wallet-info,
+.jh-page-shell .pricing-convert,
+.jh-page-shell .pricing-card,
+.jh-page-shell .generator-card,
+.jh-page-shell .library-card,
+.jh-page-shell .marketplace-gallery-card,
+.jh-page-shell .node-card {
+  background:
+    linear-gradient(180deg, rgba(10, 16, 27, 0.94) 0%, rgba(5, 10, 18, 0.9) 100%);
+  border-color: rgba(120, 180, 255, 0.14);
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(16px);
+}
+
+.jh-page-shell .chart-section,
+.jh-page-shell .wallet-status-card,
+.jh-page-shell .library-toolbar-inner,
+.jh-page-shell .marketplace-wallet-strip,
+.jh-page-shell .pricing-balance,
+.jh-page-shell .pricing-wallet-info,
+.jh-page-shell .pricing-convert,
+.jh-page-shell .generator-card {
+  border-radius: 24px;
+}
+
+.jh-page-shell .library-card:hover,
+.jh-page-shell .marketplace-gallery-card:hover,
+.jh-page-shell .node-card:hover,
+.jh-page-shell .pricing-card:hover {
+  border-color: rgba(0, 234, 255, 0.24);
+}
+
 /* ── Homepage Responsive ── */
 
 @media (max-width: 900px) {
@@ -5612,6 +5849,18 @@ details[open] .faq-icon {
 
   .jh-pipeline-connector {
     display: none;
+  }
+
+  .jh-page-hero-inner {
+    grid-template-columns: 1fr;
+  }
+
+  .jh-page-title {
+    max-width: 14ch;
+  }
+
+  .jh-page-media {
+    min-height: 320px;
   }
 }
 
@@ -5719,5 +5968,37 @@ details[open] .faq-icon {
 
   .jh-entry-card {
     aspect-ratio: 16 / 9;
+  }
+
+  .jh-page-hero {
+    padding: 1rem 1rem 1.25rem;
+  }
+
+  .jh-page-hero-inner {
+    border-radius: 24px;
+    padding: 1.1rem;
+  }
+
+  .jh-page-title {
+    font-size: 2rem;
+  }
+
+  .jh-page-description {
+    font-size: 0.94rem;
+  }
+
+  .jh-page-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .jh-page-media {
+    min-height: 260px;
+    order: -1;
+  }
+
+  .jh-page-panel {
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.75rem;
   }
 }
