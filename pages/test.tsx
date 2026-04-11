@@ -110,41 +110,6 @@ type ModelListEntry = {
 
 type GeneratorMode = "image" | "face_swap" | "video";
 
-const TRUTHY_MODEL_FLAGS = new Set(["true", "1", "yes", "online"]);
-const IMAGE_TASK_TYPES = new Set(["IMAGE_GEN", "TXT2IMG", "IMG2IMG", "INPAINT", "FACE_SWAP"]);
-const VIDEO_TASK_TYPES = new Set(["VIDEO_GEN", "ANIMATEDIFF", "LTX_VIDEO_GEN"]);
-
-const isTruthyModelFlag = (value: unknown): boolean => {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value !== 0;
-  return TRUTHY_MODEL_FLAGS.has(String(value || "").trim().toLowerCase());
-};
-
-const isAvailableModel = (entry: Partial<ModelListEntry>): boolean => {
-  return entry.available == null || entry.available === "" ? true : isTruthyModelFlag(entry.available);
-};
-
-const normalizeModelEntries = (payload: unknown): ModelListEntry[] => {
-  const rawEntries = Array.isArray(payload)
-    ? payload
-    : payload && typeof payload === "object"
-      ? Object.values(payload as Record<string, unknown>)
-      : [];
-
-  return rawEntries
-    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object")
-    .map((entry) => {
-      const name = String(
-        entry.name || entry.model || entry.model_name || entry.model_key || ""
-      ).trim();
-      return {
-        ...(entry as ModelListEntry),
-        name,
-      };
-    })
-    .filter((entry) => entry.name.length > 0);
-};
-
 const pickPreferredVideoModel = (models: { id: string; label: string }[]): string => {
   // Prefer LTX-Video 2.3 dev, then distilled, then AnimateDiff, then first available
   const ltxDev = models.find((item) => item.id.toLowerCase() === "ltx_video_dev");
@@ -416,47 +381,36 @@ const TestPage: React.FC = () => {
         const res = await fetch(`${getApiBase()}/models/list`, { credentials: "same-origin" });
         if (!res.ok) throw new Error(`models HTTP ${res.status}`);
         const data = await res.json();
-        const models = normalizeModelEntries(data?.models ?? data);
+        const models: ModelListEntry[] = Array.isArray(data?.models) ? data.models : [];
 
         if (!active) return;
 
-        const imageCandidates = models.filter((m) => {
+        // Separate models by task type
+        const imageModelsData = models.filter((m) => {
           const taskType = String(m.task_type || "").toUpperCase();
           const pipeline = String(m.pipeline || "").toLowerCase();
-          if (!isAvailableModel(m)) return false;
-          if (VIDEO_TASK_TYPES.has(taskType)) return false;
-          if (IMAGE_TASK_TYPES.has(taskType) || !taskType) return true;
-          return pipeline.includes("sdxl");
+          if (!(taskType === "IMAGE_GEN" || !taskType)) return false;
+          // Keep generator image model list focused on SDXL models only.
+          if (m.available !== true) return false;
+          if (!pipeline.includes("sdxl")) return false;
+          return true;
         });
-        const strictSdxlImageModels = imageCandidates.filter((m) =>
-          String(m.pipeline || "").toLowerCase().includes("sdxl")
-        );
-        const imageModelsData =
-          strictSdxlImageModels.length > 0 ? strictSdxlImageModels : imageCandidates;
-
         const videoModelsData = models.filter((m) => {
           const taskType = String(m.task_type || "").toUpperCase();
-          return VIDEO_TASK_TYPES.has(taskType) && isAvailableModel(m);
+          return (taskType === "VIDEO_GEN" || taskType === "ANIMATEDIFF" || taskType === "LTX_VIDEO_GEN") && m.available === true;
         });
 
-        const strictFaceSwapModels = imageModelsData.filter((m) =>
-          isTruthyModelFlag(m.face_swap_available)
-        );
-        const fallbackFaceSwapModels = imageModelsData.filter((m) => {
-          const taskType = String(m.task_type || "").toUpperCase();
-          return taskType === "FACE_SWAP";
+        // Face swap models: only currently available SDXL entries.
+        const faceSwapModelsData = imageModelsData.filter((m) => {
+          const pipeline = String(m.pipeline || "").toLowerCase();
+          return pipeline.includes("sdxl") && m.face_swap_available === true;
         });
-        const faceSwapModelsData =
-          strictFaceSwapModels.length > 0 ? strictFaceSwapModels : fallbackFaceSwapModels;
 
         // Transform to dropdown format with tier badges and clean names
-        const imageOptions =
-          imageModelsData.length > 0
-            ? imageModelsData.map((m) => ({
-                id: m.name,
-                label: buildModelOptionLabel(m, String(m.pipeline || "").toUpperCase()),
-              }))
-            : [{ id: "", label: "Auto select live image model" }];
+        const imageOptions = imageModelsData.map((m) => ({
+          id: m.name,
+          label: buildModelOptionLabel(m, String(m.pipeline || "").toUpperCase()),
+        }));
 
         const videoOptions = videoModelsData.map((m) => {
           const taskType = String(m.task_type || "").toUpperCase();
@@ -999,6 +953,14 @@ const TestPage: React.FC = () => {
     }
     if (promptAnchor.error) {
       setStatusMessage(promptAnchor.error);
+      return;
+    }
+    if (mode === "image" && imageModels.length === 0) {
+      setStatusMessage("No online image capacity right now. Try again when an image model is available.");
+      return;
+    }
+    if (mode === "image" && !selectedModel) {
+      setStatusMessage("Select an available image model before generating.");
       return;
     }
     if (mode === "video" && videoModels.length === 0) {
