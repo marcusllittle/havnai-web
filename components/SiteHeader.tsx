@@ -2,28 +2,29 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { WalletButton } from "./WalletButton";
-import { PUBLIC_ALPHA_LABEL } from "../lib/publicAlpha";
 
 interface NavItem {
   href: string;
   label: string;
   external?: boolean;
+  accent?: boolean;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Home" },
-  { href: "/generator", label: "Generator", external: true },
-  { href: "/library", label: "My Library" },
-  { href: "/pricing", label: "Buy Credits" },
-  { href: "/analytics", label: "Analytics" },
-  { href: "/nodes", label: "Nodes" },
+const PRIMARY_NAV: NavItem[] = [
+  { href: "https://play.joinhavn.io/", label: "Astra", external: true, accent: true },
+  { href: "/generator", label: "Create" },
+  { href: "/library", label: "Collection" },
   { href: "/marketplace", label: "Marketplace" },
-  { href: "/join", label: "Join" },
-  { href: "https://astra.joinhavn.io", label: "Play Astra", external: true },
+  { href: "/nodes", label: "Network" },
+];
+
+const UTILITY_NAV: NavItem[] = [
+  { href: "/pricing", label: "Credits" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
+  if (/^https?:/i.test(href)) return false;
   return pathname.startsWith(href);
 }
 
@@ -32,55 +33,70 @@ export function SiteHeader() {
   const router = useRouter();
 
   return (
-    <header className="site-header">
-      <div className="header-inner">
-        <Link href="/" className="brand">
-          <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
-          <div className="brand-text">
-            <div className="brand-meta">
-              <span className="brand-status">{PUBLIC_ALPHA_LABEL}</span>
-            </div>
-            <span className="brand-name">HavnAI Network</span>
-          </div>
+    <header className="site-header flagship-header">
+      <div className="header-inner flagship-header-inner">
+        <Link href="/" className="brand flagship-brand" onClick={() => setNavOpen(false)}>
+          <img src="/HavnAI-logo.png" alt="JoinHavn" className="brand-logo flagship-brand-logo" />
+          <span className="flagship-brand-name">JoinHavn</span>
         </Link>
+
         <button
           type="button"
-          className={`nav-toggle ${navOpen ? "nav-open" : ""}`}
+          className={`nav-toggle flagship-nav-toggle ${navOpen ? "nav-open" : ""}`}
           aria-label="Toggle navigation"
           onClick={() => setNavOpen((o) => !o)}
         >
           <span />
           <span />
         </button>
+
         <nav
-          className={`nav-links ${navOpen ? "nav-open" : ""}`}
+          className={`nav-links flagship-nav-links ${navOpen ? "nav-open" : ""}`}
           aria-label="Primary navigation"
-          onClick={() => setNavOpen(false)}
         >
-          {NAV_ITEMS.map((item) => {
-            const active = isActive(router.pathname, item.href);
-            if (item.external) {
+          <div className="flagship-nav-list">
+            {PRIMARY_NAV.map((item) => {
+              const active = isActive(router.pathname, item.href);
+              const className = `flagship-nav-link ${active ? "nav-active" : ""} ${item.accent ? "accent" : ""}`.trim();
+              if (item.external) {
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className={className}
+                    onClick={() => setNavOpen(false)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {item.label}
+                  </a>
+                );
+              }
               return (
-                <a
+                <Link
                   key={item.href}
                   href={item.href}
-                  className={active ? "nav-active" : undefined}
+                  className={className}
+                  onClick={() => setNavOpen(false)}
                 >
                   {item.label}
-                </a>
+                </Link>
               );
-            }
-            return (
+            })}
+          </div>
+          <div className="flagship-header-actions">
+            {UTILITY_NAV.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={active ? "nav-active" : undefined}
+                className="flagship-utility-link"
+                onClick={() => setNavOpen(false)}
               >
                 {item.label}
               </Link>
-            );
-          })}
-          <WalletButton />
+            ))}
+            <WalletButton />
+          </div>
         </nav>
       </div>
     </header>
