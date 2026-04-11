@@ -428,7 +428,7 @@ const LibraryPage: NextPage = () => {
           }
         />
 
-        <section className="page-container">
+        <section className="page-container flagship-library-status-wrap">
           <div className="wallet-status-card wallet-status-card-inline">
             <div className="wallet-status-copy-block">
               <div className="wallet-status-heading-row">
@@ -454,7 +454,7 @@ const LibraryPage: NextPage = () => {
         </section>
 
         {!emptyState && (
-          <section className="library-toolbar">
+          <section className="library-toolbar flagship-library-toolbar">
             <div className="library-toolbar-inner">
               {/* Search */}
               <div className="library-search-wrapper">
@@ -630,7 +630,7 @@ const LibraryPage: NextPage = () => {
             </div>
           )}
           {!loading && filteredItems.length > 0 && (
-            <div className="library-grid">
+            <div className="library-grid flagship-library-grid">
               {filteredItems.map((item) => {
                 const downloadUrl = resolveAssetUrl(
                   item.result?.video_url ||
@@ -644,7 +644,7 @@ const LibraryPage: NextPage = () => {
                 return (
                   <article
                     key={item.entry.job_id}
-                    className={`library-card ${
+                    className={`library-card flagship-library-card ${
                       bulkMode && isSelected ? "is-selected" : ""
                     }`}
                     onClick={
@@ -662,7 +662,7 @@ const LibraryPage: NextPage = () => {
                         />
                       </div>
                     )}
-                    <div className="library-preview">
+                    <div className="library-preview flagship-library-preview">
                       {item.previewUrl ? (
                         item.type === "video" ? (
                           <video src={item.previewUrl} muted playsInline />
@@ -682,7 +682,7 @@ const LibraryPage: NextPage = () => {
                         {item.type}
                       </span>
                     </div>
-                    <div className="library-body">
+                    <div className="library-body flagship-library-body">
                       {item.model && (
                         <div className="library-model">{item.model}</div>
                       )}
@@ -766,17 +766,17 @@ const LibraryPage: NextPage = () => {
 
       {/* Sell listing modal */}
       {sellItem && (
-        <div className="job-drawer" onClick={() => setSellItem(null)}>
+        <div className="job-drawer flagship-job-drawer" onClick={() => setSellItem(null)}>
           <div className="job-drawer-backdrop" />
-          <aside className="job-drawer-panel" role="dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="job-drawer-header">
+          <aside className="job-drawer-panel flagship-job-drawer-panel" role="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="job-drawer-header flagship-job-drawer-header">
               <div>
                 <p className="job-drawer-kicker">Marketplace Listing</p>
                 <h3>Publish to Marketplace</h3>
               </div>
               <button type="button" className="job-drawer-close" onClick={() => setSellItem(null)}>Close</button>
             </div>
-            <div className="job-drawer-body">
+            <div className="job-drawer-body flagship-job-drawer-body">
               {sellItem.previewUrl && (
                 <section className="job-section">
                   <div style={{ borderRadius: "12px", overflow: "hidden", background: "var(--bg-elevated)" }}>

@@ -118,53 +118,61 @@ export const OutputCard: React.FC<OutputCardProps> = ({
 
   return (
     <div className="generator-output-card">
-      {videoUrl ? (
-        <video
-          className="generator-output-media"
-          src={videoUrl}
-          controls
-          playsInline
-        />
-      ) : (
-        <img src={imageUrl} alt={jobId || "Generated image"} />
-      )}
-
-      <div className="generator-output-meta">
-        <span className="output-meta-badge">{label}</span>
-        <span className="output-meta-model">{friendlyModel(model)}</span>
-        {runtimeDisplay && <span className="output-meta-time">{runtimeDisplay}s</span>}
-        {jobId && (
-          <button
-            type="button"
-            className="output-meta-id"
-            onClick={handleCopyId}
-            title="Copy job ID"
-          >
-            {idCopied ? "Copied!" : `#${jobId.slice(0, 8)}`}
-          </button>
+      <div className="generator-output-frame">
+        {videoUrl ? (
+          <video
+            className="generator-output-media"
+            src={videoUrl}
+            controls
+            playsInline
+          />
+        ) : (
+          <img className="generator-output-media" src={imageUrl} alt={jobId || "Generated image"} />
         )}
       </div>
-      {(videoUrl || imageUrl) && (
-        <div className="generator-output-actions">
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="generator-download"
-          >
-            {videoUrl ? "\u2913 Download" : "\u2913 Download"}
-          </button>
-          {videoUrl && onUseLastFrame ? (
+
+      <div className="generator-output-body">
+        <div className="generator-output-meta">
+          <span className="output-meta-badge">{label}</span>
+          <span className="output-meta-model">{friendlyModel(model)}</span>
+          {runtimeDisplay && <span className="output-meta-time">{runtimeDisplay}s</span>}
+          {jobId && (
             <button
               type="button"
-              onClick={handleUseLastFrame}
-              className="generator-download"
-              disabled={frameBusy}
+              className="output-meta-id"
+              onClick={handleCopyId}
+              title="Copy job ID"
             >
-              {frameBusy ? "Capturing\u2026" : "\u21BB Use last frame"}
+              {idCopied ? "Copied!" : `#${jobId.slice(0, 8)}`}
             </button>
-          ) : null}
+          )}
         </div>
-      )}
+        <div className="generator-output-ownership">
+          <strong>New output ready</strong>
+          <p>Save it, download it, or move it deeper into your HavnAI flow.</p>
+        </div>
+        {(videoUrl || imageUrl) && (
+          <div className="generator-output-actions">
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="generator-download"
+            >
+              Download asset
+            </button>
+            {videoUrl && onUseLastFrame ? (
+              <button
+                type="button"
+                onClick={handleUseLastFrame}
+                className="generator-download secondary"
+                disabled={frameBusy}
+              >
+                {frameBusy ? "Capturing…" : "Use last frame"}
+              </button>
+            ) : null}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

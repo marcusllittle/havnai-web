@@ -487,6 +487,19 @@ const PricingPage: NextPage = () => {
             </div>
           )}
 
+          <div className="pricing-economy-explainer">
+            <div className="pricing-economy-card">
+              <span className="hero-kicker">Credits</span>
+              <h3>Spend simply</h3>
+              <p>Credits are the product-facing spending layer for generation and marketplace activity.</p>
+            </div>
+            <div className="pricing-economy-card">
+              <span className="hero-kicker">HAI</span>
+              <h3>Go deeper</h3>
+              <p>HAI is the network-layer token for funding, conversion, and deeper protocol participation.</p>
+            </div>
+          </div>
+
           <div className="wallet-status-card">
             <div className="wallet-status-copy-block">
               <div className="wallet-status-heading-row">
@@ -540,11 +553,11 @@ const PricingPage: NextPage = () => {
               {!stripeEnabled && (
                 <div className="pricing-alert pricing-alert-info">{getCardCheckoutCopy(stripeEnabled)}</div>
               )}
-              <div className="pricing-grid">
+              <div className="pricing-grid flagship-pricing-grid">
                 {packages.map((pkg) => (
                   <article
                     key={pkg.id}
-                    className={`pricing-card${pkg.id === "creator" ? " pricing-card-featured" : ""}`}
+                    className={`pricing-card flagship-pricing-card${pkg.id === "creator" ? " pricing-card-featured" : ""}`}
                   >
                     {pkg.id === "creator" && <div className="pricing-card-badge">Best Value</div>}
                     <h3 className="pricing-card-name">{pkg.name}</h3>
