@@ -1,7 +1,9 @@
 import type { NextPage } from "next";
 import Head from "next/head";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
+import { CinematicPageHero } from "../components/CinematicPageHero";
 import { useWallet } from "../components/WalletProvider";
 import { SiteHeader } from "../components/SiteHeader";
 import { getApiBase } from "../lib/apiBase";
@@ -567,16 +569,43 @@ const MarketplacePage: NextPage = () => {
 
       <SiteHeader />
 
-      <main className="library-page">
-        <section className="page-hero">
-          <div className="page-hero-inner">
-            <p className="hero-kicker">Marketplace</p>
-            <h1 className="hero-title">Gallery and workflows</h1>
-            <p className="hero-subtitle">
-              The {PUBLIC_ALPHA_LABEL.toLowerCase()} marketplace for generated assets with exclusive ownership transfer, collectible outputs, and reusable workflows.
-            </p>
-          </div>
-        </section>
+      <main className="library-page jh-page-shell">
+        <CinematicPageHero
+          eyebrow="Marketplace"
+          title="Trade the outputs. Reuse the systems."
+          description={`The ${PUBLIC_ALPHA_LABEL.toLowerCase()} exchange layer for collectible media, exclusive ownership transfer, and reusable workflow setups that can route back into the generator.`}
+          mediaVariant="marketplace"
+          panelEyebrow="Exchange Floor"
+          panelTitle="Gallery ownership + workflow distribution"
+          panelDescription="Browse public listings without a wallet, then connect when you want to buy, list, or relist assets tied to your active identity."
+          stats={[
+            {
+              label: "Listings",
+              value: galleryTotal.toLocaleString(),
+              detail: "Visible in public browse",
+            },
+            {
+              label: "Workflows",
+              value: workflowTotal.toLocaleString(),
+              detail: "Reusable presets in catalog",
+            },
+            {
+              label: "Credits",
+              value: creditLoading ? "Loading..." : `${formatCredits(creditBalance)}`,
+              detail: activeWallet ? "Active wallet balance" : "Connect to transact",
+            },
+          ]}
+          actions={
+            <>
+              <Link href="/generator" className="jh-btn jh-btn-primary">
+                Create to Sell
+              </Link>
+              <Link href="/marketplace?tab=gallery&galleryView=collection" className="jh-btn jh-btn-secondary">
+                Open Collection
+              </Link>
+            </>
+          }
+        />
 
         <section className="page-container">
           <div className="marketplace-tabs">

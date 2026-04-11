@@ -2,28 +2,30 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { WalletButton } from "./WalletButton";
-import { PUBLIC_ALPHA_LABEL } from "../lib/publicAlpha";
 
 interface NavItem {
   href: string;
   label: string;
   external?: boolean;
+  accent?: boolean;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Home" },
-  { href: "/generator", label: "Generator", external: true },
-  { href: "/library", label: "My Library" },
-  { href: "/pricing", label: "Buy Credits" },
-  { href: "/analytics", label: "Analytics" },
-  { href: "/nodes", label: "Nodes" },
+const PRIMARY_NAV: NavItem[] = [
+  { href: "https://astra.joinhavn.io", label: "Astra", external: true, accent: true },
+  { href: "/generator", label: "Create" },
+  { href: "/library", label: "Collection" },
   { href: "/marketplace", label: "Marketplace" },
-  { href: "/join", label: "Join" },
-  { href: "https://astra.joinhavn.io", label: "Play Astra", external: true },
+  { href: "/nodes", label: "Network" },
+];
+
+const UTILITY_NAV: NavItem[] = [
+  { href: "/pricing", label: "Credits" },
+  { href: "/join", label: "Run a Node" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
+  if (/^https?:/i.test(href)) return false;
   return pathname.startsWith(href);
 }
 
@@ -34,15 +36,10 @@ export function SiteHeader() {
   return (
     <header className="site-header">
       <div className="header-inner">
-        <Link href="/" className="brand">
-          <img src="/HavnAI-logo.png" alt="HavnAI" className="brand-logo" />
-          <div className="brand-text">
-            <div className="brand-meta">
-              <span className="brand-status">{PUBLIC_ALPHA_LABEL}</span>
-            </div>
-            <span className="brand-name">HavnAI Network</span>
-          </div>
+        <Link href="/" className="brand" aria-label="JoinHavn home" onClick={() => setNavOpen(false)}>
+          <img src="/HavnAI-logo.png" alt="JoinHavn" className="brand-logo" />
         </Link>
+
         <button
           type="button"
           className={`nav-toggle ${navOpen ? "nav-open" : ""}`}
@@ -52,30 +49,33 @@ export function SiteHeader() {
           <span />
           <span />
         </button>
+
         <nav
           className={`nav-links ${navOpen ? "nav-open" : ""}`}
           aria-label="Primary navigation"
           onClick={() => setNavOpen(false)}
         >
-          {NAV_ITEMS.map((item) => {
+          {PRIMARY_NAV.map((item) => {
             const active = isActive(router.pathname, item.href);
+            const cls = [active && "nav-active", item.accent && "nav-accent"].filter(Boolean).join(" ") || undefined;
             if (item.external) {
               return (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className={active ? "nav-active" : undefined}
-                >
+                <a key={item.href} href={item.href} className={cls} target="_blank" rel="noreferrer">
                   {item.label}
                 </a>
               );
             }
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={active ? "nav-active" : undefined}
-              >
+              <Link key={item.href} href={item.href} className={cls}>
+                {item.label}
+              </Link>
+            );
+          })}
+          <span className="nav-separator" />
+          {UTILITY_NAV.map((item) => {
+            const active = isActive(router.pathname, item.href);
+            return (
+              <Link key={item.href} href={item.href} className={`nav-utility ${active ? "nav-active" : ""}`}>
                 {item.label}
               </Link>
             );
