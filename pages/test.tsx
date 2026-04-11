@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
+import Head from "next/head";
+import Link from "next/link";
+import { CinematicPageHero } from "../components/CinematicPageHero";
 import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
 import { HavnAIPrompt } from "../components/HavnAIPrompt";
@@ -1372,25 +1375,70 @@ const TestPage: React.FC = () => {
     return () => navToggle.removeEventListener("click", handler);
   }, []);
 
+  const totalVisibleModels =
+    imageModels.length + videoModels.length + faceSwapModels.length;
+  const creditSummary =
+    credits && credits.credits_enabled
+      ? `${credits.balance.toFixed(1)} cr`
+      : inviteSaved
+      ? "Invite saved"
+      : "Access code";
+  const modeSummary =
+    mode === "face_swap" ? "Face swap" : mode === "video" ? "Video" : "Image";
+
   return (
     <>
+      <Head>
+        <title>JoinHavn Generator</title>
+        <meta
+          name="description"
+          content="Create images, face swaps, and video on the JoinHavn GPU grid with live model routing and wallet-linked alpha access."
+        />
+      </Head>
+
       <SiteHeader />
 
-      <main>
-        <section className="generator-hero" id="home">
-          <div className="generator-hero-inner">
-            <p className="hero-kicker">{PUBLIC_ALPHA_LABEL} Generator</p>
-            <h1 className="generator-hero-title">Create on the Grid.</h1>
-            <p className="generator-hero-subtitle">
-              Write a prompt, choose from the live models on the network, and render images, face
-              swaps, or video through HavnAI Public Alpha.
-            </p>
-          </div>
-        </section>
+      <main className="jh-page-shell">
+        <CinematicPageHero
+          eyebrow={`${PUBLIC_ALPHA_LABEL} Generator`}
+          title="Create on the grid."
+          description="Write a prompt, route into live network capacity, and generate images, face swaps, or video without leaving the JoinHavn creation stack."
+          mediaVariant="creation"
+          panelEyebrow="Creation Deck"
+          panelTitle={`${totalVisibleModels.toLocaleString()} visible model slots`}
+          panelDescription={`Current mode: ${modeSummary}. Use the generator to render, inspect job status, and push finished outputs into your library or marketplace flow.`}
+          stats={[
+            {
+              label: "Mode",
+              value: modeSummary,
+              detail: "Switch between image, video, and face swap",
+            },
+            {
+              label: "Visible Models",
+              value: totalVisibleModels.toLocaleString(),
+              detail: "Pulled from live capacity",
+            },
+            {
+              label: "Access",
+              value: creditSummary,
+              detail: inviteSaved ? "Saved in this browser" : "Add invite if provided",
+            },
+          ]}
+          actions={
+            <>
+              <Link href="/library" className="jh-btn jh-btn-primary">
+                Open Library
+              </Link>
+              <Link href="/pricing" className="jh-btn jh-btn-secondary">
+                Manage Credits
+              </Link>
+            </>
+          }
+        />
 
         <section className="generator-section">
           <div className="generator-card">
-            <div className="generator-grid generator-grid-flagship">
+            <div className="generator-grid">
               <div className="generator-left">
                 <div className="invite-panel">
                   <div className={`invite-badge${inviteSaved ? " is-ok" : " is-missing"}`}>
@@ -1551,7 +1599,7 @@ const TestPage: React.FC = () => {
                 )}
 
                 {mode === "face_swap" && (
-                  <div className="generator-advanced generator-advanced-flagship">
+                  <div className="generator-advanced">
                     <span className="generator-label">Face swap inputs</span>
                     <label className="generator-label" htmlFor="base-image-url">
                       Base image URL
@@ -1695,7 +1743,7 @@ const TestPage: React.FC = () => {
                   </div>
                 )}
 
-                <div className="generator-controls generator-controls-flagship">
+                <div className="generator-controls">
                   <HavnAIButton
                     label={
                       mode === "face_swap"
@@ -1742,7 +1790,7 @@ const TestPage: React.FC = () => {
                 </div>
 
                 {advancedOpen && mode === "image" && (
-                  <div className="generator-advanced generator-advanced-flagship">
+                  <div className="generator-advanced">
                     <div className="adv-group">
                       <label className="generator-label" htmlFor="image-model">
                         Model
@@ -1800,7 +1848,7 @@ const TestPage: React.FC = () => {
                 )}
 
                 {advancedOpen && mode === "video" && (
-                  <div className="generator-advanced generator-advanced-flagship">
+                  <div className="generator-advanced">
                     <span className="generator-label">Video settings</span>
                     <p className="generator-help">
                       {isLtxVideoModel

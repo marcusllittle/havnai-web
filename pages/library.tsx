@@ -1,6 +1,8 @@
 import type { NextPage } from "next";
 import Head from "next/head";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CinematicPageHero } from "../components/CinematicPageHero";
 import { useWallet } from "../components/WalletProvider";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
 import { SiteHeader } from "../components/SiteHeader";
@@ -388,19 +390,45 @@ const LibraryPage: NextPage = () => {
       </Head>
       <SiteHeader />
 
-      <main className="library-page flagship-library-page">
-        <section className="library-hero flagship-library-hero">
-          <div className="library-hero-inner flagship-library-hero-inner">
-            <p className="hero-kicker">Ownership Hub</p>
-            <h1 className="hero-title">Your collected outputs, ready to keep, use, and list.</h1>
-            <p className="hero-subtitle">
-              Library should feel like your premium inventory layer, the place where generated work becomes
-              part of your owned ecosystem and can move into collection, download, or marketplace flow.
-            </p>
-          </div>
-        </section>
+      <main className="library-page jh-page-shell">
+        <CinematicPageHero
+          eyebrow="Collection"
+          title="Own the renders you keep."
+          description="Your library is the private ownership hub for browser-saved outputs, finished jobs, and the pieces you want to move into the marketplace on your terms."
+          mediaVariant="library"
+          panelEyebrow="Ownership Hub"
+          panelTitle="Local first. Publish when ready."
+          panelDescription="Every saved result stays staged in this browser until you decide to download it, inspect it, or list it for sale."
+          stats={[
+            {
+              label: "Saved",
+              value: items.length.toLocaleString(),
+              detail: "Tracked in this browser",
+            },
+            {
+              label: "Ready",
+              value: statusCounts.ready.toLocaleString(),
+              detail: "Available for download or sale",
+            },
+            {
+              label: "Video",
+              value: typeCounts.video.toLocaleString(),
+              detail: "Motion renders in your archive",
+            },
+          ]}
+          actions={
+            <>
+              <Link href="/generator" className="jh-btn jh-btn-primary">
+                Create New Work
+              </Link>
+              <Link href="/marketplace?tab=gallery&galleryView=my-listings" className="jh-btn jh-btn-secondary">
+                Open Storefront
+              </Link>
+            </>
+          }
+        />
 
-        <section className="page-container flagship-library-status-wrap">
+        <section className="page-container">
           <div className="wallet-status-card wallet-status-card-inline">
             <div className="wallet-status-copy-block">
               <div className="wallet-status-heading-row">
@@ -426,7 +454,7 @@ const LibraryPage: NextPage = () => {
         </section>
 
         {!emptyState && (
-          <section className="library-toolbar flagship-library-toolbar">
+          <section className="library-toolbar">
             <div className="library-toolbar-inner">
               {/* Search */}
               <div className="library-search-wrapper">
@@ -602,7 +630,7 @@ const LibraryPage: NextPage = () => {
             </div>
           )}
           {!loading && filteredItems.length > 0 && (
-            <div className="library-grid flagship-library-grid">
+            <div className="library-grid">
               {filteredItems.map((item) => {
                 const downloadUrl = resolveAssetUrl(
                   item.result?.video_url ||
@@ -616,7 +644,7 @@ const LibraryPage: NextPage = () => {
                 return (
                   <article
                     key={item.entry.job_id}
-                    className={`library-card flagship-library-card ${
+                    className={`library-card ${
                       bulkMode && isSelected ? "is-selected" : ""
                     }`}
                     onClick={
@@ -634,7 +662,7 @@ const LibraryPage: NextPage = () => {
                         />
                       </div>
                     )}
-                    <div className="library-preview flagship-library-preview">
+                    <div className="library-preview">
                       {item.previewUrl ? (
                         item.type === "video" ? (
                           <video src={item.previewUrl} muted playsInline />
@@ -654,7 +682,7 @@ const LibraryPage: NextPage = () => {
                         {item.type}
                       </span>
                     </div>
-                    <div className="library-body flagship-library-body">
+                    <div className="library-body">
                       {item.model && (
                         <div className="library-model">{item.model}</div>
                       )}
@@ -738,17 +766,17 @@ const LibraryPage: NextPage = () => {
 
       {/* Sell listing modal */}
       {sellItem && (
-        <div className="job-drawer flagship-job-drawer" onClick={() => setSellItem(null)}>
+        <div className="job-drawer" onClick={() => setSellItem(null)}>
           <div className="job-drawer-backdrop" />
-          <aside className="job-drawer-panel flagship-job-drawer-panel" role="dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="job-drawer-header flagship-job-drawer-header">
+          <aside className="job-drawer-panel" role="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="job-drawer-header">
               <div>
                 <p className="job-drawer-kicker">Marketplace Listing</p>
                 <h3>Publish to Marketplace</h3>
               </div>
               <button type="button" className="job-drawer-close" onClick={() => setSellItem(null)}>Close</button>
             </div>
-            <div className="job-drawer-body flagship-job-drawer-body">
+            <div className="job-drawer-body">
               {sellItem.previewUrl && (
                 <section className="job-section">
                   <div style={{ borderRadius: "12px", overflow: "hidden", background: "var(--bg-elevated)" }}>
