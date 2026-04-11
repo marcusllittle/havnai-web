@@ -1326,3 +1326,69 @@ body {
     border-top: 1px solid rgba(151, 220, 255, 0.12);
   }
 }
+
+.flagship-marketplace-hero {
+  position: relative;
+  padding: 98px 24px 28px;
+}
+
+.flagship-marketplace-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 16% 18%, rgba(103, 217, 255, 0.1), transparent 24%),
+    radial-gradient(circle at 82% 14%, rgba(143, 125, 255, 0.1), transparent 22%),
+    linear-gradient(180deg, rgba(4, 7, 13, 0.16), rgba(4, 7, 13, 0));
+  pointer-events: none;
+}
+
+.flagship-marketplace-hero-inner {
+  width: min(100%, var(--max-width));
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.flagship-marketplace-hero-inner .hero-title {
+  margin: 14px 0 14px;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  max-width: 13ch;
+}
+
+.flagship-marketplace-hero-inner .hero-subtitle {
+  max-width: 66ch;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.flagship-marketplace-page .chart-section,
+.flagship-marketplace-page .market-card,
+.flagship-marketplace-page .listing-card,
+.flagship-marketplace-page .market-filters,
+.flagship-marketplace-page .market-toolbar,
+.flagship-marketplace-page .empty-state,
+.flagship-marketplace-page .job-details-drawer {
+  border-radius: 24px;
+  border: 1px solid rgba(151, 220, 255, 0.1);
+  background: linear-gradient(180deg, rgba(10, 17, 29, 0.9), rgba(6, 11, 20, 0.84));
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(12px);
+}
+
+.flagship-marketplace-page .chart-section {
+  padding: 20px;
+}
+
+@media (max-width: 720px) {
+  .flagship-marketplace-hero {
+    padding: 88px 16px 20px;
+  }
+
+  .flagship-marketplace-hero-inner .hero-title {
+    font-size: 2.1rem;
+  }
+}
