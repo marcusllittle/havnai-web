@@ -419,10 +419,10 @@ const PricingPage: NextPage = () => {
   return (
     <>
       <Head>
-        <title>Buy Credits — HavnAI Public Alpha</title>
+        <title>Credits — JoinHavn</title>
         <meta
           name="description"
-          content="Purchase HavnAI Public Alpha credits to generate images and videos on the GPU grid."
+          content="Purchase JoinHavn credits to generate images and videos on the GPU network."
         />
       </Head>
 
@@ -470,11 +470,14 @@ const PricingPage: NextPage = () => {
           <div className="section-header">
             <h2>Buy Credits</h2>
             <p>
-              Credits are the main usage currency across HavnAI {PUBLIC_ALPHA_LABEL}. Sepolia HAI
+              Credits are the main usage currency across JoinHavn {PUBLIC_ALPHA_LABEL}. Sepolia HAI
               funding is the primary live path today, while card checkout appears only on
               deployments where it has been enabled.
             </p>
           </div>
+        </section>
+
+        <section className="pricing-section">
 
           {balance && (
             <div className="pricing-balance">
@@ -734,7 +737,7 @@ const PricingPage: NextPage = () => {
 
       <footer className="site-footer">
         <div className="footer-inner">
-          <p className="footer-copy">&copy; 2025 HavnAI Network</p>
+          <p className="footer-copy">&copy; 2025 JoinHavn</p>
         </div>
       </footer>
     </>

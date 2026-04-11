@@ -564,7 +564,7 @@ const MarketplacePage: NextPage = () => {
   return (
     <>
       <Head>
-        <title>HavnAI Marketplace</title>
+        <title>Marketplace — JoinHavn</title>
       </Head>
 
       <SiteHeader />

@@ -118,7 +118,7 @@ const NodesPage: NextPage = () => {
 
   return (
     <>
-      <Head><title>HavnAI Nodes</title></Head>
+      <Head><title>Network — JoinHavn</title></Head>
       <SiteHeader />
 
       <main className="library-page jh-page-shell">

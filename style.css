@@ -5441,14 +5441,14 @@ details[open] .faq-icon {
   max-width: 1120px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 0;
 }
 
 .jh-pipeline-step {
   position: relative;
   text-align: center;
-  padding: 1.5rem 1rem;
+  padding: 1.5rem 1.2rem;
   border-radius: var(--card-radius);
   border: 1px solid var(--border-subtle);
   background: var(--bg-alt);
@@ -5511,7 +5511,7 @@ details[open] .faq-icon {
 }
 
 .jh-network-copy {
-  max-width: 640px;
+  max-width: 800px;
 }
 
 .jh-network h2 {
@@ -5532,7 +5532,7 @@ details[open] .faq-icon {
 .jh-entry {
   position: relative;
   z-index: 1;
-  padding: 2.5rem 1.25rem 5rem;
+  padding: 2.5rem 1.25rem 3rem;
 }
 
 .jh-entry-grid {
@@ -6193,7 +6193,7 @@ details[open] .faq-icon {
   }
 
   .jh-pipeline-flow {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 0.75rem;
   }
 
@@ -6396,4 +6396,70 @@ details[open] .faq-icon {
     right: 0.75rem;
     bottom: 0.75rem;
   }
+}
+
+/* ── Network Stats Pills ── */
+
+.jh-network-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.6rem;
+}
+
+.jh-network-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 234, 255, 0.2);
+  background: rgba(0, 234, 255, 0.06);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.jh-network-stat strong {
+  color: var(--accent-strong);
+  font-weight: 700;
+  font-family: "Orbitron", system-ui, sans-serif;
+  font-size: 0.9rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Cinematic Page Hero Enhancements
+   ═══════════════════════════════════════════════════════════════ */
+
+.page-hero,
+.library-hero {
+  position: relative;
+  padding: 4.5rem 1.25rem 2.5rem;
+  overflow: hidden;
+}
+
+.page-hero::before,
+.library-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 15% 60%, rgba(0, 234, 255, 0.06), transparent 55%),
+    radial-gradient(ellipse at 85% 25%, rgba(87, 211, 255, 0.04), transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.page-hero-inner,
+.library-hero-inner {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-title {
+  font-size: clamp(2.4rem, 5vw, 3.2rem);
+  line-height: 1.05;
+}
+
+.hero-subtitle {
+  max-width: 42rem;
 }

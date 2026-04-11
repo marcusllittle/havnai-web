@@ -386,7 +386,7 @@ const LibraryPage: NextPage = () => {
   return (
     <>
       <Head>
-        <title>HavnAI Library</title>
+        <title>Collection — JoinHavn</title>
       </Head>
       <SiteHeader />
 

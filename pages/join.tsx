@@ -28,8 +28,8 @@ const JoinPage: NextPage = () => {
   return (
     <>
       <Head>
-        <title>Join the HavnAI GPU Grid</title>
-        <meta name="description" content="Public Alpha install guide for joining the HavnAI decentralized GPU network. Prerequisites, setup, and troubleshooting." />
+        <title>Run a Node — JoinHavn</title>
+        <meta name="description" content="Install guide for running a GPU node on the JoinHavn decentralized compute network. Prerequisites, setup, and troubleshooting." />
       </Head>
 
       <SiteHeader />
