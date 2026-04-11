@@ -816,15 +816,15 @@ const MarketplacePage: NextPage = () => {
                     </div>
                   )}
                   {activeWallet && !myListingsLoading && myListings.length > 0 && (
-                    <div className="marketplace-owned-list">
+                    <div className="marketplace-owned-list flagship-marketplace-owned-list">
                       {myListings.map((listing) => (
                         <button
                           key={listing.id}
                           type="button"
-                          className="marketplace-owned-row"
+                          className="marketplace-owned-row flagship-marketplace-owned-row"
                           onClick={() => openBrowseListing(listing)}
                         >
-                          <div className="marketplace-owned-preview">
+                          <div className="marketplace-owned-preview flagship-marketplace-owned-preview">
                             {listing.video_url ? (
                               <video src={listing.video_url} muted playsInline preload="metadata" />
                             ) : listing.image_url ? (
@@ -833,7 +833,7 @@ const MarketplacePage: NextPage = () => {
                               <div className="library-preview-empty">No preview</div>
                             )}
                           </div>
-                          <div className="marketplace-owned-copy">
+                          <div className="marketplace-owned-copy flagship-marketplace-owned-copy">
                             <strong>{listing.title}</strong>
                             <span>{listing.price_credits.toFixed(1)} credits</span>
                             <span>{formatTimestamp(listing.created_at)}</span>
@@ -864,17 +864,17 @@ const MarketplacePage: NextPage = () => {
                     </div>
                   )}
                   {activeWallet && !collectionLoading && collection.length > 0 && (
-                    <div className="marketplace-owned-list">
+                    <div className="marketplace-owned-list flagship-marketplace-owned-list">
                       {collection.map((asset) => {
                         const isListed = asset.listed && !asset.sold;
                         return (
                           <button
                             key={`${asset.id}-${asset.job_id}`}
                             type="button"
-                            className="marketplace-owned-row"
+                            className="marketplace-owned-row flagship-marketplace-owned-row"
                             onClick={() => openCollectionListing(asset)}
                           >
-                            <div className="marketplace-owned-preview">
+                            <div className="marketplace-owned-preview flagship-marketplace-owned-preview">
                               {asset.video_url ? (
                                 <video src={asset.video_url} muted playsInline preload="metadata" />
                               ) : asset.image_url ? (
@@ -883,7 +883,7 @@ const MarketplacePage: NextPage = () => {
                                 <div className="library-preview-empty">No preview</div>
                               )}
                             </div>
-                            <div className="marketplace-owned-copy">
+                            <div className="marketplace-owned-copy flagship-marketplace-owned-copy">
                               <strong>{asset.title}</strong>
                               <span>{formatListingModel(asset)}</span>
                               <span>{formatTimestamp(asset.created_at)}</span>
@@ -968,7 +968,7 @@ const MarketplacePage: NextPage = () => {
                   )}
                   {!workflowLoading && workflows.length > 0 && (
                     <>
-                      <div className="marketplace-grid">
+                      <div className="marketplace-grid flagship-marketplace-grid">
                         {workflows.map((workflow) => (
                           <div
                             key={workflow.id}
