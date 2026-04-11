@@ -141,24 +141,12 @@ const HomePage: NextPage = () => {
                 target="_blank"
                 rel="noreferrer"
               >
-                Enter Astra
+                Play Astra
               </a>
               <Link href="/generator" className="jh-btn jh-btn-secondary">
                 Start Creating
               </Link>
             </div>
-          </div>
-
-          <div className="jh-hero-pilots">
-            {pilots.map((p) => (
-              <div key={p.name} className="jh-pilot-card">
-                <img src={p.img} alt={p.name} className="jh-pilot-img" />
-                <div className="jh-pilot-info">
-                  <strong>{p.name}</strong>
-                  <span>{p.role}</span>
-                </div>
-              </div>
-            ))}
           </div>
         </section>
 
@@ -203,44 +191,6 @@ const HomePage: NextPage = () => {
                 <span>Power the Network</span>
               </div>
             </Link>
-          </div>
-        </section>
-
-        {/* ── Astra Showcase ── */}
-        <section className="jh-showcase">
-          <div className="jh-showcase-header">
-            <span className="jh-eyebrow">Astra Valkyries</span>
-            <h2>A real world. Already built.</h2>
-            <p>
-              Combat. Pilots. Loadouts. Missions. Progression. Collection. Leaderboards.
-            </p>
-          </div>
-          <div className="jh-showcase-grid">
-            {showcaseItems.map((item) => (
-              <article key={item.label} className="jh-showcase-card">
-                <div className="jh-showcase-img-wrap">
-                  <img
-                    src={item.img}
-                    alt={item.label}
-                    className={`jh-showcase-img${item.contain ? " contain" : ""}`}
-                  />
-                </div>
-                <div className="jh-showcase-card-body">
-                  <strong>{item.label}</strong>
-                  <span>{item.desc}</span>
-                </div>
-              </article>
-            ))}
-          </div>
-          <div className="jh-showcase-cta">
-            <a
-              href="https://play.joinhavn.io/"
-              className="jh-btn jh-btn-primary"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Play Now
-            </a>
           </div>
         </section>
 
@@ -296,6 +246,59 @@ const HomePage: NextPage = () => {
                 Become an Operator
               </Link>
             </div>
+          </div>
+        </section>
+
+        {/* ── Astra Showcase ── */}
+        <section className="jh-showcase">
+          <div className="jh-showcase-header">
+            <span className="jh-eyebrow">Astra Valkyries</span>
+            <h2>A real world. Already built.</h2>
+            <p>
+              Combat. Pilots. Loadouts. Missions. Progression. Collection. Leaderboards.
+            </p>
+          </div>
+          <div className="jh-showcase-grid">
+            {showcaseItems.map((item) => (
+              <article key={item.label} className="jh-showcase-card">
+                <div className="jh-showcase-img-wrap">
+                  <img
+                    src={item.img}
+                    alt={item.label}
+                    className={`jh-showcase-img${item.contain ? " contain" : ""}`}
+                  />
+                </div>
+                <div className="jh-showcase-card-body">
+                  <strong>{item.label}</strong>
+                  <span>{item.desc}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="jh-showcase-cta">
+            <a
+              href="https://play.joinhavn.io/"
+              className="jh-btn jh-btn-primary"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Play Now
+            </a>
+          </div>
+        </section>
+
+        {/* ── Characters ── */}
+        <section className="jh-characters">
+          <div className="jh-hero-pilots">
+            {pilots.map((p) => (
+              <div key={p.name} className="jh-pilot-card">
+                <img src={p.img} alt={p.name} className="jh-pilot-img" />
+                <div className="jh-pilot-info">
+                  <strong>{p.name}</strong>
+                  <span>{p.role}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       </main>
