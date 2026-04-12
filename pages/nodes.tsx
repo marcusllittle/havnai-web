@@ -1,6 +1,8 @@
 import type { NextPage } from "next";
 import Head from "next/head";
+import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { CinematicPageHero } from "../components/CinematicPageHero";
 import { fetchNodes, fetchOperatorWorkers, fetchLeaderboard, NodeInfo, LeaderboardEntry } from "../lib/havnai";
 import { getNodeSSE, SSEEvent } from "../lib/sse";
 import { SiteHeader } from "../components/SiteHeader";
@@ -85,6 +87,14 @@ const NodesPage: NextPage = () => {
   }, [nodes, search]);
 
   const onlineCount = useMemo(() => nodes.filter((n) => n.online).length, [nodes]);
+  const operatorCount = useMemo(() => {
+    const wallets = new Set(
+      nodes
+        .map((node) => (node.operator?.wallet || node.wallet || "").toLowerCase())
+        .filter(Boolean)
+    );
+    return wallets.size;
+  }, [nodes]);
 
   const formatUptime = useCallback((lastSeen: string) => {
     const diff = Date.now() - new Date(lastSeen).getTime();
@@ -108,17 +118,46 @@ const NodesPage: NextPage = () => {
 
   return (
     <>
-      <Head><title>HavnAI Nodes</title></Head>
+      <Head><title>Network — JoinHavn</title></Head>
       <SiteHeader />
 
-      <main className="library-page">
-        <section className="page-hero">
-          <div className="page-hero-inner">
-            <p className="hero-kicker">Network</p>
-            <h1 className="hero-title">GPU Nodes</h1>
-            <p className="hero-subtitle">Live Public Alpha view of the GPU operators and machines currently powering the HavnAI network.</p>
-          </div>
-        </section>
+      <main className="library-page jh-page-shell">
+        <CinematicPageHero
+          eyebrow="Network"
+          title="Watch the grid in real time."
+          description="Live operator telemetry from the coordinator shows which machines are online, what capacity they expose, and how Public Alpha activity is flowing through the network."
+          mediaVariant="network"
+          panelEyebrow="Node Telemetry"
+          panelTitle="Capacity, uptime, trust, rewards"
+          panelDescription="Use this view to monitor the machines powering image, face swap, and video jobs, then jump into onboarding when you are ready to add your own hardware."
+          stats={[
+            {
+              label: "Nodes",
+              value: nodes.length.toLocaleString(),
+              detail: "Machines currently tracked",
+            },
+            {
+              label: "Online",
+              value: onlineCount.toLocaleString(),
+              detail: "Reporting live heartbeats",
+            },
+            {
+              label: "Operators",
+              value: operatorCount.toLocaleString(),
+              detail: "Distinct wallets in view",
+            },
+          ]}
+          actions={
+            <>
+              <Link href="/join" className="jh-btn jh-btn-primary">
+                Run a Node
+              </Link>
+              <Link href="/analytics" className="jh-btn jh-btn-secondary">
+                Open Analytics
+              </Link>
+            </>
+          }
+        />
 
         <section className="page-container">
           <div className="chart-section">

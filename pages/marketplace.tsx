@@ -1,7 +1,9 @@
 import type { NextPage } from "next";
 import Head from "next/head";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
+import { CinematicPageHero } from "../components/CinematicPageHero";
 import { useWallet } from "../components/WalletProvider";
 import { SiteHeader } from "../components/SiteHeader";
 import { getApiBase } from "../lib/apiBase";
@@ -9,21 +11,27 @@ import {
   createWorkflow,
   fetchCredits,
   fetchGalleryBrowse,
+  fetchGalleryCollection,
   fetchGalleryPurchases,
   fetchMarketplace,
   fetchMyGalleryListings,
+  fetchOwnershipHistory,
   GalleryListing,
+  GalleryOwnershipEvent,
   GalleryPurchaseRecord,
   HavnaiApiError,
   delistGalleryListing,
+  getGalleryDownloadUrl,
   purchaseGalleryListing,
+  relistGalleryAsset,
   Workflow,
 } from "../lib/havnai";
+import { downloadAsset } from "../lib/download";
 import { getConnectButtonLabel, isUsableWallet } from "../lib/wallet";
 import { getWalletIdentityLabel, getWalletSourceLabel, getWalletStatusCopy, PUBLIC_ALPHA_LABEL } from "../lib/publicAlpha";
 
 type MarketplaceTab = "gallery" | "workflows";
-type GalleryView = "browse" | "my-listings" | "purchases";
+type GalleryView = "browse" | "my-listings" | "collection";
 type GalleryAssetFilter = "all" | "image" | "video";
 type WorkflowView = "browse" | "create";
 
@@ -76,6 +84,7 @@ function purchaseToListing(purchase: GalleryPurchaseRecord): GalleryListing {
     id: purchase.listing_id,
     job_id: purchase.job_id,
     seller_wallet: purchase.seller_wallet,
+    owner_wallet: purchase.buyer_wallet,
     title: purchase.title,
     description: "",
     price_credits: purchase.price_paid,
@@ -126,12 +135,17 @@ const MarketplacePage: NextPage = () => {
   const [myListingsLoading, setMyListingsLoading] = useState(false);
   const [myListingsError, setMyListingsError] = useState<string | null>(null);
 
-  const [purchases, setPurchases] = useState<GalleryPurchaseRecord[]>([]);
-  const [purchasesLoading, setPurchasesLoading] = useState(false);
-  const [purchasesError, setPurchasesError] = useState<string | null>(null);
+  const [collection, setCollection] = useState<GalleryListing[]>([]);
+  const [collectionLoading, setCollectionLoading] = useState(false);
+  const [collectionError, setCollectionError] = useState<string | null>(null);
 
   const [selectedListing, setSelectedListing] = useState<GalleryListing | null>(null);
   const [selectedListingReadonly, setSelectedListingReadonly] = useState(false);
+  const [ownershipHistory, setOwnershipHistory] = useState<GalleryOwnershipEvent[]>([]);
+  const [relistModalOpen, setRelistModalOpen] = useState(false);
+  const [relistPrice, setRelistPrice] = useState("");
+  const [relistTitle, setRelistTitle] = useState("");
+  const [relistDescription, setRelistDescription] = useState("");
   const [galleryActionLoading, setGalleryActionLoading] = useState(false);
   const [galleryActionError, setGalleryActionError] = useState<string | null>(null);
   const [galleryActionSuccess, setGalleryActionSuccess] = useState<string | null>(null);
@@ -174,7 +188,7 @@ const MarketplacePage: NextPage = () => {
       typeof router.query.galleryView === "string" ? router.query.galleryView : "browse";
 
     setTab(rawTab === "workflows" ? "workflows" : "gallery");
-    if (rawGalleryView === "my-listings" || rawGalleryView === "purchases") {
+    if (rawGalleryView === "my-listings" || rawGalleryView === "collection") {
       setGalleryView(rawGalleryView);
     } else {
       setGalleryView("browse");
@@ -289,28 +303,28 @@ const MarketplacePage: NextPage = () => {
   useEffect(() => {
     let active = true;
     if (!activeWallet) {
-      setPurchases([]);
-      setPurchasesError(null);
+      setCollection([]);
+      setCollectionError(null);
       return () => {
         active = false;
       };
     }
-    const loadPurchases = async () => {
-      setPurchasesLoading(true);
-      setPurchasesError(null);
+    const loadCollection = async () => {
+      setCollectionLoading(true);
+      setCollectionError(null);
       try {
-        const items = await fetchGalleryPurchases(activeWallet);
-        if (active) setPurchases(items);
+        const items = await fetchGalleryCollection(activeWallet);
+        if (active) setCollection(items);
       } catch (err: any) {
         if (active) {
-          setPurchases([]);
-          setPurchasesError(err?.message || "Failed to load purchases.");
+          setCollection([]);
+          setCollectionError(err?.message || "Failed to load collection.");
         }
       } finally {
-        if (active) setPurchasesLoading(false);
+        if (active) setCollectionLoading(false);
       }
     };
-    loadPurchases();
+    loadCollection();
     return () => {
       active = false;
     };
@@ -406,19 +420,35 @@ const MarketplacePage: NextPage = () => {
     setSelectedListingReadonly(false);
     setGalleryActionError(null);
     setGalleryActionSuccess(null);
+    setOwnershipHistory([]);
+    setRelistModalOpen(false);
+    if (listing.job_id) {
+      fetchOwnershipHistory(listing.job_id)
+        .then(setOwnershipHistory)
+        .catch(() => setOwnershipHistory([]));
+    }
   };
 
-  const openPurchaseListing = (purchase: GalleryPurchaseRecord) => {
-    setSelectedListing(purchaseToListing(purchase));
+  const openCollectionListing = (listing: GalleryListing) => {
+    setSelectedListing(listing);
     setSelectedListingReadonly(true);
     setGalleryActionError(null);
     setGalleryActionSuccess(null);
+    setOwnershipHistory([]);
+    setRelistModalOpen(false);
+    if (listing.job_id) {
+      fetchOwnershipHistory(listing.job_id)
+        .then(setOwnershipHistory)
+        .catch(() => setOwnershipHistory([]));
+    }
   };
 
   const closeListingDrawer = () => {
     setSelectedListing(null);
     setSelectedListingReadonly(false);
     setGalleryActionError(null);
+    setOwnershipHistory([]);
+    setRelistModalOpen(false);
   };
 
   const handlePurchase = async () => {
@@ -467,22 +497,62 @@ const MarketplacePage: NextPage = () => {
     }
   };
 
+  const handleRelist = async () => {
+    if (!selectedListing || !connectedWallet || !isUsableWallet(connectedWallet)) return;
+    const price = parseFloat(relistPrice);
+    if (!price || price <= 0) {
+      setGalleryActionError("Price must be greater than 0.");
+      return;
+    }
+    setGalleryActionLoading(true);
+    setGalleryActionError(null);
+    setGalleryActionSuccess(null);
+    try {
+      await relistGalleryAsset({
+        wallet: connectedWallet,
+        job_id: selectedListing.job_id,
+        title: relistTitle.trim() || selectedListing.title,
+        description: relistDescription.trim(),
+        price_credits: price,
+      });
+      setGalleryActionSuccess("Asset re-listed on marketplace.");
+      setGalleryRefreshKey((value) => value + 1);
+      setRelistModalOpen(false);
+      closeListingDrawer();
+    } catch (err: any) {
+      const message =
+        err instanceof HavnaiApiError
+          ? err.message
+          : typeof err?.message === "string"
+          ? err.message
+          : "Re-listing failed.";
+      setGalleryActionError(message);
+    } finally {
+      setGalleryActionLoading(false);
+    }
+  };
+
   const userOwnsSelectedListing =
     selectedListing && activeWallet
-      ? selectedListing.seller_wallet.toLowerCase() === activeWallet.toLowerCase()
+      ? (selectedListing.owner_wallet || selectedListing.seller_wallet).toLowerCase() === activeWallet.toLowerCase()
+      : false;
+
+  const userIsCurrentOwner =
+    selectedListing && activeWallet
+      ? (selectedListing.owner_wallet || "").toLowerCase() === activeWallet.toLowerCase()
       : false;
 
   const galleryPrimaryActionDisabled =
     !selectedListing ||
-    selectedListingReadonly ||
+    (selectedListingReadonly && !userIsCurrentOwner) ||
     !connectedWallet ||
     userOwnsSelectedListing ||
     selectedListing.status !== "active";
 
   const galleryPrimaryActionLabel = !selectedListing
     ? "Unavailable"
-    : selectedListingReadonly
-    ? "Purchased"
+    : userIsCurrentOwner && selectedListing.status !== "active"
+    ? "Owned"
     : !connectedWallet
     ? "Connect wallet to buy"
     : userOwnsSelectedListing
@@ -494,22 +564,48 @@ const MarketplacePage: NextPage = () => {
   return (
     <>
       <Head>
-        <title>HavnAI Marketplace</title>
+        <title>Marketplace — JoinHavn</title>
       </Head>
 
       <SiteHeader />
 
-      <main className="library-page">
-        <section className="page-hero">
-          <div className="page-hero-inner">
-            <p className="hero-kicker">Marketplace</p>
-            <h1 className="hero-title">Gallery and workflows</h1>
-            <p className="hero-subtitle">
-              Browse published Public Alpha creations and reusable workflows. Gallery inventory grows
-              as creators list work from Generator and My Library.
-            </p>
-          </div>
-        </section>
+      <main className="library-page jh-page-shell">
+        <CinematicPageHero
+          eyebrow="Marketplace"
+          title="Trade the outputs. Reuse the systems."
+          description={`The ${PUBLIC_ALPHA_LABEL.toLowerCase()} exchange layer for collectible media, exclusive ownership transfer, and reusable workflow setups that can route back into the generator.`}
+          mediaVariant="marketplace"
+          panelEyebrow="Exchange Floor"
+          panelTitle="Gallery ownership + workflow distribution"
+          panelDescription="Browse public listings without a wallet, then connect when you want to buy, list, or relist assets tied to your active identity."
+          stats={[
+            {
+              label: "Listings",
+              value: galleryTotal.toLocaleString(),
+              detail: "Visible in public browse",
+            },
+            {
+              label: "Workflows",
+              value: workflowTotal.toLocaleString(),
+              detail: "Reusable presets in catalog",
+            },
+            {
+              label: "Credits",
+              value: creditLoading ? "Loading..." : `${formatCredits(creditBalance)}`,
+              detail: activeWallet ? "Active wallet balance" : "Connect to transact",
+            },
+          ]}
+          actions={
+            <>
+              <Link href="/generator" className="jh-btn jh-btn-primary">
+                Create to Sell
+              </Link>
+              <Link href="/marketplace?tab=gallery&galleryView=collection" className="jh-btn jh-btn-secondary">
+                Open Collection
+              </Link>
+            </>
+          }
+        />
 
         <section className="page-container">
           <div className="marketplace-tabs">
@@ -591,16 +687,16 @@ const MarketplacePage: NextPage = () => {
                 </button>
                 <button
                   type="button"
-                  className={`library-chip ${galleryView === "purchases" ? "is-active" : ""}`}
-                  onClick={() => activeWallet && setGalleryView("purchases")}
+                  className={`library-chip ${galleryView === "collection" ? "is-active" : ""}`}
+                  onClick={() => activeWallet && setGalleryView("collection")}
                   disabled={!activeWallet}
                 >
-                  Purchases
+                  My Collection
                 </button>
               </div>
               {!activeWallet && (
                 <p className="job-hint" style={{ marginTop: "-0.35rem", marginBottom: "1rem" }}>
-                  Public browsing stays open without a wallet. Connect a wallet to unlock My Listings and Purchases.
+                  Connect your wallet to unlock My Listings and My Collection. Public browsing stays open without a wallet.
                 </p>
               )}
 
@@ -697,7 +793,7 @@ const MarketplacePage: NextPage = () => {
                                 {listing.model && <span>{formatListingModel(listing)}</span>}
                               </div>
                               <div className="marketplace-gallery-footer">
-                                <span>{formatWallet(listing.seller_wallet)}</span>
+                                <span>{formatWallet(listing.owner_wallet || listing.seller_wallet)}</span>
                                 <span>{formatTimestamp(listing.created_at)}</span>
                               </div>
                             </div>
@@ -781,48 +877,52 @@ const MarketplacePage: NextPage = () => {
                 </div>
               )}
 
-              {galleryView === "purchases" && (
+              {galleryView === "collection" && (
                 <div className="chart-section marketplace-panel">
                   <div className="chart-header">
-                    <h3 className="chart-title">Purchases</h3>
+                    <h3 className="chart-title">My Collection</h3>
                   </div>
                     {!activeWallet && (
-                      <p className="job-hint">Connect your wallet to view wallet-linked purchases. Guest sessions can browse listings without purchasing.</p>
+                      <p className="job-hint">Connect your wallet to view your owned assets. Purchased items transfer exclusive ownership to you.</p>
                     )}
-                  {activeWallet && purchasesLoading && <p className="library-loading">Loading purchases...</p>}
-                  {activeWallet && purchasesError && <p className="job-hint error">{purchasesError}</p>}
-                  {activeWallet && !purchasesLoading && purchases.length === 0 && (
+                  {activeWallet && collectionLoading && <p className="library-loading">Loading collection...</p>}
+                  {activeWallet && collectionError && <p className="job-hint error">{collectionError}</p>}
+                  {activeWallet && !collectionLoading && collection.length === 0 && (
                     <div className="library-empty">
-                      <p>No purchases yet. Bought gallery pieces will appear here with their source details and delivery history.</p>
+                      <p>No assets owned yet. When you buy a gallery piece, exclusive ownership transfers to you and it appears here.</p>
                     </div>
                   )}
-                  {activeWallet && !purchasesLoading && purchases.length > 0 && (
+                  {activeWallet && !collectionLoading && collection.length > 0 && (
                     <div className="marketplace-owned-list">
-                      {purchases.map((purchase) => (
-                        <button
-                          key={`${purchase.listing_id}-${purchase.created_at}`}
-                          type="button"
-                          className="marketplace-owned-row"
-                          onClick={() => openPurchaseListing(purchase)}
-                        >
-                          <div className="marketplace-owned-preview">
-                            {purchase.video_url ? (
-                              <video src={purchase.video_url} muted playsInline preload="metadata" />
-                            ) : purchase.image_url ? (
-                              <img src={purchase.image_url} alt={purchase.title} loading="lazy" />
-                            ) : (
-                              <div className="library-preview-empty">No preview</div>
-                            )}
-                          </div>
-                          <div className="marketplace-owned-copy">
-                            <strong>{purchase.title}</strong>
-                            <span>Seller: {formatWallet(purchase.seller_wallet)}</span>
-                            <span>Paid: {purchase.price_paid.toFixed(1)} credits</span>
-                            <span>{formatTimestamp(purchase.created_at)}</span>
-                          </div>
-                          <span className="marketplace-status-badge status-sold">purchased</span>
-                        </button>
-                      ))}
+                      {collection.map((asset) => {
+                        const isListed = asset.listed && !asset.sold;
+                        return (
+                          <button
+                            key={`${asset.id}-${asset.job_id}`}
+                            type="button"
+                            className="marketplace-owned-row"
+                            onClick={() => openCollectionListing(asset)}
+                          >
+                            <div className="marketplace-owned-preview">
+                              {asset.video_url ? (
+                                <video src={asset.video_url} muted playsInline preload="metadata" />
+                              ) : asset.image_url ? (
+                                <img src={asset.image_url} alt={asset.title} loading="lazy" />
+                              ) : (
+                                <div className="library-preview-empty">No preview</div>
+                              )}
+                            </div>
+                            <div className="marketplace-owned-copy">
+                              <strong>{asset.title}</strong>
+                              <span>{formatListingModel(asset)}</span>
+                              <span>{formatTimestamp(asset.created_at)}</span>
+                            </div>
+                            <span className={`marketplace-status-badge ${isListed ? "status-active" : "status-sold"}`}>
+                              {isListed ? "listed" : "owned"}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1115,15 +1215,15 @@ const MarketplacePage: NextPage = () => {
                   <section className="job-section">
                     <h4>Details</h4>
                     <div className="job-details-grid">
-                      <div><span className="job-label">Seller</span><span>{selectedListing.seller_wallet}</span></div>
-                      <div><span className="job-label">Job ID</span><span>{selectedListing.job_id}</span></div>
+                      <div><span className="job-label">Owner</span><span>{selectedListing.owner_wallet || selectedListing.seller_wallet}</span></div>
+                      <div><span className="job-label">Creator</span><span>{selectedListing.seller_wallet}</span></div>
                       <div><span className="job-label">Asset type</span><span>{selectedListing.asset_type}</span></div>
                       <div><span className="job-label">Created</span><span>{formatTimestamp(selectedListing.created_at)}</span></div>
                       <div><span className="job-label">Model</span><span>{formatListingModel(selectedListing)}</span></div>
                       <div><span className="job-label">Category</span><span>{selectedListing.category || "--"}</span></div>
                     </div>
                   </section>
-                  {selectedListing.prompt && (
+                  {selectedListing.prompt && userIsCurrentOwner && (
                     <section className="job-section">
                       <h4>Prompt</h4>
                       <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
@@ -1131,17 +1231,50 @@ const MarketplacePage: NextPage = () => {
                       </p>
                     </section>
                   )}
+                  {!userIsCurrentOwner && (
+                    <section className="job-section">
+                      <p className="job-hint" style={{ margin: 0, fontStyle: "italic" }}>
+                        Prompt is only visible to the current owner.
+                      </p>
+                    </section>
+                  )}
+                  {ownershipHistory.length > 0 && (
+                    <section className="job-section">
+                      <h4>Provenance</h4>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                        {ownershipHistory.map((event, idx) => (
+                          <div key={event.id || idx} style={{ fontSize: "0.8rem", color: "var(--text-muted)", lineHeight: 1.4 }}>
+                            <span style={{ textTransform: "capitalize", fontWeight: 600, color: "var(--text-default)" }}>
+                              {event.event_type}
+                            </span>
+                            {event.event_type === "mint" && (
+                              <span> — Created by {formatWallet(event.to_wallet)}</span>
+                            )}
+                            {event.event_type === "sale" && (
+                              <span> — {formatWallet(event.from_wallet)} → {formatWallet(event.to_wallet)} for {event.price_credits.toFixed(1)} credits</span>
+                            )}
+                            {event.event_type === "relist" && (
+                              <span> — Re-listed by {formatWallet(event.to_wallet)} at {event.price_credits.toFixed(1)} credits</span>
+                            )}
+                            <span style={{ marginLeft: "0.5rem", opacity: 0.6 }}>{formatTimestamp(event.created_at)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
                   <section className="job-section">
                     <div className="job-actions">
-                      <button
-                        type="button"
-                        className="job-action-button"
-                        disabled={galleryPrimaryActionDisabled || galleryActionLoading}
-                        onClick={handlePurchase}
-                      >
-                        {galleryActionLoading ? "Processing..." : galleryPrimaryActionLabel}
-                      </button>
-                      {userOwnsSelectedListing && selectedListing.status === "active" && !selectedListingReadonly && (
+                      {selectedListing.status === "active" && !userOwnsSelectedListing && (
+                        <button
+                          type="button"
+                          className="job-action-button"
+                          disabled={galleryPrimaryActionDisabled || galleryActionLoading}
+                          onClick={handlePurchase}
+                        >
+                          {galleryActionLoading ? "Processing..." : galleryPrimaryActionLabel}
+                        </button>
+                      )}
+                      {userIsCurrentOwner && selectedListing.status === "active" && (
                         <button
                           type="button"
                           className="job-action-button secondary"
@@ -1150,6 +1283,52 @@ const MarketplacePage: NextPage = () => {
                         >
                           Delist
                         </button>
+                      )}
+                      {userIsCurrentOwner && !selectedListing.listed && (
+                        <button
+                          type="button"
+                          className="job-action-button"
+                          disabled={galleryActionLoading}
+                          onClick={() => {
+                            setRelistTitle(selectedListing.title);
+                            setRelistDescription(selectedListing.description || "");
+                            setRelistPrice("");
+                            setRelistModalOpen(true);
+                          }}
+                        >
+                          Re-list on Marketplace
+                        </button>
+                      )}
+                      {userIsCurrentOwner && (
+                        <>
+                          <button
+                            type="button"
+                            className="job-action-button"
+                            onClick={() => {
+                              const ext = selectedListing.asset_type === "video" ? "mp4" : "png";
+                              const url = getGalleryDownloadUrl(selectedListing.id, activeWallet || "", true);
+                              downloadAsset(url, `havnai-${selectedListing.job_id.slice(0, 8)}-original.${ext}`);
+                            }}
+                          >
+                            &#x2913; Download (No Watermark)
+                          </button>
+                          <button
+                            type="button"
+                            className="job-action-button secondary"
+                            onClick={() => {
+                              const ext = selectedListing.asset_type === "video" ? "mp4" : "png";
+                              const url = getGalleryDownloadUrl(selectedListing.id, activeWallet || "", false);
+                              downloadAsset(url, `havnai-${selectedListing.job_id.slice(0, 8)}.${ext}`);
+                            }}
+                          >
+                            &#x2913; Download (With Watermark)
+                          </button>
+                        </>
+                      )}
+                      {userIsCurrentOwner && selectedListing.status !== "active" && !relistModalOpen && (
+                        <span className="marketplace-status-badge status-sold" style={{ padding: "0.4rem 0.8rem" }}>
+                          Owned by you
+                        </span>
                       )}
                       {galleryActionError && galleryActionError.toLowerCase().includes("credits") && (
                         <a
@@ -1161,9 +1340,62 @@ const MarketplacePage: NextPage = () => {
                         </a>
                       )}
                     </div>
+                    {relistModalOpen && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "0.8rem" }}>
+                        <label>
+                          <span className="library-filter-label" style={{ display: "block", marginBottom: "0.2rem" }}>Title</span>
+                          <input
+                            type="text"
+                            className="library-search"
+                            value={relistTitle}
+                            onChange={(event) => setRelistTitle(event.target.value)}
+                            placeholder="Listing title"
+                          />
+                        </label>
+                        <label>
+                          <span className="library-filter-label" style={{ display: "block", marginBottom: "0.2rem" }}>Description</span>
+                          <textarea
+                            className="library-search"
+                            value={relistDescription}
+                            onChange={(event) => setRelistDescription(event.target.value)}
+                            placeholder="Optional description"
+                            style={{ minHeight: "50px", resize: "vertical" }}
+                          />
+                        </label>
+                        <label>
+                          <span className="library-filter-label" style={{ display: "block", marginBottom: "0.2rem" }}>Price (credits)</span>
+                          <input
+                            type="number"
+                            className="library-search"
+                            value={relistPrice}
+                            onChange={(event) => setRelistPrice(event.target.value)}
+                            placeholder="e.g. 50"
+                            min={0.1}
+                            step={0.1}
+                          />
+                        </label>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <button
+                            type="button"
+                            className="job-action-button"
+                            disabled={galleryActionLoading}
+                            onClick={handleRelist}
+                          >
+                            {galleryActionLoading ? "Processing..." : "Publish Re-listing"}
+                          </button>
+                          <button
+                            type="button"
+                            className="job-action-button secondary"
+                            onClick={() => setRelistModalOpen(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {!connectedWallet && (
                       <p className="job-hint">
-                        Connect your wallet to approve this purchase. Browsing is open, but buying always requires a wallet signature.
+                        Connect your wallet to interact. Buying transfers exclusive ownership to you.
                       </p>
                     )}
                     {galleryActionError && <p className="job-hint error">{galleryActionError}</p>}

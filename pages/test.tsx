@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
+import Head from "next/head";
+import Link from "next/link";
+import { CinematicPageHero } from "../components/CinematicPageHero";
 import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
 import { HavnAIPrompt } from "../components/HavnAIPrompt";
@@ -97,6 +100,12 @@ type ModelListEntry = {
     video?: string;
     face_swap?: string;
   } | null;
+  // LTX-Video 2.3 model family fields
+  model_family?: string | null;
+  model_version?: string | null;
+  checkpoint_variant?: string | null;
+  capabilities?: string[] | null;
+  available_modes?: string[] | null;
 };
 
 type GeneratorMode = "image" | "face_swap" | "video";
@@ -164,6 +173,11 @@ const formatResolutionLabel = (width?: number, height?: number): string => {
 };
 
 const pickPreferredVideoModel = (models: { id: string; label: string }[]): string => {
+  // Prefer LTX-Video 2.3 dev, then distilled, then AnimateDiff, then first available
+  const ltxDev = models.find((item) => item.id.toLowerCase() === "ltx_video_dev");
+  if (ltxDev) return ltxDev.id;
+  const ltxDistilled = models.find((item) => item.id.toLowerCase() === "ltx_video_distilled");
+  if (ltxDistilled) return ltxDistilled.id;
   const animatediff = models.find((item) => item.id.toLowerCase() === "animatediff");
   if (animatediff) return animatediff.id;
   return models.length > 0 ? models[0].id : "";
@@ -268,6 +282,10 @@ const TestPage: React.FC = () => {
   const [sfwMode, setSfwMode] = useState(false);
   const [loras, setLoras] = useState<LoraDraft[]>([]);
   const [autoStitch, setAutoStitch] = useState(false);
+  // LTX-Video 2.3 settings
+  const [ltxPipelineMode, setLtxPipelineMode] = useState("two_stage");
+  const [ltxUpscaler, setLtxUpscaler] = useState("");
+  const [ltxTemporalUpscale, setLtxTemporalUpscale] = useState(false);
   const [availableLoras, setAvailableLoras] = useState<string[]>([]);
   const [allLoraInfo, setAllLoraInfo] = useState<LoraInfo[]>([]);
   const [loraLoadError, setLoraLoadError] = useState<string | undefined>();
@@ -451,7 +469,7 @@ const TestPage: React.FC = () => {
         });
         const videoModelsData = models.filter((m) => {
           const taskType = String(m.task_type || "").toUpperCase();
-          return (taskType === "VIDEO_GEN" || taskType === "ANIMATEDIFF") && m.available === true;
+          return (taskType === "VIDEO_GEN" || taskType === "ANIMATEDIFF" || taskType === "LTX_VIDEO_GEN") && m.available === true;
         });
 
         // Face swap models: only currently available SDXL entries.
@@ -888,6 +906,12 @@ const TestPage: React.FC = () => {
     }
     if (sfwMode) {
       request.sfwMode = true;
+    }
+    // LTX-Video 2.3 extended fields
+    if (isLtxVideoModel) {
+      if (ltxPipelineMode) request.pipelineMode = ltxPipelineMode;
+      if (ltxUpscaler) request.upscaler = ltxUpscaler;
+      if (ltxTemporalUpscale) request.temporalUpscale = true;
     }
     return request as import("../lib/havnai").VideoJobRequest;
   };
@@ -1437,21 +1461,66 @@ const TestPage: React.FC = () => {
     return () => navToggle.removeEventListener("click", handler);
   }, []);
 
+  const totalVisibleModels =
+    imageModels.length + videoModels.length + faceSwapModels.length;
+  const creditSummary =
+    credits && credits.credits_enabled
+      ? `${credits.balance.toFixed(1)} cr`
+      : inviteSaved
+      ? "Invite saved"
+      : "Access code";
+  const modeSummary =
+    mode === "face_swap" ? "Face swap" : mode === "video" ? "Video" : "Image";
+
   return (
     <>
+      <Head>
+        <title>JoinHavn Generator</title>
+        <meta
+          name="description"
+          content="Create images, face swaps, and video on the JoinHavn GPU grid with live model routing and wallet-linked alpha access."
+        />
+      </Head>
+
       <SiteHeader />
 
-      <main>
-        <section className="generator-hero" id="home">
-          <div className="generator-hero-inner">
-            <p className="hero-kicker">{PUBLIC_ALPHA_LABEL} Generator</p>
-            <h1 className="generator-hero-title">Create on the Grid.</h1>
-            <p className="generator-hero-subtitle">
-              Write a prompt, choose from the live models on the network, and render images, face
-              swaps, or video through HavnAI Public Alpha.
-            </p>
-          </div>
-        </section>
+      <main className="jh-page-shell">
+        <CinematicPageHero
+          eyebrow={`${PUBLIC_ALPHA_LABEL} Generator`}
+          title="Create on the grid."
+          description="Write a prompt, route into live network capacity, and generate images, face swaps, or video without leaving the JoinHavn creation stack."
+          mediaVariant="creation"
+          panelEyebrow="Creation Deck"
+          panelTitle={`${totalVisibleModels.toLocaleString()} visible model slots`}
+          panelDescription={`Current mode: ${modeSummary}. Use the generator to render, inspect job status, and push finished outputs into your library or marketplace flow.`}
+          stats={[
+            {
+              label: "Mode",
+              value: modeSummary,
+              detail: "Switch between image, video, and face swap",
+            },
+            {
+              label: "Visible Models",
+              value: totalVisibleModels.toLocaleString(),
+              detail: "Pulled from live capacity",
+            },
+            {
+              label: "Access",
+              value: creditSummary,
+              detail: inviteSaved ? "Saved in this browser" : "Add invite if provided",
+            },
+          ]}
+          actions={
+            <>
+              <Link href="/library" className="jh-btn jh-btn-primary">
+                Open Library
+              </Link>
+              <Link href="/pricing" className="jh-btn jh-btn-secondary">
+                Manage Credits
+              </Link>
+            </>
+          }
+        />
 
         <section className="generator-section">
           <div className="generator-card">
@@ -1904,7 +1973,9 @@ const TestPage: React.FC = () => {
                   <div className="generator-advanced">
                     <span className="generator-label">Video settings</span>
                     <p className="generator-help">
-                      LTX2 defaults to 16 frames at 8fps (~2s). AnimateDiff can go longer but is heavier.
+                      {isLtxVideoModel
+                        ? "LTX-Video 2.3: up to 257 frames at 24fps (~10s). DiT model with audio+video sync."
+                        : "LTX2 defaults to 16 frames at 8fps (~2s). AnimateDiff can go longer but is heavier."}
                     </p>
                     <label className="generator-label" htmlFor="video-model">
                       Video model
@@ -1925,6 +1996,54 @@ const TestPage: React.FC = () => {
                       <p className="generator-help">
                         Using recommended defaults for this model (source: {videoDefaultsBadge}). Leave fields blank to apply them automatically.
                       </p>
+                    )}
+                    {isLtxVideoModel && ltxVideoModes.length > 0 && (
+                      <>
+                        <label className="generator-label" htmlFor="ltx-pipeline-mode">
+                          Pipeline mode
+                        </label>
+                        <select
+                          id="ltx-pipeline-mode"
+                          value={ltxPipelineMode}
+                          onChange={(e) => setLtxPipelineMode(e.target.value)}
+                          className="generator-select"
+                        >
+                          {ltxVideoModes.map((m: string) => (
+                            <option key={m} value={m}>
+                              {m.replace(/_/g, " ")}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="generator-help">
+                          two stage = best quality. distilled fast = 8 steps. one stage = no upscale.
+                        </p>
+                        <div className="generator-row">
+                          <div>
+                            <label className="generator-label" htmlFor="ltx-upscaler">
+                              Spatial upscaler
+                            </label>
+                            <select
+                              id="ltx-upscaler"
+                              value={ltxUpscaler}
+                              onChange={(e) => setLtxUpscaler(e.target.value)}
+                              className="generator-select"
+                            >
+                              <option value="">None</option>
+                              <option value="spatial_upscaler_x2">Spatial upscale</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="generator-checkbox">
+                              <input
+                                type="checkbox"
+                                checked={ltxTemporalUpscale}
+                                onChange={(e) => setLtxTemporalUpscale(e.target.checked)}
+                              />
+                              <span>Temporal upscale (2x frames)</span>
+                            </label>
+                          </div>
+                        </div>
+                      </>
                     )}
                     <label className="generator-label" htmlFor="negative-prompt-video">
                       Negative prompt (optional)
@@ -1995,7 +2114,7 @@ const TestPage: React.FC = () => {
                           id="steps"
                           type="number"
                           min={1}
-                          max={50}
+                          max={isLtxVideoModel ? 150 : 50}
                           step={1}
                           className="generator-input"
                           placeholder="Recommended"
@@ -2011,7 +2130,7 @@ const TestPage: React.FC = () => {
                           id="guidance"
                           type="number"
                           min={0}
-                          max={12}
+                          max={isLtxVideoModel ? 20 : 12}
                           step={0.1}
                           className="generator-input"
                           placeholder="Recommended"
@@ -2029,7 +2148,7 @@ const TestPage: React.FC = () => {
                           id="width"
                           type="number"
                           min={256}
-                          max={768}
+                          max={isLtxVideoModel ? 1280 : 768}
                           step={64}
                           className="generator-input"
                           placeholder="Recommended"
@@ -2045,7 +2164,7 @@ const TestPage: React.FC = () => {
                           id="height"
                           type="number"
                           min={256}
-                          max={768}
+                          max={isLtxVideoModel ? 1280 : 768}
                           step={64}
                           className="generator-input"
                           placeholder="Recommended"
@@ -2063,7 +2182,7 @@ const TestPage: React.FC = () => {
                           id="frames"
                           type="number"
                           min={1}
-                          max={64}
+                          max={isLtxVideoModel ? 257 : 64}
                           step={1}
                           className="generator-input"
                           placeholder="Recommended"
@@ -2079,7 +2198,7 @@ const TestPage: React.FC = () => {
                           id="fps"
                           type="number"
                           min={1}
-                          max={24}
+                          max={isLtxVideoModel ? 60 : 24}
                           step={1}
                           className="generator-input"
                           placeholder="Recommended"
@@ -2089,7 +2208,9 @@ const TestPage: React.FC = () => {
                       </div>
                     </div>
                     <p className="generator-help">
-                      AnimateDiff: 16 frames optimal, max 32 (4s @ 8fps). LTX2: max 16 frames (2s @ 8fps). Use <strong>auto-extend chunks</strong> below for longer videos.
+                      {isLtxVideoModel
+                        ? "LTX-Video 2.3: 97 frames default (~4s @ 24fps), up to 257 frames. Upscalers available for higher resolution."
+                        : "AnimateDiff: 16 frames optimal, max 32 (4s @ 8fps). LTX2: max 16 frames (2s @ 8fps). Use auto-extend chunks below for longer videos."}
                     </p>
                     <div className="generator-row">
                       <div>

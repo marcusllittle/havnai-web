@@ -168,7 +168,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         readChainInfo(selection.provider),
       ]);
       patchSnapshot({
-        connectedWallet: accounts[0] || null,
+        connectedWallet: accounts[0]?.toLowerCase() || null,
         hasProvider: true,
         hasConflict: selection.hasConflict,
         providerName: selection.providerName,
@@ -330,7 +330,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             timeout,
             "Wallet did not respond. Trying next provider..."
           );
-          const wallet = accounts[0] || null;
+          const wallet = accounts[0]?.toLowerCase() || null;
           if (!wallet) {
             throw new WalletError("wallet_unknown", "No wallet account returned.");
           }

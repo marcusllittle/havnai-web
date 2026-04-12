@@ -1,6 +1,8 @@
 import type { NextPage } from "next";
 import Head from "next/head";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CinematicPageHero } from "../components/CinematicPageHero";
 import { useWallet } from "../components/WalletProvider";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
 import { SiteHeader } from "../components/SiteHeader";
@@ -384,21 +386,47 @@ const LibraryPage: NextPage = () => {
   return (
     <>
       <Head>
-        <title>HavnAI Library</title>
+        <title>Collection — JoinHavn</title>
       </Head>
       <SiteHeader />
 
-      <main className="library-page">
-        <section className="library-hero">
-          <div className="library-hero-inner">
-            <p className="hero-kicker">My Library</p>
-            <h1 className="hero-title">Saved creations</h1>
-            <p className="hero-subtitle">
-              Saved outputs from this browser stay local until you choose to publish them to the
-              Public Alpha marketplace.
-            </p>
-          </div>
-        </section>
+      <main className="library-page jh-page-shell">
+        <CinematicPageHero
+          eyebrow="Collection"
+          title="Own the renders you keep."
+          description="Your library is the private ownership hub for browser-saved outputs, finished jobs, and the pieces you want to move into the marketplace on your terms."
+          mediaVariant="library"
+          panelEyebrow="Ownership Hub"
+          panelTitle="Local first. Publish when ready."
+          panelDescription="Every saved result stays staged in this browser until you decide to download it, inspect it, or list it for sale."
+          stats={[
+            {
+              label: "Saved",
+              value: items.length.toLocaleString(),
+              detail: "Tracked in this browser",
+            },
+            {
+              label: "Ready",
+              value: statusCounts.ready.toLocaleString(),
+              detail: "Available for download or sale",
+            },
+            {
+              label: "Video",
+              value: typeCounts.video.toLocaleString(),
+              detail: "Motion renders in your archive",
+            },
+          ]}
+          actions={
+            <>
+              <Link href="/generator" className="jh-btn jh-btn-primary">
+                Create New Work
+              </Link>
+              <Link href="/marketplace?tab=gallery&galleryView=my-listings" className="jh-btn jh-btn-secondary">
+                Open Storefront
+              </Link>
+            </>
+          }
+        />
 
         <section className="page-container">
           <div className="wallet-status-card wallet-status-card-inline">

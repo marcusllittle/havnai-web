@@ -120,6 +120,11 @@ export interface VideoJobRequest {
   extendChunks?: number;
   strength?: number;
   sfwMode?: boolean;
+  // LTX-Video 2.3 extended fields
+  pipelineMode?: string;
+  checkpointVariant?: string;
+  upscaler?: string;
+  temporalUpscale?: boolean;
 }
 
 export interface WanVideoStatus {
@@ -273,7 +278,7 @@ const WALLET_SIGN_TIMEOUT_MS = Number.parseInt(
   10
 );
 const WALLET_PROVIDER_TIMEOUT_MS = Number.parseInt(
-  String(process.env.NEXT_PUBLIC_WALLET_PROVIDER_TIMEOUT_MS || "20000"),
+  String(process.env.NEXT_PUBLIC_WALLET_PROVIDER_TIMEOUT_MS || "30000"),
   10
 );
 const ENABLE_LEGACY_WAN_STATUS =
@@ -554,6 +559,11 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   if (request.extendChunks != null) body.extend_chunks = request.extendChunks;
   if (request.strength != null) body.strength = request.strength;
   if (request.sfwMode === true) body.sfw_mode = true;
+  // LTX-Video 2.3 extended fields
+  if (request.pipelineMode) body.pipeline_mode = request.pipelineMode;
+  if (request.checkpointVariant) body.checkpoint_variant = request.checkpointVariant;
+  if (request.upscaler) body.upscaler = request.upscaler;
+  if (request.temporalUpscale === true) body.temporal_upscale = true;
 
   const res = await fetch(apiUrl("/submit-job"), {
     method: "POST",
@@ -806,6 +816,8 @@ type WalletNoncePurpose =
   | "convert_credits_to_hai"
   | "gallery_purchase"
   | "gallery_list"
+  | "gallery_relist"
+  | "gallery_delist"
   | "identity_anchor_create"
   | "identity_anchor_delete";
 
@@ -860,6 +872,18 @@ async function signWalletNonce(
   let lastError: unknown = null;
   for (const candidate of candidates) {
     try {
+      // Fast health check: skip providers that don't respond to a basic RPC
+      // call within 3s. This avoids waiting 30s on a provider that will never
+      // show a popup (e.g. Coinbase Wallet pretending to be MetaMask).
+      try {
+        await withWalletTimeout(
+          Promise.resolve((candidate as any).request({ method: "eth_chainId" })),
+          "Provider did not respond to health check.",
+          3000
+        );
+      } catch {
+        continue;
+      }
       const provider = new BrowserProvider(candidate as any);
       const signer = await withWalletTimeout(
         provider.getSigner(),
@@ -894,6 +918,11 @@ async function signWalletNonce(
       };
     } catch (error) {
       lastError = error;
+      // If MetaMask itself timed out, don't try other providers — they share
+      // the same stuck state and will just cascade more timeouts.
+      if (error instanceof HavnaiApiError && error.code === "wallet_request_timeout") {
+        break;
+      }
     }
   }
 
@@ -1530,6 +1559,7 @@ export interface GalleryListing {
   id: number;
   job_id: string;
   seller_wallet: string;
+  owner_wallet: string;
   title: string;
   description: string;
   price_credits: number;
@@ -1552,6 +1582,17 @@ export interface GalleryListing {
   already_listed?: boolean;
   created_at: number;
   updated_at: number;
+}
+
+export interface GalleryOwnershipEvent {
+  id: number;
+  job_id: string;
+  listing_id: number | null;
+  from_wallet: string;
+  to_wallet: string;
+  event_type: "mint" | "sale" | "relist" | string;
+  price_credits: number;
+  created_at: number;
 }
 
 export interface GalleryBrowseResponse {
@@ -1624,6 +1665,7 @@ function normalizeGalleryListing(raw: any): GalleryListing {
     id: Number(raw?.id || 0),
     job_id: String(raw?.job_id || ""),
     seller_wallet: String(raw?.seller_wallet || ""),
+    owner_wallet: String(raw?.owner_wallet || raw?.seller_wallet || ""),
     title: String(raw?.title || ""),
     description: String(raw?.description || ""),
     price_credits: Number(raw?.price_credits || 0),
@@ -1827,14 +1869,79 @@ export async function purchaseGalleryListing(
   return (await res.json()) as GalleryPurchaseResponse;
 }
 
+export function getGalleryDownloadUrl(listingId: number, wallet: string = WALLET, original = false): string {
+  const params = new URLSearchParams({ wallet });
+  if (original) params.set("original", "true");
+  return apiUrl(`/gallery/listings/${listingId}/download?${params.toString()}`);
+}
+
 export async function delistGalleryListing(listingId: number, wallet: string = WALLET): Promise<{ ok: boolean }> {
+  const signed = await signWalletNonce({
+    wallet,
+    amount: 0,
+    purpose: "gallery_delist",
+    listing_id: listingId,
+  });
   const res = await fetchWithTimeout(apiUrl(`/gallery/listings/${listingId}`), {
     method: "DELETE",
     headers: buildHeaders(true),
-    body: JSON.stringify({ wallet }),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as { ok: boolean };
+}
+
+export async function fetchGalleryCollection(wallet: string = WALLET): Promise<GalleryListing[]> {
+  const res = await fetchWithTimeout(
+    apiUrl(`/gallery/collection?wallet=${encodeURIComponent(wallet)}`),
+    { headers: buildHeaders(false) }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.assets) ? data.assets.map(normalizeGalleryListing) : [];
+}
+
+export async function fetchOwnershipHistory(jobId: string): Promise<GalleryOwnershipEvent[]> {
+  const res = await fetchWithTimeout(
+    apiUrl(`/gallery/ownership/${encodeURIComponent(jobId)}`),
+    { headers: buildHeaders(false) }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.history) ? data.history : [];
+}
+
+export async function relistGalleryAsset(
+  input: { wallet?: string; job_id: string; title: string; description?: string; price_credits: number; category?: string },
+  options: CreateGalleryListingOptions = {}
+): Promise<GalleryListing> {
+  const signed = await signWalletNonce(
+    {
+      wallet: input.wallet || WALLET,
+      amount: input.price_credits,
+      purpose: "gallery_relist",
+      job_id: input.job_id,
+    },
+    (step) => options.onProgress?.(step)
+  );
+  options.onProgress?.("submitting_listing");
+  const res = await fetchWithTimeout(apiUrl("/gallery/relist"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      ...input,
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return normalizeGalleryListing(data);
 }
 
 export async function fetchMarketplace(
