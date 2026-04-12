@@ -101,6 +101,37 @@ type ModelListEntry = {
 
 type GeneratorMode = "image" | "face_swap" | "video";
 type ImageQualityPreset = "fastest" | "balanced" | "best";
+type ImageSizePreset =
+  | "auto"
+  | "21x9"
+  | "16x9"
+  | "3x2"
+  | "4x3"
+  | "5x4"
+  | "1x1"
+  | "4x5"
+  | "3x4"
+  | "2x3"
+  | "9x16";
+
+const IMAGE_SIZE_PRESETS: Array<{
+  id: ImageSizePreset;
+  label: string;
+  width?: number;
+  height?: number;
+}> = [
+  { id: "auto", label: "Auto" },
+  { id: "21x9", label: "21:9", width: 1536, height: 640 },
+  { id: "16x9", label: "16:9", width: 1344, height: 768 },
+  { id: "3x2", label: "3:2", width: 1216, height: 832 },
+  { id: "4x3", label: "4:3", width: 1152, height: 896 },
+  { id: "5x4", label: "5:4", width: 1088, height: 896 },
+  { id: "1x1", label: "1:1", width: 1024, height: 1024 },
+  { id: "4x5", label: "4:5", width: 896, height: 1088 },
+  { id: "3x4", label: "3:4", width: 896, height: 1152 },
+  { id: "2x3", label: "2:3", width: 832, height: 1216 },
+  { id: "9x16", label: "9:16", width: 768, height: 1344 },
+];
 
 const clampStepValue = (value: number): number => {
   if (!Number.isFinite(value)) return 30;
@@ -125,6 +156,11 @@ const formatImageDefaultsSummary = (defaults?: RuntimeDefaults | null): string =
   }
   if (defaults.sampler) parts.push(String(defaults.sampler));
   return parts.join(" · ");
+};
+
+const formatResolutionLabel = (width?: number, height?: number): string => {
+  if (width == null || height == null) return "";
+  return `${width}x${height}`;
 };
 
 const pickPreferredVideoModel = (models: { id: string; label: string }[]): string => {
@@ -219,6 +255,7 @@ const TestPage: React.FC = () => {
   const [faceSwapModels, setFaceSwapModels] = useState<{ id: string; label: string }[]>([]);
   const [modelRuntimeDefaults, setModelRuntimeDefaults] = useState<Record<string, ModelListEntry>>({});
   const [imageQualityPreset, setImageQualityPreset] = useState<ImageQualityPreset>("balanced");
+  const [imageSizePreset, setImageSizePreset] = useState<ImageSizePreset>("auto");
   const [steps, setSteps] = useState("30");
   const [guidance, setGuidance] = useState("");
   const [width, setWidth] = useState("");
@@ -323,6 +360,15 @@ const TestPage: React.FC = () => {
   const faceSwapDefaultsBadge = summarizeDefaultsSource(selectedFaceSwapModelMeta?.defaults_source?.face_swap);
   const imageStepPresets = resolveImageStepPresets(selectedImageModelMeta?.image_defaults);
   const imageDefaultsSummary = formatImageDefaultsSummary(selectedImageModelMeta?.image_defaults);
+  const selectedImageSizePreset =
+    IMAGE_SIZE_PRESETS.find((preset) => preset.id === imageSizePreset) || IMAGE_SIZE_PRESETS[0];
+  const selectedImageResolution =
+    imageSizePreset === "auto"
+      ? formatResolutionLabel(
+          selectedImageModelMeta?.image_defaults?.width,
+          selectedImageModelMeta?.image_defaults?.height
+        )
+      : formatResolutionLabel(selectedImageSizePreset.width, selectedImageSizePreset.height);
 
   useEffect(() => {
     let active = true;
@@ -422,7 +468,12 @@ const TestPage: React.FC = () => {
 
         const videoOptions = videoModelsData.map((m) => {
           const isAnimateDiff = String(m.task_type || "").toUpperCase() === "ANIMATEDIFF";
-          const typeLabel = isAnimateDiff ? "AnimateDiff · SD1.5 motion" : "LTX2 · native video";
+          const pipeline = String(m.pipeline || "").toLowerCase();
+          const typeLabel = isAnimateDiff
+            ? "AnimateDiff · SD1.5 motion"
+            : pipeline === "ltx_video"
+              ? "LTX-Video 2.3 · DiT"
+              : "LTX2 · native video";
           return {
             id: m.name,
             label: buildModelOptionLabel(m, typeLabel),
@@ -485,6 +536,7 @@ const TestPage: React.FC = () => {
       setHeight("");
       setSampler("");
       setImageQualityPreset("balanced");
+      setImageSizePreset("auto");
       // Default image mode to the first live model when available.
       setSelectedModel(imageModels.length > 0 ? imageModels[0].id : "");
     } else if (mode === "video") {
@@ -773,13 +825,16 @@ const TestPage: React.FC = () => {
     const options: SubmitJobOptions = {};
     const seedValue = parseOptionalInt(seed);
     const modelDefaults = selectedImageModelMeta?.image_defaults || undefined;
+    const sizePreset = imageSizePreset === "auto" ? undefined : selectedImageSizePreset;
     const requestedLoras = buildLoraPayload();
 
     if (activeWallet) options.wallet = activeWallet;
     options.steps = imageStepPresets[imageQualityPreset];
     if (modelDefaults?.guidance != null) options.guidance = modelDefaults.guidance;
-    if (modelDefaults?.width != null) options.width = modelDefaults.width;
-    if (modelDefaults?.height != null) options.height = modelDefaults.height;
+    if (sizePreset?.width != null) options.width = sizePreset.width;
+    else if (modelDefaults?.width != null) options.width = modelDefaults.width;
+    if (sizePreset?.height != null) options.height = sizePreset.height;
+    else if (modelDefaults?.height != null) options.height = modelDefaults.height;
     if (modelDefaults?.sampler) options.sampler = String(modelDefaults.sampler);
     if (seedValue !== undefined) options.seed = seedValue;
     if (requestedLoras.length > 0) options.loras = requestedLoras;
@@ -1794,6 +1849,36 @@ const TestPage: React.FC = () => {
                       </select>
                       <p className="generator-help">
                         Step presets now adapt to the selected model's recommended baseline.
+                      </p>
+                      <label className="generator-label" htmlFor="image-size-preset">
+                        Image size
+                      </label>
+                      <select
+                        id="image-size-preset"
+                        className="generator-select"
+                        value={imageSizePreset}
+                        onChange={(e) => setImageSizePreset(e.target.value as ImageSizePreset)}
+                      >
+                        {IMAGE_SIZE_PRESETS.map((preset) => {
+                          const resolution =
+                            preset.id === "auto"
+                              ? selectedImageResolution
+                              : formatResolutionLabel(preset.width, preset.height);
+                          const label =
+                            preset.id === "auto"
+                              ? resolution
+                                ? `${preset.label} · ${resolution}`
+                                : `${preset.label} · Model default`
+                              : `${preset.label} · ${resolution}`;
+                          return (
+                            <option key={preset.id} value={preset.id}>
+                              {label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <p className="generator-help">
+                        Auto uses the selected model&apos;s recommended resolution. Presets use SDXL-safe aspect ratios.
                       </p>
                       <label className="generator-label" htmlFor="image-seed">
                         Seed (optional)
