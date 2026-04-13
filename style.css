@@ -6342,6 +6342,10 @@ details[open] .faq-icon {
     aspect-ratio: 16 / 9;
   }
 
+  .jh-entry-card .jh-entry-img {
+    object-position: center top;
+  }
+
   .jh-page-hero {
     padding: 1rem 1rem 1.25rem;
   }
