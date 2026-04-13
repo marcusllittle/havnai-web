@@ -33,6 +33,35 @@ const shipImages = [
   "/astra/ships/seraph_guard.png",
 ];
 
+const outfitImages = [
+  "/astra/outfits/aurora_borealis.png",
+  "/astra/outfits/cloud_walker.png",
+  "/astra/outfits/cosmic_surge.png",
+  "/astra/outfits/crimson_wing.png",
+  "/astra/outfits/desert_storm.png",
+  "/astra/outfits/emerald_gale.png",
+  "/astra/outfits/frost_nova.png",
+  "/astra/outfits/iron_hawk.png",
+  "/astra/outfits/lunar_eclipse.png",
+  "/astra/outfits/neon_vanguard.png",
+  "/astra/outfits/ocean_drift.png",
+  "/astra/outfits/shadow_pulse.png",
+  "/astra/outfits/solar_flare.png",
+  "/astra/outfits/standard_flight_suit.png",
+  "/astra/outfits/starfall_armor.png",
+  "/astra/outfits/thunder_strike.png",
+  "/astra/outfits/violet_tempest.png",
+  "/astra/outfits/void_reaper.png",
+];
+
+function pickTwoDistinct<T>(pool: T[], fallbackA: T, fallbackB: T): [T, T] {
+  if (pool.length < 2) return [fallbackA, fallbackB];
+  const a = Math.floor(Math.random() * pool.length);
+  let b = Math.floor(Math.random() * pool.length);
+  if (b === a) b = (a + 1) % pool.length;
+  return [pool[a], pool[b]];
+}
+
 const showcaseItems = [
   {
     label: "Shmup Combat",
@@ -45,21 +74,9 @@ const showcaseItems = [
     img: "/astra/scenes/nebula_runway_briefing.png",
   },
   {
-    label: "20+ Outfits",
-    desc: "Cosmetic gear across four rarity tiers.",
-    img: "/astra/outfits/aurora_borealis.webp",
-    contain: true,
-  },
-  {
     label: "Missions & Zones",
     desc: "Three zones. Twelve missions. Three bosses.",
     img: "/astra/scenes/abyss_crown_briefing.png",
-  },
-  {
-    label: "Collection",
-    desc: "Track what you've created and collected.",
-    img: "/astra/outfits/void_reaper.webp",
-    contain: true,
   },
 ];
 
@@ -89,12 +106,23 @@ const pipelineSteps = [
 const HomePage: NextPage = () => {
   const [networkStats, setNetworkStats] = useState<AnalyticsOverview | null>(null);
   const [featuredImg, setFeaturedImg] = useState<string | null>(null);
-  // Rotate through the 3 Astra ships on each page load.
+  // Rotate through Astra ships/outfits on each page load.
   // Initialized to index 0 so SSR/CSR match, then randomized after mount.
   const [shipImg, setShipImg] = useState<string>(shipImages[0]);
+  const [outfitImg, setOutfitImg] = useState<string>(outfitImages[0]);
+  const [collectionImg, setCollectionImg] = useState<string>(
+    outfitImages[outfitImages.length - 1]
+  );
 
   useEffect(() => {
     setShipImg(shipImages[Math.floor(Math.random() * shipImages.length)]);
+    const [outfitPick, collectionPick] = pickTwoDistinct(
+      outfitImages,
+      outfitImages[0],
+      outfitImages[outfitImages.length - 1]
+    );
+    setOutfitImg(outfitPick);
+    setCollectionImg(collectionPick);
     fetchAnalyticsOverview()
       .then(setNetworkStats)
       .catch(() => {});
@@ -273,7 +301,7 @@ const HomePage: NextPage = () => {
                   <img
                     src={item.img}
                     alt={item.label}
-                    className={`jh-showcase-img${item.contain ? " contain" : ""}`}
+                    className="jh-showcase-img"
                   />
                 </div>
                 <div className="jh-showcase-card-body">
@@ -295,13 +323,26 @@ const HomePage: NextPage = () => {
                 <span>Three ships. Weapon kits. Stat synergies.</span>
               </div>
             </article>
+            <article className="jh-showcase-card">
+              <div className="jh-showcase-img-wrap">
+                <img
+                  src={outfitImg}
+                  alt="Outfits"
+                  className="jh-showcase-img contain"
+                />
+              </div>
+              <div className="jh-showcase-card-body">
+                <strong>20+ Outfits</strong>
+                <span>Cosmetic gear across four rarity tiers.</span>
+              </div>
+            </article>
             {showcaseItems.slice(2).map((item) => (
               <article key={item.label} className="jh-showcase-card">
                 <div className="jh-showcase-img-wrap">
                   <img
                     src={item.img}
                     alt={item.label}
-                    className={`jh-showcase-img${item.contain ? " contain" : ""}`}
+                    className="jh-showcase-img"
                   />
                 </div>
                 <div className="jh-showcase-card-body">
@@ -310,6 +351,19 @@ const HomePage: NextPage = () => {
                 </div>
               </article>
             ))}
+            <article className="jh-showcase-card">
+              <div className="jh-showcase-img-wrap">
+                <img
+                  src={collectionImg}
+                  alt="Collection"
+                  className="jh-showcase-img contain"
+                />
+              </div>
+              <div className="jh-showcase-card-body">
+                <strong>Collection</strong>
+                <span>Track what you've created and collected.</span>
+              </div>
+            </article>
           </div>
           <div className="jh-showcase-cta">
             <a
