@@ -66,7 +66,7 @@ const showcaseItems = [
   {
     label: "Shmup Combat",
     desc: "Arcade shooter action with bosses, combos, and scoring.",
-    img: "/astra/scenes/solar_rift_briefing.png",
+    img: "/astra/scenes/shmup_combat.png",
   },
   {
     label: "Spaceport Hub",
