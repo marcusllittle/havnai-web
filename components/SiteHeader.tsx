@@ -11,7 +11,7 @@ interface NavItem {
 }
 
 const PRIMARY_NAV: NavItem[] = [
-  { href: "https://astra.joinhavn.io", label: "Astra", external: true, accent: true },
+  { href: "https://astra.joinhavn.io", label: "Play Astra", external: true, accent: true },
   { href: "/generator", label: "Create" },
   { href: "/library", label: "Collection" },
   { href: "/marketplace", label: "Marketplace" },

@@ -27,39 +27,70 @@ const pilots = [
   },
 ];
 
+const shipImages = [
+  "/astra/ships/astra_interceptor.png",
+  "/astra/ships/valkyrie_lancer.png",
+  "/astra/ships/seraph_guard.png",
+];
+
+const outfitImages = [
+  "/astra/outfits/aurora_borealis.png",
+  "/astra/outfits/cloud_walker.png",
+  "/astra/outfits/cosmic_surge.png",
+  "/astra/outfits/crimson_wing.png",
+  "/astra/outfits/desert_storm.png",
+  "/astra/outfits/emerald_gale.png",
+  "/astra/outfits/frost_nova.png",
+  "/astra/outfits/iron_hawk.png",
+  "/astra/outfits/lunar_eclipse.png",
+  "/astra/outfits/neon_vanguard.png",
+  "/astra/outfits/ocean_drift.png",
+  "/astra/outfits/shadow_pulse.png",
+  "/astra/outfits/solar_flare.png",
+  "/astra/outfits/standard_flight_suit.png",
+  "/astra/outfits/starfall_armor.png",
+  "/astra/outfits/thunder_strike.png",
+  "/astra/outfits/violet_tempest.png",
+  "/astra/outfits/void_reaper.png",
+];
+
+function pickTwoDistinct<T>(pool: T[], fallbackA: T, fallbackB: T): [T, T] {
+  if (pool.length < 2) return [fallbackA, fallbackB];
+  const a = Math.floor(Math.random() * pool.length);
+  let b = Math.floor(Math.random() * pool.length);
+  if (b === a) b = (a + 1) % pool.length;
+  return [pool[a], pool[b]];
+}
+
+function pickN<T>(pool: T[], n: number): T[] {
+  const copy = [...pool];
+  const out: T[] = [];
+  while (out.length < n && copy.length > 0) {
+    const idx = Math.floor(Math.random() * copy.length);
+    out.push(copy.splice(idx, 1)[0]);
+  }
+  // If pool is smaller than n, repeat from original to fill
+  while (out.length < n && pool.length > 0) {
+    out.push(pool[out.length % pool.length]);
+  }
+  return out;
+}
+
 const showcaseItems = [
   {
     label: "Shmup Combat",
     desc: "Arcade shooter action with bosses, combos, and scoring.",
-    img: "/astra/scenes/solar_rift_briefing.png",
+    img: "/astra/scenes/shmup_combat.png",
   },
   {
     label: "Spaceport Hub",
     desc: "Your base of operations between missions.",
-    img: "/astra/scenes/nebula_runway_briefing.png",
-  },
-  {
-    label: "Ship Loadouts",
-    desc: "Three ships. Weapon kits. Stat synergies.",
-    img: "/astra/ships/astra_interceptor.png",
-    contain: true,
-  },
-  {
-    label: "20+ Outfits",
-    desc: "Cosmetic gear across four rarity tiers.",
-    img: "/astra/outfits/aurora_borealis.webp",
-    contain: true,
+    img: "/astra/scenes/spaceport_hub.png",
   },
   {
     label: "Missions & Zones",
     desc: "Three zones. Twelve missions. Three bosses.",
     img: "/astra/scenes/abyss_crown_briefing.png",
-  },
-  {
-    label: "Collection",
-    desc: "Track what you've created and collected.",
-    img: "/astra/outfits/void_reaper.webp",
-    contain: true,
   },
 ];
 
@@ -89,15 +120,30 @@ const pipelineSteps = [
 const HomePage: NextPage = () => {
   const [networkStats, setNetworkStats] = useState<AnalyticsOverview | null>(null);
   const [featuredImg, setFeaturedImg] = useState<string | null>(null);
+  // Rotate through Astra ships/outfits on each page load.
+  // Initialized to index 0 so SSR/CSR match, then randomized after mount.
+  const [shipImg, setShipImg] = useState<string>(shipImages[0]);
+  const [outfitImg, setOutfitImg] = useState<string>(outfitImages[0]);
+  const [collectionGrid, setCollectionGrid] = useState<string[]>(outfitImages);
 
   useEffect(() => {
+    setShipImg(shipImages[Math.floor(Math.random() * shipImages.length)]);
+    const featuredOutfit =
+      outfitImages[Math.floor(Math.random() * outfitImages.length)];
+    setOutfitImg(featuredOutfit);
+    // Show all 18 outfits in a shuffled order so the mosaic feels alive.
+    setCollectionGrid(pickN(outfitImages, outfitImages.length));
     fetchAnalyticsOverview()
       .then(setNetworkStats)
       .catch(() => {});
-    fetchGalleryBrowse({ asset_type: "image", sort: "newest", limit: 1 })
+    // Pull a batch of recent listings and pick one at random so the
+    // Create card showcases live renders without pinning to a single "newest".
+    fetchGalleryBrowse({ asset_type: "image", sort: "newest", limit: 24 })
       .then((res) => {
-        const listing = res.listings[0];
-        if (listing?.image_url) setFeaturedImg(listing.image_url);
+        const withImages = res.listings.filter((l) => !!l.image_url);
+        if (withImages.length === 0) return;
+        const pick = withImages[Math.floor(Math.random() * withImages.length)];
+        if (pick?.image_url) setFeaturedImg(pick.image_url);
       })
       .catch(() => {});
   }, []);
@@ -259,13 +305,13 @@ const HomePage: NextPage = () => {
             </p>
           </div>
           <div className="jh-showcase-grid">
-            {showcaseItems.map((item) => (
+            {showcaseItems.slice(0, 2).map((item) => (
               <article key={item.label} className="jh-showcase-card">
                 <div className="jh-showcase-img-wrap">
                   <img
                     src={item.img}
                     alt={item.label}
-                    className={`jh-showcase-img${item.contain ? " contain" : ""}`}
+                    className="jh-showcase-img"
                   />
                 </div>
                 <div className="jh-showcase-card-body">
@@ -274,6 +320,63 @@ const HomePage: NextPage = () => {
                 </div>
               </article>
             ))}
+            <article className="jh-showcase-card">
+              <div className="jh-showcase-img-wrap">
+                <img
+                  src={shipImg}
+                  alt="Ship Loadouts"
+                  className="jh-showcase-img contain"
+                />
+              </div>
+              <div className="jh-showcase-card-body">
+                <strong>Ship Loadouts</strong>
+                <span>Three ships. Weapon kits. Stat synergies.</span>
+              </div>
+            </article>
+            <article className="jh-showcase-card">
+              <div className="jh-showcase-img-wrap">
+                <img
+                  src={outfitImg}
+                  alt="Outfits"
+                  className="jh-showcase-img contain"
+                />
+              </div>
+              <div className="jh-showcase-card-body">
+                <strong>20+ Outfits</strong>
+                <span>Cosmetic gear across four rarity tiers.</span>
+              </div>
+            </article>
+            {showcaseItems.slice(2).map((item) => (
+              <article key={item.label} className="jh-showcase-card">
+                <div className="jh-showcase-img-wrap">
+                  <img
+                    src={item.img}
+                    alt={item.label}
+                    className="jh-showcase-img"
+                  />
+                </div>
+                <div className="jh-showcase-card-body">
+                  <strong>{item.label}</strong>
+                  <span>{item.desc}</span>
+                </div>
+              </article>
+            ))}
+            <article className="jh-showcase-card">
+              <div className="jh-showcase-img-wrap jh-collection-mosaic">
+                {collectionGrid.map((src, i) => (
+                  <img
+                    key={`${src}-${i}`}
+                    src={src}
+                    alt=""
+                    className="jh-collection-tile"
+                  />
+                ))}
+              </div>
+              <div className="jh-showcase-card-body">
+                <strong>Collection</strong>
+                <span>Track what you've created and collected.</span>
+              </div>
+            </article>
           </div>
           <div className="jh-showcase-cta">
             <a
