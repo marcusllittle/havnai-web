@@ -124,17 +124,15 @@ const HomePage: NextPage = () => {
   // Initialized to index 0 so SSR/CSR match, then randomized after mount.
   const [shipImg, setShipImg] = useState<string>(shipImages[0]);
   const [outfitImg, setOutfitImg] = useState<string>(outfitImages[0]);
-  const [collectionGrid, setCollectionGrid] = useState<string[]>(
-    outfitImages.slice(0, 9)
-  );
+  const [collectionGrid, setCollectionGrid] = useState<string[]>(outfitImages);
 
   useEffect(() => {
     setShipImg(shipImages[Math.floor(Math.random() * shipImages.length)]);
     const featuredOutfit =
       outfitImages[Math.floor(Math.random() * outfitImages.length)];
     setOutfitImg(featuredOutfit);
-    const mosaicPool = outfitImages.filter((o) => o !== featuredOutfit);
-    setCollectionGrid(pickN(mosaicPool, 9));
+    // Show all 18 outfits in a shuffled order so the mosaic feels alive.
+    setCollectionGrid(pickN(outfitImages, outfitImages.length));
     fetchAnalyticsOverview()
       .then(setNetworkStats)
       .catch(() => {});
