@@ -71,7 +71,7 @@ const showcaseItems = [
   {
     label: "Spaceport Hub",
     desc: "Your base of operations between missions.",
-    img: "/astra/scenes/nebula_runway_briefing.png",
+    img: "/astra/scenes/spaceport_hub.png",
   },
   {
     label: "Missions & Zones",
