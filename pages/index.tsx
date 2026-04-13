@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { SiteHeader } from "../components/SiteHeader";
 import {
   fetchAnalyticsOverview,
+  fetchGalleryBrowse,
   AnalyticsOverview,
 } from "../lib/havnai";
 
@@ -87,10 +88,21 @@ const pipelineSteps = [
 
 const HomePage: NextPage = () => {
   const [networkStats, setNetworkStats] = useState<AnalyticsOverview | null>(null);
+  const [featuredImg, setFeaturedImg] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAnalyticsOverview()
       .then(setNetworkStats)
+      .catch(() => {});
+    // Pull a batch of recent listings and pick one at random so the
+    // Create card showcases live renders without pinning to a single "newest".
+    fetchGalleryBrowse({ asset_type: "image", sort: "newest", limit: 24 })
+      .then((res) => {
+        const withImages = res.listings.filter((l) => !!l.image_url);
+        if (withImages.length === 0) return;
+        const pick = withImages[Math.floor(Math.random() * withImages.length)];
+        if (pick?.image_url) setFeaturedImg(pick.image_url);
+      })
       .catch(() => {});
   }, []);
 
@@ -163,7 +175,7 @@ const HomePage: NextPage = () => {
             </a>
             <Link href="/generator" className="jh-entry-card">
               <img
-                src="/astra/scenes/abyss_crown_briefing.png"
+                src={featuredImg || "/astra/scenes/abyss_crown_briefing.png"}
                 alt="Create"
                 className="jh-entry-img"
               />
