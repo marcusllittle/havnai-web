@@ -62,6 +62,20 @@ function pickTwoDistinct<T>(pool: T[], fallbackA: T, fallbackB: T): [T, T] {
   return [pool[a], pool[b]];
 }
 
+function pickN<T>(pool: T[], n: number): T[] {
+  const copy = [...pool];
+  const out: T[] = [];
+  while (out.length < n && copy.length > 0) {
+    const idx = Math.floor(Math.random() * copy.length);
+    out.push(copy.splice(idx, 1)[0]);
+  }
+  // If pool is smaller than n, repeat from original to fill
+  while (out.length < n && pool.length > 0) {
+    out.push(pool[out.length % pool.length]);
+  }
+  return out;
+}
+
 const showcaseItems = [
   {
     label: "Shmup Combat",
@@ -110,19 +124,17 @@ const HomePage: NextPage = () => {
   // Initialized to index 0 so SSR/CSR match, then randomized after mount.
   const [shipImg, setShipImg] = useState<string>(shipImages[0]);
   const [outfitImg, setOutfitImg] = useState<string>(outfitImages[0]);
-  const [collectionImg, setCollectionImg] = useState<string>(
-    outfitImages[outfitImages.length - 1]
+  const [collectionGrid, setCollectionGrid] = useState<string[]>(
+    outfitImages.slice(0, 9)
   );
 
   useEffect(() => {
     setShipImg(shipImages[Math.floor(Math.random() * shipImages.length)]);
-    const [outfitPick, collectionPick] = pickTwoDistinct(
-      outfitImages,
-      outfitImages[0],
-      outfitImages[outfitImages.length - 1]
-    );
-    setOutfitImg(outfitPick);
-    setCollectionImg(collectionPick);
+    const featuredOutfit =
+      outfitImages[Math.floor(Math.random() * outfitImages.length)];
+    setOutfitImg(featuredOutfit);
+    const mosaicPool = outfitImages.filter((o) => o !== featuredOutfit);
+    setCollectionGrid(pickN(mosaicPool, 9));
     fetchAnalyticsOverview()
       .then(setNetworkStats)
       .catch(() => {});
@@ -352,12 +364,15 @@ const HomePage: NextPage = () => {
               </article>
             ))}
             <article className="jh-showcase-card">
-              <div className="jh-showcase-img-wrap">
-                <img
-                  src={collectionImg}
-                  alt="Collection"
-                  className="jh-showcase-img contain"
-                />
+              <div className="jh-showcase-img-wrap jh-collection-mosaic">
+                {collectionGrid.map((src, i) => (
+                  <img
+                    key={`${src}-${i}`}
+                    src={src}
+                    alt=""
+                    className="jh-collection-tile"
+                  />
+                ))}
               </div>
               <div className="jh-showcase-card-body">
                 <strong>Collection</strong>
