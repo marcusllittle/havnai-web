@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { SiteHeader } from "../components/SiteHeader";
 import {
   fetchAnalyticsOverview,
-  fetchGalleryBrowse,
   AnalyticsOverview,
 } from "../lib/havnai";
 
@@ -88,17 +87,10 @@ const pipelineSteps = [
 
 const HomePage: NextPage = () => {
   const [networkStats, setNetworkStats] = useState<AnalyticsOverview | null>(null);
-  const [featuredImg, setFeaturedImg] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAnalyticsOverview()
       .then(setNetworkStats)
-      .catch(() => {});
-    fetchGalleryBrowse({ asset_type: "image", sort: "newest", limit: 1 })
-      .then((res) => {
-        const listing = res.listings[0];
-        if (listing?.image_url) setFeaturedImg(listing.image_url);
-      })
       .catch(() => {});
   }, []);
 
@@ -171,7 +163,7 @@ const HomePage: NextPage = () => {
             </a>
             <Link href="/generator" className="jh-entry-card">
               <img
-                src={featuredImg || "/astra/scenes/abyss_crown_briefing.png"}
+                src="/astra/scenes/abyss_crown_briefing.png"
                 alt="Create"
                 className="jh-entry-img"
               />
