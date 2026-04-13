@@ -27,6 +27,12 @@ const pilots = [
   },
 ];
 
+const shipImages = [
+  "/astra/ships/astra_interceptor.png",
+  "/astra/ships/valkyrie_lancer.png",
+  "/astra/ships/seraph_guard.png",
+];
+
 const showcaseItems = [
   {
     label: "Shmup Combat",
@@ -37,12 +43,6 @@ const showcaseItems = [
     label: "Spaceport Hub",
     desc: "Your base of operations between missions.",
     img: "/astra/scenes/nebula_runway_briefing.png",
-  },
-  {
-    label: "Ship Loadouts",
-    desc: "Three ships. Weapon kits. Stat synergies.",
-    img: "/astra/ships/astra_interceptor.png",
-    contain: true,
   },
   {
     label: "20+ Outfits",
@@ -89,8 +89,12 @@ const pipelineSteps = [
 const HomePage: NextPage = () => {
   const [networkStats, setNetworkStats] = useState<AnalyticsOverview | null>(null);
   const [featuredImg, setFeaturedImg] = useState<string | null>(null);
+  // Rotate through the 3 Astra ships on each page load.
+  // Initialized to index 0 so SSR/CSR match, then randomized after mount.
+  const [shipImg, setShipImg] = useState<string>(shipImages[0]);
 
   useEffect(() => {
+    setShipImg(shipImages[Math.floor(Math.random() * shipImages.length)]);
     fetchAnalyticsOverview()
       .then(setNetworkStats)
       .catch(() => {});
@@ -263,7 +267,35 @@ const HomePage: NextPage = () => {
             </p>
           </div>
           <div className="jh-showcase-grid">
-            {showcaseItems.map((item) => (
+            {showcaseItems.slice(0, 2).map((item) => (
+              <article key={item.label} className="jh-showcase-card">
+                <div className="jh-showcase-img-wrap">
+                  <img
+                    src={item.img}
+                    alt={item.label}
+                    className={`jh-showcase-img${item.contain ? " contain" : ""}`}
+                  />
+                </div>
+                <div className="jh-showcase-card-body">
+                  <strong>{item.label}</strong>
+                  <span>{item.desc}</span>
+                </div>
+              </article>
+            ))}
+            <article className="jh-showcase-card">
+              <div className="jh-showcase-img-wrap">
+                <img
+                  src={shipImg}
+                  alt="Ship Loadouts"
+                  className="jh-showcase-img contain"
+                />
+              </div>
+              <div className="jh-showcase-card-body">
+                <strong>Ship Loadouts</strong>
+                <span>Three ships. Weapon kits. Stat synergies.</span>
+              </div>
+            </article>
+            {showcaseItems.slice(2).map((item) => (
               <article key={item.label} className="jh-showcase-card">
                 <div className="jh-showcase-img-wrap">
                   <img
