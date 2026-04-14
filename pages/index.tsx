@@ -182,7 +182,7 @@ const HomePage: NextPage = () => {
             </p>
             <div className="jh-hero-actions">
               <a
-                href="https://play.joinhavn.io/"
+                href="https://astra.joinhavn.io/"
                 className="jh-btn jh-btn-primary"
                 target="_blank"
                 rel="noreferrer"
@@ -200,7 +200,7 @@ const HomePage: NextPage = () => {
         <section className="jh-entry">
           <div className="jh-entry-grid">
             <a
-              href="https://play.joinhavn.io/"
+              href="https://astra.joinhavn.io/"
               className="jh-entry-card"
               target="_blank"
               rel="noreferrer"
@@ -380,7 +380,7 @@ const HomePage: NextPage = () => {
           </div>
           <div className="jh-showcase-cta">
             <a
-              href="https://play.joinhavn.io/"
+              href="https://astra.joinhavn.io/"
               className="jh-btn jh-btn-primary"
               target="_blank"
               rel="noreferrer"
