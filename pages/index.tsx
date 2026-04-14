@@ -284,7 +284,7 @@ const HomePage: NextPage = () => {
                     <strong>{networkStats.total_jobs.toLocaleString()}</strong> jobs served
                   </span>
                   <span className="jh-network-stat">
-                    <strong>{(networkStats.success_rate * 100).toFixed(0)}%</strong> success rate
+                    <strong>{Number(networkStats.success_rate || 0).toFixed(0)}%</strong> success rate
                   </span>
                 </div>
               )}
