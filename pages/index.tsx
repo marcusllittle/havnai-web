@@ -415,6 +415,19 @@ const HomePage: NextPage = () => {
           </div>
 
           <div className="footer-col footer-col-center">
+            <h4>Explore</h4>
+            <ul>
+              <li><Link href="/astra">Astra</Link></li>
+              <li><Link href="/how-it-works">How It Works</Link></li>
+              <li><Link href="/ai-image-generator">AI Image Generator</Link></li>
+              <li><Link href="/ownership">Ownership</Link></li>
+              <li><Link href="/marketplace">Marketplace</Link></li>
+              <li><Link href="/run-a-node">Run a Node</Link></li>
+              <li><Link href="/pricing">Pricing</Link></li>
+            </ul>
+          </div>
+
+          <div className="footer-col">
             <h4>Follow</h4>
             <ul>
               <li>

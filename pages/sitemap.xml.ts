@@ -5,6 +5,9 @@ const routes = [
   "/",
   "/astra",
   "/create",
+  "/ai-image-generator",
+  "/how-it-works",
+  "/ownership",
   "/run-a-node",
   "/marketplace",
   "/pricing",
@@ -14,7 +17,10 @@ const routes = [
 function buildSitemapXml() {
   const urls = routes
     .map((route) => {
-      const priority = route === "/" ? "1.0" : route === "/astra" || route === "/create" || route === "/run-a-node" ? "0.9" : "0.8";
+      const priority =
+        route === "/" ? "1.0" :
+        ["/astra", "/create", "/ai-image-generator", "/how-it-works", "/run-a-node"].includes(route) ? "0.9" :
+        "0.8";
       return `
   <url>
     <loc>${absoluteUrl(route)}</loc>
