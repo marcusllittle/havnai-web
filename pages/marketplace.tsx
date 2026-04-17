@@ -611,6 +611,20 @@ const MarketplacePage: NextPage = () => {
         />
 
         <section className="page-container">
+          <div className="chart-section" style={{ marginBottom: "1.5rem" }}>
+            <div className="chart-header">
+              <h2 className="chart-title">Related paths</h2>
+            </div>
+            <p style={{ color: "var(--text-muted)", lineHeight: 1.7, marginBottom: "1rem" }}>
+              Marketplace works best as part of the full JoinHavn flow: generate, claim ownership, then buy, sell, or reuse assets.
+            </p>
+            <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap" }}>
+              <Link href="/ai-image-generator" className="jh-btn jh-btn-secondary">AI Image Generator</Link>
+              <Link href="/ownership" className="jh-btn jh-btn-secondary">Ownership</Link>
+              <Link href="/how-it-works" className="jh-btn jh-btn-tertiary">How It Works</Link>
+            </div>
+          </div>
+
           <div className="marketplace-tabs">
             <button
               type="button"

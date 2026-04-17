@@ -54,6 +54,24 @@ const outfitImages = [
   "/astra/outfits/void_reaper.png",
 ];
 
+function assetLabelFromPath(src: string): string {
+  return src
+    .split("/")
+    .pop()
+    ?.replace(/\.[^.]+$/, "")
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Astra asset";
+}
+
+function getOutfitAlt(src: string): string {
+  return `Astra Valkyries outfit ${assetLabelFromPath(src)}`;
+}
+
+function getShipAlt(src: string): string {
+  return `Astra Valkyries ship ${assetLabelFromPath(src)}`;
+}
+
 function pickTwoDistinct<T>(pool: T[], fallbackA: T, fallbackB: T): [T, T] {
   if (pool.length < 2) return [fallbackA, fallbackB];
   const a = Math.floor(Math.random() * pool.length);
@@ -166,7 +184,7 @@ const HomePage: NextPage = () => {
           <div className="jh-hero-bg" aria-hidden="true">
             <img
               src="/astra/scenes/nebula_runway_briefing.png"
-              alt=""
+              alt="Astra Valkyries nebula runway briefing scene"
               className="jh-hero-bg-img"
             />
             <div className="jh-hero-bg-overlay" />
@@ -319,7 +337,7 @@ const HomePage: NextPage = () => {
               <div className="jh-showcase-img-wrap">
                 <img
                   src={shipImg}
-                  alt="Ship Loadouts"
+                  alt={getShipAlt(shipImg)}
                   className="jh-showcase-img contain"
                 />
               </div>
@@ -332,7 +350,7 @@ const HomePage: NextPage = () => {
               <div className="jh-showcase-img-wrap">
                 <img
                   src={outfitImg}
-                  alt="Outfits"
+                  alt={getOutfitAlt(outfitImg)}
                   className="jh-showcase-img contain"
                 />
               </div>
@@ -362,7 +380,7 @@ const HomePage: NextPage = () => {
                   <img
                     key={`${src}-${i}`}
                     src={src}
-                    alt=""
+                    alt={getOutfitAlt(src)}
                     className="jh-collection-tile"
                   />
                 ))}

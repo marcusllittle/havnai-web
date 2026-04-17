@@ -172,6 +172,11 @@ const NodesPage: NextPage = () => {
               Alpha tracking and may include Sepolia or testnet-era activity while settlement rails
               continue to evolve. Want to appear here? <a href="/run-a-node" style={{ color: "var(--accent)" }}>Open the install guide</a>.
             </p>
+            <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", marginTop: "1rem" }}>
+              <Link href="/how-it-works" className="jh-btn jh-btn-secondary">How It Works</Link>
+              <Link href="/pricing" className="jh-btn jh-btn-secondary">Credits & Pricing</Link>
+              <Link href="/ai-image-generator" className="jh-btn jh-btn-tertiary">AI Image Generator</Link>
+            </div>
           </div>
 
           {/* Stats bar */}
