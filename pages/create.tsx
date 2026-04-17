@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import Head from "next/head";
 import Link from "next/link";
+import { SeoHead } from "../components/SeoHead";
 import { CinematicPageHero } from "../components/CinematicPageHero";
 import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
@@ -361,6 +361,12 @@ const TestPage: React.FC = () => {
     selectedModel ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
   const selectedVideoModelMeta =
     mode === "video" && selectedModel ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
+  const isLtxVideoModel =
+    mode === "video" &&
+    !!selectedModel &&
+    (String(selectedVideoModelMeta?.model_family || "").toLowerCase() === "ltx_video" ||
+      selectedModel.toLowerCase().includes("ltx"));
+  const ltxVideoModes = selectedVideoModelMeta?.available_modes || [];
   const selectedFaceSwapModelMeta = faceswapModel
     ? modelRuntimeDefaults[faceswapModel.toLowerCase()]
     : undefined;
@@ -1474,13 +1480,12 @@ const TestPage: React.FC = () => {
 
   return (
     <>
-      <Head>
-        <title>JoinHavn Generator</title>
-        <meta
-          name="description"
-          content="Create images, face swaps, and video on the JoinHavn GPU grid with live model routing and wallet-linked alpha access."
-        />
-      </Head>
+      <SeoHead
+        title="AI image and video generator"
+        description="Create images, face swaps, and video on the JoinHavn GPU grid with live model routing, collection flow, and wallet-linked alpha access."
+        path="/create"
+        image="/astra/scenes/abyss_crown_briefing.png"
+      />
 
       <SiteHeader />
 
@@ -1521,6 +1526,23 @@ const TestPage: React.FC = () => {
             </>
           }
         />
+
+        <section className="page-container" style={{ paddingTop: "1.5rem" }}>
+          <div className="chart-section">
+            <div className="chart-header">
+              <h2 className="chart-title">Where creation goes next</h2>
+            </div>
+            <p style={{ color: "var(--text-muted)", lineHeight: 1.75, marginBottom: "1rem" }}>
+              JoinHavn creation is not meant to end at a single render. Save outputs into your collection, move selected assets into marketplace flow,
+              and connect them back to Astra where the broader world gives them context.
+            </p>
+            <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap" }}>
+              <Link href="/astra" className="jh-btn jh-btn-secondary">See Astra</Link>
+              <Link href="/marketplace" className="jh-btn jh-btn-secondary">Browse Marketplace</Link>
+              <Link href="/run-a-node" className="jh-btn jh-btn-tertiary">Run a Node</Link>
+            </div>
+          </div>
+        </section>
 
         <section className="generator-section">
           <div className="generator-card">

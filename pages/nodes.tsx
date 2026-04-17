@@ -1,8 +1,8 @@
 import type { NextPage } from "next";
-import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { CinematicPageHero } from "../components/CinematicPageHero";
+import { SeoHead } from "../components/SeoHead";
 import { fetchNodes, fetchOperatorWorkers, fetchLeaderboard, NodeInfo, LeaderboardEntry } from "../lib/havnai";
 import { getNodeSSE, SSEEvent } from "../lib/sse";
 import { SiteHeader } from "../components/SiteHeader";
@@ -118,7 +118,12 @@ const NodesPage: NextPage = () => {
 
   return (
     <>
-      <Head><title>Network — JoinHavn</title></Head>
+      <SeoHead
+        title="GPU node network"
+        description="Track live operators, node uptime, and capacity across the JoinHavn GPU network."
+        path="/nodes"
+        image="/astra/scenes/spaceport_hub.png"
+      />
       <SiteHeader />
 
       <main className="library-page jh-page-shell">
@@ -149,7 +154,7 @@ const NodesPage: NextPage = () => {
           ]}
           actions={
             <>
-              <Link href="/join" className="jh-btn jh-btn-primary">
+              <Link href="/run-a-node" className="jh-btn jh-btn-primary">
                 Run a Node
               </Link>
               <Link href="/analytics" className="jh-btn jh-btn-secondary">
@@ -165,7 +170,7 @@ const NodesPage: NextPage = () => {
               Live node telemetry comes directly from the coordinator. Use this page to track current
               capacity, uptime, and operator visibility across the grid. Reward totals reflect Public
               Alpha tracking and may include Sepolia or testnet-era activity while settlement rails
-              continue to evolve. Want to appear here? <a href="/join" style={{ color: "var(--accent)" }}>Open the install guide</a>.
+              continue to evolve. Want to appear here? <a href="/run-a-node" style={{ color: "var(--accent)" }}>Open the install guide</a>.
             </p>
           </div>
 

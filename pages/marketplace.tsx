@@ -1,9 +1,9 @@
 import type { NextPage } from "next";
-import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import { CinematicPageHero } from "../components/CinematicPageHero";
+import { SeoHead } from "../components/SeoHead";
 import { useWallet } from "../components/WalletProvider";
 import { SiteHeader } from "../components/SiteHeader";
 import { getApiBase } from "../lib/apiBase";
@@ -563,9 +563,12 @@ const MarketplacePage: NextPage = () => {
 
   return (
     <>
-      <Head>
-        <title>Marketplace — JoinHavn</title>
-      </Head>
+      <SeoHead
+        title="AI asset marketplace"
+        description="Browse collectible outputs, ownership history, and reusable workflows in the JoinHavn marketplace."
+        path="/marketplace"
+        image="/astra/inbox/nova_after_hours.png"
+      />
 
       <SiteHeader />
 
@@ -597,11 +600,11 @@ const MarketplacePage: NextPage = () => {
           ]}
           actions={
             <>
-              <Link href="/generator" className="jh-btn jh-btn-primary">
+              <Link href="/create" className="jh-btn jh-btn-primary">
                 Create to Sell
               </Link>
-              <Link href="/marketplace?tab=gallery&galleryView=collection" className="jh-btn jh-btn-secondary">
-                Open Collection
+              <Link href="/astra" className="jh-btn jh-btn-secondary">
+                See Astra
               </Link>
             </>
           }

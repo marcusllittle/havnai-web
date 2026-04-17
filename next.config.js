@@ -45,6 +45,20 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   poweredByHeader: false,
+  async redirects() {
+    return [
+      {
+        source: "/generator",
+        destination: "/create",
+        permanent: true,
+      },
+      {
+        source: "/join",
+        destination: "/run-a-node",
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

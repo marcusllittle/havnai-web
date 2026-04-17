@@ -1,6 +1,6 @@
 import type { NextPage } from "next";
-import Head from "next/head";
 import { useEffect, useState } from "react";
+import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
 import {
@@ -203,7 +203,12 @@ const WalletPage: NextPage = () => {
 
   return (
     <>
-      <Head><title>Wallet — JoinHavn</title></Head>
+      <SeoHead
+        title="Wallet"
+        description="Track credits, rewards, and funding history inside your JoinHavn wallet."
+        path="/wallet"
+        noindex
+      />
       <SiteHeader />
 
       <main className="library-page">
