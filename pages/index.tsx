@@ -54,6 +54,24 @@ const outfitImages = [
   "/astra/outfits/void_reaper.png",
 ];
 
+function assetLabelFromPath(src: string): string {
+  return src
+    .split("/")
+    .pop()
+    ?.replace(/\.[^.]+$/, "")
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Astra asset";
+}
+
+function getOutfitAlt(src: string): string {
+  return `Astra Valkyries outfit ${assetLabelFromPath(src)}`;
+}
+
+function getShipAlt(src: string): string {
+  return `Astra Valkyries ship ${assetLabelFromPath(src)}`;
+}
+
 function pickTwoDistinct<T>(pool: T[], fallbackA: T, fallbackB: T): [T, T] {
   if (pool.length < 2) return [fallbackA, fallbackB];
   const a = Math.floor(Math.random() * pool.length);
@@ -166,7 +184,7 @@ const HomePage: NextPage = () => {
           <div className="jh-hero-bg" aria-hidden="true">
             <img
               src="/astra/scenes/nebula_runway_briefing.png"
-              alt=""
+              alt="Astra Valkyries nebula runway briefing scene"
               className="jh-hero-bg-img"
             />
             <div className="jh-hero-bg-overlay" />
@@ -185,7 +203,7 @@ const HomePage: NextPage = () => {
                 Explore Astra
               </Link>
               <Link href="/create" className="jh-btn jh-btn-secondary">
-                Start Creating
+                Open Generator
               </Link>
             </div>
           </div>
@@ -213,7 +231,7 @@ const HomePage: NextPage = () => {
               />
               <div className="jh-entry-overlay">
                 <strong>Create</strong>
-                <span>Generate with HavnAI</span>
+                <span>Generate images and video</span>
               </div>
             </Link>
             <Link href="/run-a-node" className="jh-entry-card">
@@ -248,9 +266,15 @@ const HomePage: NextPage = () => {
               </div>
             ))}
           </div>
-          <div className="jh-pipeline-cta">
-            <Link href="/create" className="jh-btn jh-btn-secondary">
-              Start Creating
+          <div className="jh-pipeline-cta" style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", justifyContent: "center" }}>
+            <Link href="/how-it-works" className="jh-btn jh-btn-primary">
+              How It Works
+            </Link>
+            <Link href="/ai-image-generator" className="jh-btn jh-btn-secondary">
+              AI Image Generator
+            </Link>
+            <Link href="/ai-video-generator" className="jh-btn jh-btn-tertiary">
+              AI Video Generator
             </Link>
           </div>
         </section>
@@ -278,9 +302,14 @@ const HomePage: NextPage = () => {
                   </span>
                 </div>
               )}
-              <Link href="/run-a-node" className="jh-btn jh-btn-tertiary">
-                Become an Operator
-              </Link>
+              <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap" }}>
+                <Link href="/run-a-node" className="jh-btn jh-btn-tertiary">
+                  Become an Operator
+                </Link>
+                <Link href="/pricing" className="jh-btn jh-btn-secondary">
+                  Credits & Pricing
+                </Link>
+              </div>
             </div>
           </div>
         </section>
@@ -319,7 +348,7 @@ const HomePage: NextPage = () => {
               <div className="jh-showcase-img-wrap">
                 <img
                   src={shipImg}
-                  alt="Ship Loadouts"
+                  alt={getShipAlt(shipImg)}
                   className="jh-showcase-img contain"
                 />
               </div>
@@ -332,7 +361,7 @@ const HomePage: NextPage = () => {
               <div className="jh-showcase-img-wrap">
                 <img
                   src={outfitImg}
-                  alt="Outfits"
+                  alt={getOutfitAlt(outfitImg)}
                   className="jh-showcase-img contain"
                 />
               </div>
@@ -362,7 +391,7 @@ const HomePage: NextPage = () => {
                   <img
                     key={`${src}-${i}`}
                     src={src}
-                    alt=""
+                    alt={getOutfitAlt(src)}
                     className="jh-collection-tile"
                   />
                 ))}
@@ -373,7 +402,7 @@ const HomePage: NextPage = () => {
               </div>
             </article>
           </div>
-          <div className="jh-showcase-cta">
+          <div className="jh-showcase-cta" style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", justifyContent: "center" }}>
             <a
               href="https://astra.joinhavn.io/"
               className="jh-btn jh-btn-primary"
@@ -382,6 +411,9 @@ const HomePage: NextPage = () => {
             >
               Play Now
             </a>
+            <Link href="/ownership" className="jh-btn jh-btn-secondary">
+              Ownership Flow
+            </Link>
           </div>
         </section>
 
@@ -420,6 +452,7 @@ const HomePage: NextPage = () => {
               <li><Link href="/astra">Astra</Link></li>
               <li><Link href="/how-it-works">How It Works</Link></li>
               <li><Link href="/ai-image-generator">AI Image Generator</Link></li>
+              <li><Link href="/ai-video-generator">AI Video Generator</Link></li>
               <li><Link href="/ownership">Ownership</Link></li>
               <li><Link href="/marketplace">Marketplace</Link></li>
               <li><Link href="/run-a-node">Run a Node</Link></li>

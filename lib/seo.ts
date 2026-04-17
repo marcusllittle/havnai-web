@@ -25,6 +25,10 @@ const PAGE_SOCIAL_IMAGES: Record<string, SocialImageConfig> = {
     image: "/astra/scenes/nebula_runway_briefing.png",
     alt: "AI image generator preview with JoinHavn sci-fi scene",
   },
+  "/ai-video-generator": {
+    image: "/astra/scenes/solar_rift_briefing.png",
+    alt: "AI video generator preview with JoinHavn cinematic sci-fi artwork",
+  },
   "/how-it-works": {
     image: "/astra/scenes/spaceport_hub.png",
     alt: "How JoinHavn works preview showing the Astra spaceport hub",

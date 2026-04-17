@@ -323,6 +323,11 @@ const RunANodePage: NextPage = () => {
               <Link href="/create" className="jh-btn jh-btn-secondary">Open Generator</Link>
               <Link href="/astra" className="jh-btn jh-btn-tertiary">See Astra</Link>
             </div>
+            <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", marginTop: "1rem" }}>
+              <Link href="/how-it-works" className="jh-btn jh-btn-secondary">How It Works</Link>
+              <Link href="/ownership" className="jh-btn jh-btn-secondary">Ownership</Link>
+              <Link href="/pricing" className="jh-btn jh-btn-tertiary">Credits & Pricing</Link>
+            </div>
           </div>
         </section>
       </main>

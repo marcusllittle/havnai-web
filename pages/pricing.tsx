@@ -474,6 +474,17 @@ const PricingPage: NextPage = () => {
               deployments where it has been enabled.
             </p>
           </div>
+          <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", marginTop: "1rem" }}>
+            <Link href="/ai-image-generator" className="jh-btn jh-btn-secondary">
+              AI Image Generator
+            </Link>
+            <Link href="/how-it-works" className="jh-btn jh-btn-secondary">
+              How It Works
+            </Link>
+            <Link href="/ownership" className="jh-btn jh-btn-tertiary">
+              Ownership Flow
+            </Link>
+          </div>
         </section>
 
         <section className="pricing-section">
