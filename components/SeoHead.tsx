@@ -1,6 +1,6 @@
 import Head from "next/head";
 import { ReactNode } from "react";
-import { absoluteUrl, buildTitle, normalizeCanonical, normalizeImage, SeoConfig, SITE_NAME } from "../lib/seo";
+import { absoluteUrl, buildTitle, normalizeCanonical, normalizeImage, normalizeImageAlt, SeoConfig, SITE_NAME } from "../lib/seo";
 
 type SeoHeadProps = SeoConfig & {
   schema?: Record<string, unknown> | Array<Record<string, unknown>>;
@@ -12,6 +12,7 @@ export function SeoHead({
   description,
   path,
   image,
+  imageAlt,
   noindex = false,
   type = "website",
   canonicalUrl,
@@ -20,7 +21,8 @@ export function SeoHead({
 }: SeoHeadProps) {
   const fullTitle = buildTitle(title);
   const canonical = normalizeCanonical(path, canonicalUrl);
-  const imageUrl = normalizeImage(image);
+  const imageUrl = normalizeImage(image, path);
+  const resolvedImageAlt = normalizeImageAlt(imageAlt, path);
   const robots = noindex ? "noindex, nofollow" : "index, follow";
   const schemaPayload = schema
     ? JSON.stringify(Array.isArray(schema) ? schema : [schema])
@@ -41,11 +43,13 @@ export function SeoHead({
       <meta property="og:image" content={imageUrl} />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
+      <meta property="og:image:alt" content={resolvedImageAlt} />
 
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={fullTitle} />
       {description ? <meta name="twitter:description" content={description} /> : null}
       <meta name="twitter:image" content={imageUrl} />
+      <meta name="twitter:image:alt" content={resolvedImageAlt} />
 
       {schemaPayload ? (
         <script

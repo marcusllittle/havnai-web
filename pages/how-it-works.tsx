@@ -92,6 +92,8 @@ const HowItWorksPage: NextPage = () => (
       title="How JoinHavn works — generate, collect, and use AI assets"
       description="Full breakdown of the JoinHavn flow: generate AI images, save to Library, claim into Collection, and use assets in Astra or list on the marketplace."
       path="/how-it-works"
+      image="/astra/scenes/spaceport_hub.png"
+      imageAlt="JoinHavn how-it-works preview showing the Astra spaceport hub"
       schema={schema}
     />
 

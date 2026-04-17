@@ -62,6 +62,8 @@ const AiImageGeneratorPage: NextPage = () => (
       title="AI image generator for sci-fi and game worlds"
       description="Generate sci-fi pilots, ships, environments, and atmospheric scenes with JoinHavn's AI image generator. Save to Library, claim into Collection, use in Astra."
       path="/ai-image-generator"
+      image="/astra/scenes/nebula_runway_briefing.png"
+      imageAlt="JoinHavn AI image generator preview with a cinematic sci-fi scene"
       schema={schema}
     />
 

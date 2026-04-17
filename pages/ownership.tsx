@@ -42,6 +42,8 @@ const OwnershipPage: NextPage = () => (
       title="AI asset ownership — how JoinHavn collection works"
       description="Understand how AI asset ownership works on JoinHavn: generate images, save to Library, claim into your Collection, and use or sell owned assets."
       path="/ownership"
+      image="/astra/inbox/nova_after_hours.png"
+      imageAlt="JoinHavn ownership preview with collectible asset artwork"
       schema={schema}
     />
 
