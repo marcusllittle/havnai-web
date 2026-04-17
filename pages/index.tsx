@@ -181,14 +181,9 @@ const HomePage: NextPage = () => {
               Create with HavnAI. Collect what you make.
             </p>
             <div className="jh-hero-actions">
-              <a
-                href="https://astra.joinhavn.io/"
-                className="jh-btn jh-btn-primary"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Play Astra
-              </a>
+              <Link href="/astra" className="jh-btn jh-btn-primary">
+                Explore Astra
+              </Link>
               <Link href="/create" className="jh-btn jh-btn-secondary">
                 Start Creating
               </Link>
@@ -199,12 +194,7 @@ const HomePage: NextPage = () => {
         {/* ── Entry Points ── */}
         <section className="jh-entry">
           <div className="jh-entry-grid">
-            <a
-              href="https://astra.joinhavn.io/"
-              className="jh-entry-card"
-              target="_blank"
-              rel="noreferrer"
-            >
+            <Link href="/astra" className="jh-entry-card">
               <img
                 src="/astra/pilots/nova_starling.png"
                 alt="Play Astra"
@@ -214,7 +204,7 @@ const HomePage: NextPage = () => {
                 <strong>Play</strong>
                 <span>Enter Astra Valkyries</span>
               </div>
-            </a>
+            </Link>
             <Link href="/create" className="jh-entry-card">
               <img
                 src={featuredImg || "/astra/scenes/abyss_crown_briefing.png"}
@@ -303,6 +293,11 @@ const HomePage: NextPage = () => {
             <p>
               Combat. Pilots. Loadouts. Missions. Progression. Collection. Leaderboards.
             </p>
+            <div className="jh-pipeline-cta">
+              <Link href="/astra" className="jh-btn jh-btn-secondary">
+                See Astra
+              </Link>
+            </div>
           </div>
           <div className="jh-showcase-grid">
             {showcaseItems.slice(0, 2).map((item) => (

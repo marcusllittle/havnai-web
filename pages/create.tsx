@@ -1527,6 +1527,23 @@ const TestPage: React.FC = () => {
           }
         />
 
+        <section className="page-container" style={{ paddingTop: "1.5rem" }}>
+          <div className="chart-section">
+            <div className="chart-header">
+              <h2 className="chart-title">Where creation goes next</h2>
+            </div>
+            <p style={{ color: "var(--text-muted)", lineHeight: 1.75, marginBottom: "1rem" }}>
+              JoinHavn creation is not meant to end at a single render. Save outputs into your collection, move selected assets into marketplace flow,
+              and connect them back to Astra where the broader world gives them context.
+            </p>
+            <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap" }}>
+              <Link href="/astra" className="jh-btn jh-btn-secondary">See Astra</Link>
+              <Link href="/marketplace" className="jh-btn jh-btn-secondary">Browse Marketplace</Link>
+              <Link href="/run-a-node" className="jh-btn jh-btn-tertiary">Run a Node</Link>
+            </div>
+          </div>
+        </section>
+
         <section className="generator-section">
           <div className="generator-card">
             <div className="generator-grid">

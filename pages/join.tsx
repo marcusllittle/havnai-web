@@ -68,8 +68,8 @@ const JoinPage: NextPage = () => {
               <a href="#quick-install" className="jh-btn jh-btn-primary">
                 View Install Command
               </a>
-              <Link href="/nodes" className="jh-btn jh-btn-secondary">
-                Watch Live Nodes
+              <Link href="/astra" className="jh-btn jh-btn-secondary">
+                See Astra
               </Link>
             </>
           }

@@ -3,6 +3,7 @@ import { absoluteUrl } from "../lib/seo";
 
 const routes = [
   "/",
+  "/astra",
   "/create",
   "/run-a-node",
   "/marketplace",
@@ -13,7 +14,7 @@ const routes = [
 function buildSitemapXml() {
   const urls = routes
     .map((route) => {
-      const priority = route === "/" ? "1.0" : route === "/create" || route === "/run-a-node" ? "0.9" : "0.8";
+      const priority = route === "/" ? "1.0" : route === "/astra" || route === "/create" || route === "/run-a-node" ? "0.9" : "0.8";
       return `
   <url>
     <loc>${absoluteUrl(route)}</loc>

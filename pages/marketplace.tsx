@@ -603,8 +603,8 @@ const MarketplacePage: NextPage = () => {
               <Link href="/create" className="jh-btn jh-btn-primary">
                 Create to Sell
               </Link>
-              <Link href="/marketplace?tab=gallery&galleryView=collection" className="jh-btn jh-btn-secondary">
-                Open Collection
+              <Link href="/astra" className="jh-btn jh-btn-secondary">
+                See Astra
               </Link>
             </>
           }
