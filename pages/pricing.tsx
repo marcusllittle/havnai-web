@@ -1,8 +1,8 @@
 import type { NextPage } from "next";
-import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CinematicPageHero } from "../components/CinematicPageHero";
+import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
 import {
@@ -418,13 +418,12 @@ const PricingPage: NextPage = () => {
 
   return (
     <>
-      <Head>
-        <title>Credits — JoinHavn</title>
-        <meta
-          name="description"
-          content="Purchase JoinHavn credits to generate images and videos on the GPU network."
-        />
-      </Head>
+      <SeoHead
+        title="Credits and pricing"
+        description="See how JoinHavn credits work for AI image and video generation, funding paths, and Public Alpha usage across the creation stack."
+        path="/pricing"
+        image="/astra/scenes/solar_rift_briefing.png"
+      />
 
       <SiteHeader />
 
@@ -456,7 +455,7 @@ const PricingPage: NextPage = () => {
           ]}
           actions={
             <>
-              <Link href="/generator" className="jh-btn jh-btn-primary">
+              <Link href="/create" className="jh-btn jh-btn-primary">
                 Start Creating
               </Link>
               <Link href="/marketplace" className="jh-btn jh-btn-secondary">

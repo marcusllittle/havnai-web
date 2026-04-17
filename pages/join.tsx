@@ -1,8 +1,8 @@
 import type { NextPage } from "next";
-import Head from "next/head";
 import Link from "next/link";
 import { useState } from "react";
 import { CinematicPageHero } from "../components/CinematicPageHero";
+import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import { getApiBase } from "../lib/apiBase";
 
@@ -27,10 +27,13 @@ const JoinPage: NextPage = () => {
 
   return (
     <>
-      <Head>
-        <title>Run a Node — JoinHavn</title>
-        <meta name="description" content="Install guide for running a GPU node on the JoinHavn decentralized compute network. Prerequisites, setup, and troubleshooting." />
-      </Head>
+      <SeoHead
+        title="Run a GPU node"
+        description="Install guide for running a GPU node on the JoinHavn compute network, with prerequisites, setup steps, and live operator visibility."
+        path="/join"
+        canonicalUrl="/run-a-node"
+        image="/astra/scenes/spaceport_hub.png"
+      />
 
       <SiteHeader />
 
