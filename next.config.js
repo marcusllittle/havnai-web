@@ -1,8 +1,37 @@
-const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_HAVNAI_API_BASE || "http://api.joinhavn.io:5001")
-    .replace(/\/$/, "");
+// API base URL must be set via environment variable.
+// No HTTP fallback — misconfigured deploys fail loudly instead of silently
+// proxying to the wrong host.
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_HAVNAI_API_BASE ||
+  ""
+).replace(/\/$/, "");
+
+if (!API_BASE && process.env.NODE_ENV === "production") {
+  // Warn loudly in build logs but don't crash the build so preview deploys work.
+  console.warn(
+    "[havnai-web] WARNING: NEXT_PUBLIC_HAVNAI_API_BASE is not set. " +
+    "API proxying will not function correctly in production."
+  );
+}
 
 const isDev = process.env.NODE_ENV !== "production";
+
+// connect-src: only allow HTTPS origins in production.
+// During local development we also allow the explicit dev API host.
+const connectSrcHosts = [
+  "'self'",
+  "https://api.joinhavn.io",
+  "https://metamask-sdk.api.cx.metamask.io",
+  "wss://metamask-sdk.api.cx.metamask.io",
+  "https://mm-sdk-analytics.api.cx.metamask.io",
+  "https://va.vercel-scripts.com",
+];
+
+if (isDev && API_BASE && API_BASE.startsWith("http://")) {
+  // Allow localhost HTTP during development only
+  connectSrcHosts.push(API_BASE);
+}
 
 const cspReportOnly = [
   "default-src 'self'",
@@ -15,7 +44,7 @@ const cspReportOnly = [
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https:",
   "media-src 'self' data: blob: https:",
-  "connect-src 'self' http://api.joinhavn.io:5001 https://api.joinhavn.io:5001 https://metamask-sdk.api.cx.metamask.io wss://metamask-sdk.api.cx.metamask.io https://mm-sdk-analytics.api.cx.metamask.io https://va.vercel-scripts.com",
+  `connect-src ${connectSrcHosts.join(" ")}`,
   "worker-src 'self' blob:",
 ].join("; ");
 
@@ -60,6 +89,7 @@ const nextConfig = {
     ];
   },
   async rewrites() {
+    if (!API_BASE) return [];
     return [
       {
         source: "/api/:path*",
