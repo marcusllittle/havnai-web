@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: Node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["20"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          # Placeholder values — validates the build works with env vars set.
+          # Real values must be configured in Vercel environment settings.
+          NEXT_PUBLIC_HAVNAI_API_BASE: https://api.joinhavn.io
+          NEXT_PUBLIC_HAVNAI_WALLET: "0x0000000000000000000000000000000000000000"
+          NEXT_PUBLIC_HAI_TOKEN_ADDRESS: "0x0000000000000000000000000000000000000000"
+          NEXT_PUBLIC_HAI_TREASURY_WALLET: "0x0000000000000000000000000000000000000000"
+          NEXT_PUBLIC_SEPOLIA_CHAIN_ID: "0xaa36a7"
