@@ -12,6 +12,9 @@
     "start": "next start",
     "test": "vitest run"
   },
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

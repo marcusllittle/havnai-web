@@ -33,6 +33,11 @@ export interface JobDetail {
   timestamp?: number;
   completed_at?: number | null;
   retry_count?: number;
+  preferred_node_id?: string | null;
+  dispatch_score?: number | null;
+  dispatch_reason?: string | null;
+  assigned_at?: number | null;
+  lease_expires_at?: number | null;
   reward?: number;
   reward_factors?: Record<string, unknown>;
   requested_loras?: JobLoraEntry[];
@@ -50,7 +55,94 @@ export interface JobDetail {
     prompt?: string;
     source?: string;
   } | null;
+  timeline_summary?: {
+    event_count: number;
+    current_stage?: string | null;
+    total_elapsed_ms: number;
+  };
+  proof_receipt?: {
+    available: boolean;
+    receipt_hash?: string | null;
+    signed: boolean;
+  };
   data?: any;
+}
+
+export interface ExecutionEvent {
+  id: number;
+  job_id: string;
+  sequence: number;
+  stage: string;
+  status: string;
+  node_id?: string | null;
+  attempt_number?: number | null;
+  message?: string | null;
+  metadata: Record<string, any>;
+  stage_latency_ms: number;
+  total_elapsed_ms: number;
+  created_at: number;
+}
+
+export interface ExecutionTimeline {
+  job_id: string;
+  events: ExecutionEvent[];
+  event_count: number;
+  current_stage?: string | null;
+  current_status?: string | null;
+  total_elapsed_ms: number;
+}
+
+export interface ProofReceipt {
+  job_id: string;
+  schema_version: "proof-of-creation.v1";
+  payload: Record<string, any>;
+  canonical_payload: string;
+  receipt_hash: string;
+  signature?: string | null;
+  signature_algorithm: "sha256" | "hmac-sha256" | "ed25519";
+  key_id?: string | null;
+  public_key?: string | null;
+  artifact_sha256?: string | null;
+  created_at: number;
+  signed: boolean;
+}
+
+export interface LocalReceiptVerification {
+  supported: boolean;
+  valid: boolean;
+  hash_valid: boolean;
+  signature_valid?: boolean | null;
+  error?: string;
+}
+
+export interface ReceiptInclusionProof {
+  batch_id: number;
+  job_id: string;
+  leaf_index: number;
+  receipt_hash: string;
+  leaf_hash: string;
+  proof: { position: "left" | "right"; hash: string }[];
+  schema_version: "receipt-merkle-batch.v1";
+  merkle_root: string;
+  leaf_count: number;
+  status: "ready" | "anchored";
+  anchor_network?: string | null;
+  anchor_tx_hash?: string | null;
+  anchored_at?: number | null;
+  valid: boolean;
+}
+
+export interface ProofReceiptVerification {
+  job_id: string;
+  valid: boolean;
+  integrity_valid: boolean;
+  hash_valid: boolean;
+  artifact_exists: boolean;
+  artifact_valid: boolean;
+  signature_valid?: boolean | null;
+  authenticity: "verified" | "unverifiable" | "unsigned";
+  receipt_hash: string;
+  schema_version: string;
 }
 
 export interface JobDetailResponse extends JobDetail {}
@@ -592,6 +684,123 @@ export async function fetchJob(jobId: string): Promise<JobDetailResponse> {
   }
   const json = (await res.json()) as JobDetailResponse;
   return json;
+}
+
+export async function fetchJobTimeline(jobId: string): Promise<ExecutionTimeline> {
+  const res = await fetch(apiUrl(`/jobs/${encodeURIComponent(jobId)}/timeline`), {
+    headers: buildHeaders(true),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as ExecutionTimeline;
+}
+
+export async function fetchProofReceipt(jobId: string): Promise<ProofReceipt> {
+  const res = await fetch(apiUrl(`/jobs/${encodeURIComponent(jobId)}/receipt`), {
+    headers: buildHeaders(true),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as ProofReceipt;
+}
+
+export async function verifyProofReceipt(jobId: string): Promise<ProofReceiptVerification> {
+  const res = await fetch(apiUrl(`/jobs/${encodeURIComponent(jobId)}/receipt/verify`), {
+    headers: buildHeaders(true),
+  });
+  const payload = (await res.json()) as ProofReceiptVerification;
+  if (!res.ok && res.status !== 422) throw await parseErrorResponse(res);
+  return payload;
+}
+
+export async function fetchReceiptInclusionProof(jobId: string): Promise<ReceiptInclusionProof> {
+  const res = await fetch(apiUrl(`/jobs/${encodeURIComponent(jobId)}/receipt/proof`), {
+    headers: buildHeaders(true),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as ReceiptInclusionProof;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function base64ToBytes(value: string): ArrayBuffer {
+  const binary = globalThis.atob(value);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function hexToBytes(value: string): Uint8Array {
+  if (!/^[0-9a-f]+$/i.test(value) || value.length % 2 !== 0) {
+    throw new Error("Invalid hexadecimal value");
+  }
+  return Uint8Array.from(value.match(/.{2}/g) || [], (pair) => Number.parseInt(pair, 16));
+}
+
+async function sha256Bytes(value: Uint8Array): Promise<Uint8Array> {
+  const exact = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
+  return new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", exact));
+}
+
+export async function verifyReceiptInclusionProofLocally(
+  inclusion: ReceiptInclusionProof
+): Promise<boolean> {
+  if (!globalThis.crypto?.subtle) return false;
+  const receiptBytes = hexToBytes(inclusion.receipt_hash);
+  let current = await sha256Bytes(Uint8Array.from([0, ...receiptBytes]));
+  for (const step of inclusion.proof) {
+    const sibling = hexToBytes(step.hash);
+    const left = step.position === "left" ? sibling : current;
+    const right = step.position === "left" ? current : sibling;
+    current = await sha256Bytes(Uint8Array.from([1, ...left, ...right]));
+  }
+  return bytesToHex(current) === inclusion.merkle_root.toLowerCase();
+}
+
+export async function verifyProofReceiptLocally(
+  receipt: ProofReceipt
+): Promise<LocalReceiptVerification> {
+  try {
+    if (!globalThis.crypto?.subtle || !receipt.canonical_payload) {
+      return { supported: false, valid: false, hash_valid: false, error: "Web Crypto unavailable" };
+    }
+    const encodedPayload = new TextEncoder().encode(receipt.canonical_payload);
+    const digest = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", encodedPayload));
+    const hashValid = bytesToHex(digest) === receipt.receipt_hash.toLowerCase();
+    if (receipt.signature_algorithm !== "ed25519" || !receipt.signature || !receipt.public_key) {
+      return {
+        supported: true,
+        valid: hashValid,
+        hash_valid: hashValid,
+        signature_valid: null,
+      };
+    }
+    const publicKey = await globalThis.crypto.subtle.importKey(
+      "raw",
+      base64ToBytes(receipt.public_key),
+      { name: "Ed25519" },
+      false,
+      ["verify"]
+    );
+    const signatureValid = await globalThis.crypto.subtle.verify(
+      { name: "Ed25519" },
+      publicKey,
+      base64ToBytes(receipt.signature),
+      new TextEncoder().encode(receipt.receipt_hash)
+    );
+    return {
+      supported: true,
+      valid: hashValid && signatureValid,
+      hash_valid: hashValid,
+      signature_valid: signatureValid,
+    };
+  } catch (error: any) {
+    return {
+      supported: false,
+      valid: false,
+      hash_valid: false,
+      error: error?.message || "Local verification failed",
+    };
+  }
 }
 
 export async function fetchResult(jobId: string): Promise<ResultResponse> {
@@ -1321,6 +1530,13 @@ export interface NodeInfo {
     sample_size?: number;
   };
   recent_activity_at?: number | null;
+  scheduler?: {
+    score: number;
+    components: Record<string, number>;
+    utilization: number;
+    vram_gb: number;
+    sample_size: number;
+  };
 }
 
 export interface NodeDetail extends NodeInfo {
@@ -1368,6 +1584,94 @@ export interface OperatorWorkersResponse {
     offline_workers: number;
     total_payouts: number;
     timestamp: string;
+  };
+}
+
+export interface NetworkSummary {
+  schema_version: "network-summary.v1";
+  generated_at: string;
+  coordinator: {
+    status: string;
+    version: string;
+  };
+  nodes: {
+    total: number;
+    online: number;
+    offline: number;
+    operators_online: number;
+  };
+  capacity: {
+    by_job_type: Record<string, number>;
+    total_vram_mb: number;
+    average_gpu_utilization: number;
+  };
+  queue: {
+    queued: number;
+    running: number;
+    completed: number;
+    failed: number;
+  };
+  recovery: {
+    lease_seconds: number;
+    max_retries: number;
+    jobs_retried: number;
+    expired_claims: number;
+  };
+  scheduler: {
+    strategy: string;
+    preference_grace_seconds: number;
+    signals: string[];
+  };
+}
+
+export interface NetworkControlPlane {
+  schema_version: "network-control-plane.v1";
+  generated_at: string;
+  health: {
+    status: "healthy" | "degraded" | "critical";
+    alerts: { severity: "warning" | "critical"; code: string; message: string }[];
+  };
+  nodes: { tracked: number; online: number; ready: number; busy: number; offline: number };
+  queue: { queued: number; running: number; failed: number; oldest_wait_seconds: number };
+  latency_24h: {
+    sample_size: number;
+    queue_p50_seconds: number;
+    queue_p95_seconds: number;
+    run_p50_seconds: number;
+    run_p95_seconds: number;
+  };
+  claims: {
+    at_risk: number;
+    active: {
+      job_id: string;
+      model: string;
+      task_type: string;
+      node_id: string;
+      assigned_at?: number | null;
+      lease_expires_at?: number | null;
+      lease_remaining_seconds: number;
+      retry_count: number;
+      dispatch_score?: number | null;
+      dispatch_reason?: string | null;
+      at_risk: boolean;
+    }[];
+  };
+  scheduler_24h: {
+    strategy: string;
+    decisions: Record<string, number>;
+    preferred: number;
+    fallback: number;
+  };
+  receipts: {
+    unbatched: number;
+    batch_size: number;
+    recent_batches: {
+      id: number;
+      merkle_root: string;
+      leaf_count: number;
+      status: "ready" | "anchored";
+      created_at: number;
+    }[];
   };
 }
 
@@ -1450,6 +1754,15 @@ function normalizeNodeInfo(raw: any): NodeInfo {
       level: trustRaw?.level ? String(trustRaw.level) : undefined,
       sample_size: toNumber(trustRaw?.sample_size, 0),
     },
+    scheduler: raw?.scheduler && typeof raw.scheduler === "object"
+      ? {
+          score: toNumber(raw.scheduler.score, 0),
+          components: raw.scheduler.components || {},
+          utilization: toNumber(raw.scheduler.utilization, 0),
+          vram_gb: toNumber(raw.scheduler.vram_gb, 0),
+          sample_size: toNumber(raw.scheduler.sample_size, 0),
+        }
+      : undefined,
     recent_activity_at:
       raw?.recent_activity_at == null ? null : toNumber(raw?.recent_activity_at, 0),
   };
@@ -1502,6 +1815,22 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();
   return (data.leaderboard || []) as LeaderboardEntry[];
+}
+
+export async function fetchNetworkSummary(): Promise<NetworkSummary> {
+  const res = await fetch(apiUrl("/v1/network/summary"), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as NetworkSummary;
+}
+
+export async function fetchNetworkControlPlane(): Promise<NetworkControlPlane> {
+  const res = await fetch(apiUrl("/v1/network/control-plane"), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as NetworkControlPlane;
 }
 
 // ---------------------------------------------------------------------------
