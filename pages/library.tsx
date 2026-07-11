@@ -1,8 +1,8 @@
 import type { NextPage } from "next";
-import Head from "next/head";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CinematicPageHero } from "../components/CinematicPageHero";
+import { SeoHead } from "../components/SeoHead";
 import { useWallet } from "../components/WalletProvider";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
 import { SiteHeader } from "../components/SiteHeader";
@@ -385,9 +385,12 @@ const LibraryPage: NextPage = () => {
 
   return (
     <>
-      <Head>
-        <title>Collection — JoinHavn</title>
-      </Head>
+      <SeoHead
+        title="Collection"
+        description="Manage saved outputs, preview owned media, and prepare assets for marketplace flow inside your JoinHavn collection."
+        path="/library"
+        noindex
+      />
       <SiteHeader />
 
       <main className="library-page jh-page-shell">
@@ -418,7 +421,7 @@ const LibraryPage: NextPage = () => {
           ]}
           actions={
             <>
-              <Link href="/generator" className="jh-btn jh-btn-primary">
+              <Link href="/create" className="jh-btn jh-btn-primary">
                 Create New Work
               </Link>
               <Link href="/marketplace?tab=gallery&galleryView=my-listings" className="jh-btn jh-btn-secondary">

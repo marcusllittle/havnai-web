@@ -1,6 +1,6 @@
 import type { NextPage } from "next";
-import Head from "next/head";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../lib/WalletContext";
 import {
@@ -89,7 +89,12 @@ const MarketplacePage: NextPage = () => {
 
   return (
     <>
-      <Head><title>HavnAI Templates</title></Head>
+      <SeoHead
+        title="Workflow templates"
+        description="Browse and publish reusable generation presets and workflows inside JoinHavn."
+        path="/templates"
+        noindex
+      />
       <SiteHeader />
 
       <main className="library-page">

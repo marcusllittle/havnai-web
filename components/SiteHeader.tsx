@@ -11,8 +11,8 @@ interface NavItem {
 }
 
 const PRIMARY_NAV: NavItem[] = [
-  { href: "https://astra.joinhavn.io", label: "Play Astra", external: true, accent: true },
-  { href: "/generator", label: "Create" },
+  { href: "/astra", label: "Astra", accent: true },
+  { href: "/create", label: "Create" },
   { href: "/library", label: "Collection" },
   { href: "/marketplace", label: "Marketplace" },
   { href: "/nodes", label: "Network" },
@@ -20,7 +20,7 @@ const PRIMARY_NAV: NavItem[] = [
 
 const UTILITY_NAV: NavItem[] = [
   { href: "/pricing", label: "Credits" },
-  { href: "/join", label: "Run a Node" },
+  { href: "/run-a-node", label: "Run a Node" },
 ];
 
 function isActive(pathname: string, href: string): boolean {

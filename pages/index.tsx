@@ -1,7 +1,7 @@
 import type { NextPage } from "next";
-import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { SeoHead, buildWebsiteSchema } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import {
   fetchAnalyticsOverview,
@@ -53,6 +53,24 @@ const outfitImages = [
   "/astra/outfits/violet_tempest.png",
   "/astra/outfits/void_reaper.png",
 ];
+
+function assetLabelFromPath(src: string): string {
+  return src
+    .split("/")
+    .pop()
+    ?.replace(/\.[^.]+$/, "")
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Astra asset";
+}
+
+function getOutfitAlt(src: string): string {
+  return `Astra Valkyries outfit ${assetLabelFromPath(src)}`;
+}
+
+function getShipAlt(src: string): string {
+  return `Astra Valkyries ship ${assetLabelFromPath(src)}`;
+}
 
 function pickTwoDistinct<T>(pool: T[], fallbackA: T, fallbackB: T): [T, T] {
   if (pool.length < 2) return [fallbackA, fallbackB];
@@ -150,13 +168,13 @@ const HomePage: NextPage = () => {
 
   return (
     <>
-      <Head>
-        <title>JoinHavn | Enter the World</title>
-        <meta
-          name="description"
-          content="JoinHavn — create with AI, collect what you make, and enter Astra Valkyries, a sci-fi world with combat, pilots, and progression."
-        />
-      </Head>
+      <SeoHead
+        title="Create AI assets, claim ownership, and use them in Astra"
+        description="JoinHavn connects AI creation, collection, marketplace flow, and Astra, a sci-fi world with combat, pilots, and progression."
+        path="/"
+        image="/astra/scenes/nebula_runway_briefing.png"
+        schema={buildWebsiteSchema()}
+      />
 
       <SiteHeader />
 
@@ -166,7 +184,7 @@ const HomePage: NextPage = () => {
           <div className="jh-hero-bg" aria-hidden="true">
             <img
               src="/astra/scenes/nebula_runway_briefing.png"
-              alt=""
+              alt="Astra Valkyries nebula runway briefing scene"
               className="jh-hero-bg-img"
             />
             <div className="jh-hero-bg-overlay" />
@@ -181,16 +199,11 @@ const HomePage: NextPage = () => {
               Create with HavnAI. Collect what you make.
             </p>
             <div className="jh-hero-actions">
-              <a
-                href="https://play.joinhavn.io/"
-                className="jh-btn jh-btn-primary"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Play Astra
-              </a>
-              <Link href="/generator" className="jh-btn jh-btn-secondary">
-                Start Creating
+              <Link href="/astra" className="jh-btn jh-btn-primary">
+                Explore Astra
+              </Link>
+              <Link href="/create" className="jh-btn jh-btn-secondary">
+                Open Generator
               </Link>
             </div>
           </div>
@@ -199,12 +212,7 @@ const HomePage: NextPage = () => {
         {/* ── Entry Points ── */}
         <section className="jh-entry">
           <div className="jh-entry-grid">
-            <a
-              href="https://play.joinhavn.io/"
-              className="jh-entry-card"
-              target="_blank"
-              rel="noreferrer"
-            >
+            <Link href="/astra" className="jh-entry-card">
               <img
                 src="/astra/pilots/nova_starling.png"
                 alt="Play Astra"
@@ -214,8 +222,8 @@ const HomePage: NextPage = () => {
                 <strong>Play</strong>
                 <span>Enter Astra Valkyries</span>
               </div>
-            </a>
-            <Link href="/generator" className="jh-entry-card">
+            </Link>
+            <Link href="/create" className="jh-entry-card">
               <img
                 src={featuredImg || "/astra/scenes/abyss_crown_briefing.png"}
                 alt="Create"
@@ -223,10 +231,10 @@ const HomePage: NextPage = () => {
               />
               <div className="jh-entry-overlay">
                 <strong>Create</strong>
-                <span>Generate with HavnAI</span>
+                <span>Generate images and video</span>
               </div>
             </Link>
-            <Link href="/join" className="jh-entry-card">
+            <Link href="/run-a-node" className="jh-entry-card">
               <img
                 src="/astra/scenes/solar_rift_briefing.png"
                 alt="Operate"
@@ -258,9 +266,15 @@ const HomePage: NextPage = () => {
               </div>
             ))}
           </div>
-          <div className="jh-pipeline-cta">
-            <Link href="/generator" className="jh-btn jh-btn-secondary">
-              Start Creating
+          <div className="jh-pipeline-cta" style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", justifyContent: "center" }}>
+            <Link href="/how-it-works" className="jh-btn jh-btn-primary">
+              How It Works
+            </Link>
+            <Link href="/ai-image-generator" className="jh-btn jh-btn-secondary">
+              AI Image Generator
+            </Link>
+            <Link href="/ai-video-generator" className="jh-btn jh-btn-tertiary">
+              AI Video Generator
             </Link>
           </div>
         </section>
@@ -284,13 +298,18 @@ const HomePage: NextPage = () => {
                     <strong>{networkStats.total_jobs.toLocaleString()}</strong> jobs served
                   </span>
                   <span className="jh-network-stat">
-                    <strong>{(networkStats.success_rate * 100).toFixed(0)}%</strong> success rate
+                    <strong>{Number(networkStats.success_rate || 0).toFixed(0)}%</strong> success rate
                   </span>
                 </div>
               )}
-              <Link href="/join" className="jh-btn jh-btn-tertiary">
-                Become an Operator
-              </Link>
+              <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap" }}>
+                <Link href="/run-a-node" className="jh-btn jh-btn-tertiary">
+                  Become an Operator
+                </Link>
+                <Link href="/pricing" className="jh-btn jh-btn-secondary">
+                  Credits & Pricing
+                </Link>
+              </div>
             </div>
           </div>
         </section>
@@ -303,6 +322,11 @@ const HomePage: NextPage = () => {
             <p>
               Combat. Pilots. Loadouts. Missions. Progression. Collection. Leaderboards.
             </p>
+            <div className="jh-pipeline-cta">
+              <Link href="/astra" className="jh-btn jh-btn-secondary">
+                See Astra
+              </Link>
+            </div>
           </div>
           <div className="jh-showcase-grid">
             {showcaseItems.slice(0, 2).map((item) => (
@@ -324,7 +348,7 @@ const HomePage: NextPage = () => {
               <div className="jh-showcase-img-wrap">
                 <img
                   src={shipImg}
-                  alt="Ship Loadouts"
+                  alt={getShipAlt(shipImg)}
                   className="jh-showcase-img contain"
                 />
               </div>
@@ -337,7 +361,7 @@ const HomePage: NextPage = () => {
               <div className="jh-showcase-img-wrap">
                 <img
                   src={outfitImg}
-                  alt="Outfits"
+                  alt={getOutfitAlt(outfitImg)}
                   className="jh-showcase-img contain"
                 />
               </div>
@@ -367,7 +391,7 @@ const HomePage: NextPage = () => {
                   <img
                     key={`${src}-${i}`}
                     src={src}
-                    alt=""
+                    alt={getOutfitAlt(src)}
                     className="jh-collection-tile"
                   />
                 ))}
@@ -378,15 +402,18 @@ const HomePage: NextPage = () => {
               </div>
             </article>
           </div>
-          <div className="jh-showcase-cta">
+          <div className="jh-showcase-cta" style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", justifyContent: "center" }}>
             <a
-              href="https://play.joinhavn.io/"
+              href="https://astra.joinhavn.io/"
               className="jh-btn jh-btn-primary"
               target="_blank"
               rel="noreferrer"
             >
               Play Now
             </a>
+            <Link href="/ownership" className="jh-btn jh-btn-secondary">
+              Ownership Flow
+            </Link>
           </div>
         </section>
 
@@ -420,6 +447,20 @@ const HomePage: NextPage = () => {
           </div>
 
           <div className="footer-col footer-col-center">
+            <h4>Explore</h4>
+            <ul>
+              <li><Link href="/astra">Astra</Link></li>
+              <li><Link href="/how-it-works">How It Works</Link></li>
+              <li><Link href="/ai-image-generator">AI Image Generator</Link></li>
+              <li><Link href="/ai-video-generator">AI Video Generator</Link></li>
+              <li><Link href="/ownership">Ownership</Link></li>
+              <li><Link href="/marketplace">Marketplace</Link></li>
+              <li><Link href="/run-a-node">Run a Node</Link></li>
+              <li><Link href="/pricing">Pricing</Link></li>
+            </ul>
+          </div>
+
+          <div className="footer-col">
             <h4>Follow</h4>
             <ul>
               <li>

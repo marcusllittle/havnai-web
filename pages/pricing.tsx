@@ -1,8 +1,8 @@
 import type { NextPage } from "next";
-import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CinematicPageHero } from "../components/CinematicPageHero";
+import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
 import {
@@ -40,6 +40,8 @@ const FALLBACK_PACKAGES: CreditPackage[] = [
   { id: "creator", name: "Creator Pack", credits: 150, price_cents: 1200, description: "150 credits – 20% bonus" },
   { id: "pro", name: "Pro Pack", credits: 500, price_cents: 3500, description: "500 credits – 30% bonus" },
 ];
+
+const PENDING_HAI_FUNDING_KEY = "havnai.pendingHaiFunding";
 
 function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -92,6 +94,7 @@ const PricingPage: NextPage = () => {
   const [haiFundingStep, setHaiFundingStep] = useState<string | null>(null);
   const [haiFundingError, setHaiFundingError] = useState<string | null>(null);
   const [haiFundingSuccess, setHaiFundingSuccess] = useState<string | null>(null);
+  const [haiFundingTxHash, setHaiFundingTxHash] = useState("");
   const haiFundingConfigured = isHaiFundingConfigured();
 
   const activeWallet = wallet.activeWallet;
@@ -110,6 +113,22 @@ const PricingPage: NextPage = () => {
     } else if (params.get("payment") === "cancelled") {
       setError("Payment was cancelled.");
       window.history.replaceState({}, "", "/pricing");
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(PENDING_HAI_FUNDING_KEY);
+      if (!raw) return;
+      const pending = JSON.parse(raw);
+      if (pending?.txHash) {
+        setHaiFundingTxHash(String(pending.txHash));
+      }
+      if (pending?.amount) {
+        setHaiAmount(String(pending.amount));
+      }
+    } catch {
+      // Ignore stale or malformed recovery state.
     }
   }, []);
 
@@ -285,6 +304,55 @@ const PricingPage: NextPage = () => {
     }
   };
 
+  const rememberPendingHaiFunding = (txHash: string, amount: number) => {
+    setHaiFundingTxHash(txHash);
+    try {
+      window.localStorage.setItem(
+        PENDING_HAI_FUNDING_KEY,
+        JSON.stringify({ txHash, amount, wallet: connectedWallet, createdAt: Date.now() })
+      );
+    } catch {
+      // Local storage is best-effort recovery only.
+    }
+  };
+
+  const clearPendingHaiFunding = () => {
+    try {
+      window.localStorage.removeItem(PENDING_HAI_FUNDING_KEY);
+    } catch {
+      // Local storage is best-effort recovery only.
+    }
+  };
+
+  const finalizeHaiFunding = async (amount: number, txHash: string) => {
+    if (!connectedWallet) {
+      throw new Error("Connect your wallet to finalize this HAI funding transaction.");
+    }
+    let result = await fundCreditsWithHai(connectedWallet, amount, txHash);
+    for (let attempt = 0; result.status === "pending" && attempt < 4; attempt += 1) {
+      setHaiFundingStep(`Finalizing credits (${attempt + 1}/4)...`);
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      result = await fundCreditsWithHai(connectedWallet, amount, txHash);
+    }
+
+    const granted = Number(result.credits_granted ?? 0);
+    const completed = result.status === "completed" || (result.status === "already_processed" && granted > 0);
+    if (!completed) {
+      throw new Error(
+        result.error ||
+        result.message ||
+        "Transfer is recorded but credits are still pending backend verification."
+      );
+    }
+
+    setHaiFundingSuccess(
+      `Funded ${granted || amount} credits. New balance: ${result.balance?.toFixed(1) ?? "?"}`
+    );
+    clearPendingHaiFunding();
+    const updated = await fetchCredits(connectedWallet);
+    setBalance(updated);
+  };
+
   // Load HAI balance when wallet connects
   useEffect(() => {
     if (!connectedWallet || !haiFundingConfigured) {
@@ -364,39 +432,45 @@ const PricingPage: NextPage = () => {
 
       setHaiFundingStep("Confirm transfer in your wallet...");
       const { txHash, wait } = await transferHaiToTreasury(signer, amount.toString());
+      rememberPendingHaiFunding(txHash, amount);
 
       setHaiFundingStep(`Waiting for confirmations (tx: ${txHash.slice(0, 10)}...)...`);
       await wait(2);
 
       setHaiFundingStep("Verifying with backend...");
-      let result = await fundCreditsWithHai(connectedWallet, amount, txHash);
-      for (let attempt = 0; result.status === "pending" && attempt < 4; attempt += 1) {
-        setHaiFundingStep(`Finalizing credits (${attempt + 1}/4)...`);
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-        result = await fundCreditsWithHai(connectedWallet, amount, txHash);
-      }
-
-      const granted = Number(result.credits_granted ?? 0);
-      const completed = result.status === "completed" || (result.status === "already_processed" && granted > 0);
-      if (!completed) {
-        throw new Error(
-          result.error ||
-          result.message ||
-          "Transfer is recorded but credits are still pending backend verification."
-        );
-      }
-      setHaiFundingSuccess(
-        `Funded ${granted || amount} credits. New balance: ${result.balance?.toFixed(1) ?? "?"}`
-      );
-      // Refresh credit balance
-      const updated = await fetchCredits(connectedWallet);
-      setBalance(updated);
+      await finalizeHaiFunding(amount, txHash);
     } catch (err: any) {
       if (err?.code === 4001 || /user rejected/i.test(String(err?.message || ""))) {
         setHaiFundingError("Transaction was rejected in your wallet.");
       } else {
         setHaiFundingError(err?.message || "HAI funding failed.");
       }
+    } finally {
+      setHaiFunding(false);
+      setHaiFundingStep(null);
+    }
+  };
+
+  const handleFinalizeHaiFunding = async () => {
+    const amount = Number.parseFloat(haiAmount);
+    const txHash = haiFundingTxHash.trim();
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setHaiFundingError("Enter the HAI amount for this transaction.");
+      return;
+    }
+    if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+      setHaiFundingError("Enter a valid transaction hash from MetaMask.");
+      return;
+    }
+    setHaiFunding(true);
+    setHaiFundingError(null);
+    setHaiFundingSuccess(null);
+    try {
+      setHaiFundingStep("Verifying confirmed transaction...");
+      rememberPendingHaiFunding(txHash, amount);
+      await finalizeHaiFunding(amount, txHash);
+    } catch (err: any) {
+      setHaiFundingError(err?.message || "Failed to finalize HAI funding.");
     } finally {
       setHaiFunding(false);
       setHaiFundingStep(null);
@@ -418,13 +492,12 @@ const PricingPage: NextPage = () => {
 
   return (
     <>
-      <Head>
-        <title>Credits — JoinHavn</title>
-        <meta
-          name="description"
-          content="Purchase JoinHavn credits to generate images and videos on the GPU network."
-        />
-      </Head>
+      <SeoHead
+        title="Credits and pricing"
+        description="See how JoinHavn credits work for AI image and video generation, funding paths, and Public Alpha usage across the creation stack."
+        path="/pricing"
+        image="/astra/scenes/solar_rift_briefing.png"
+      />
 
       <SiteHeader />
 
@@ -456,7 +529,7 @@ const PricingPage: NextPage = () => {
           ]}
           actions={
             <>
-              <Link href="/generator" className="jh-btn jh-btn-primary">
+              <Link href="/create" className="jh-btn jh-btn-primary">
                 Start Creating
               </Link>
               <Link href="/marketplace" className="jh-btn jh-btn-secondary">
@@ -474,6 +547,17 @@ const PricingPage: NextPage = () => {
               funding is the primary live path today, while card checkout appears only on
               deployments where it has been enabled.
             </p>
+          </div>
+          <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", marginTop: "1rem" }}>
+            <Link href="/ai-image-generator" className="jh-btn jh-btn-secondary">
+              AI Image Generator
+            </Link>
+            <Link href="/how-it-works" className="jh-btn jh-btn-secondary">
+              How It Works
+            </Link>
+            <Link href="/ownership" className="jh-btn jh-btn-tertiary">
+              Ownership Flow
+            </Link>
           </div>
         </section>
 
@@ -610,6 +694,29 @@ const PricingPage: NextPage = () => {
               {!connectedWallet && (
                 <p className="convert-note">Connect your wallet on Sepolia to fund credits with HAI.</p>
               )}
+              <div className="convert-row">
+                <div className="convert-input-group">
+                  <input
+                    className="convert-input"
+                    type="text"
+                    placeholder="Confirmed tx hash"
+                    value={haiFundingTxHash}
+                    onChange={(e) => setHaiFundingTxHash(e.target.value.trim())}
+                    disabled={!connectedWallet || haiFunding}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="convert-submit-btn"
+                  onClick={handleFinalizeHaiFunding}
+                  disabled={haiFunding || !connectedWallet || !haiFundingTxHash.trim()}
+                >
+                  Finalize confirmed tx
+                </button>
+              </div>
+              <p className="convert-note">
+                If MetaMask confirmed but credits did not update, paste the transaction hash here and finalize it.
+              </p>
               {haiFundingSuccess && <p className="convert-message">{haiFundingSuccess}</p>}
               {haiFundingError && <p className="convert-error">{haiFundingError}</p>}
             </div>
