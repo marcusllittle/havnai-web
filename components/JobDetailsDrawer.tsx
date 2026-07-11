@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   JobDetailResponse,
+  ExecutionTimeline,
+  ProofReceipt,
+  ProofReceiptVerification,
+  LocalReceiptVerification,
+  ReceiptInclusionProof,
   JobLoraEntry,
   ResultResponse,
   createGalleryListing,
@@ -8,6 +13,12 @@ import {
   resolveAssetUrl,
   cancelJob,
   getJobStuckWarning,
+  fetchJobTimeline,
+  fetchProofReceipt,
+  verifyProofReceipt,
+  verifyProofReceiptLocally,
+  fetchReceiptInclusionProof,
+  verifyReceiptInclusionProofLocally,
   isUsableWallet,
 } from "../lib/havnai";
 import { downloadAsset } from "../lib/download";
@@ -126,6 +137,13 @@ function formatIso(value?: string | null): string | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date.toLocaleString();
 }
 
+function formatDurationMs(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return "--";
+  if (value < 1000) return `${Math.round(value)}ms`;
+  if (value < 60000) return `${(value / 1000).toFixed(1)}s`;
+  return `${Math.floor(value / 60000)}m ${Math.round((value % 60000) / 1000)}s`;
+}
+
 function resolveCreatedAtIso(
   timestamp?: number | null,
   submittedAt?: string | null
@@ -175,6 +193,12 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
   const [listingProgress, setListingProgress] = useState<string | undefined>();
   const [listingError, setListingError] = useState<string | undefined>();
   const [listingSuccess, setListingSuccess] = useState<string | undefined>();
+  const [executionTimeline, setExecutionTimeline] = useState<ExecutionTimeline | null>(null);
+  const [proofReceipt, setProofReceipt] = useState<ProofReceipt | null>(null);
+  const [receiptVerification, setReceiptVerification] = useState<ProofReceiptVerification | null>(null);
+  const [localReceiptVerification, setLocalReceiptVerification] = useState<LocalReceiptVerification | null>(null);
+  const [inclusionProof, setInclusionProof] = useState<ReceiptInclusionProof | null>(null);
+  const [localInclusionValid, setLocalInclusionValid] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!resolvedId || !open) {
@@ -202,6 +226,56 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     setListingSuccess(undefined);
     setListingOpen(false);
   }, [open, resolvedId]);
+
+  useEffect(() => {
+    let active = true;
+    if (!open || !resolvedId) {
+      setExecutionTimeline(null);
+      return () => { active = false; };
+    }
+    void fetchJobTimeline(resolvedId)
+      .then((timeline) => {
+        if (active) setExecutionTimeline(timeline);
+      })
+      .catch(() => {
+        if (active) setExecutionTimeline(null);
+      });
+    return () => { active = false; };
+  }, [open, resolvedId, statusValue]);
+
+  useEffect(() => {
+    let active = true;
+    if (!open || !resolvedId || job?.proof_receipt?.available === false) {
+      setProofReceipt(null);
+      setReceiptVerification(null);
+      setLocalReceiptVerification(null);
+      setInclusionProof(null);
+      setLocalInclusionValid(null);
+      return () => { active = false; };
+    }
+    void Promise.all([fetchProofReceipt(resolvedId), verifyProofReceipt(resolvedId)])
+      .then(async ([receipt, verification]) => {
+        if (!active) return;
+        const localVerification = await verifyProofReceiptLocally(receipt);
+        if (!active) return;
+        setProofReceipt(receipt);
+        setReceiptVerification(verification);
+        setLocalReceiptVerification(localVerification);
+        const proof = await fetchReceiptInclusionProof(resolvedId).catch(() => null);
+        if (!active) return;
+        setInclusionProof(proof);
+        setLocalInclusionValid(proof ? await verifyReceiptInclusionProofLocally(proof) : null);
+      })
+      .catch(() => {
+        if (!active) return;
+        setProofReceipt(null);
+        setReceiptVerification(null);
+        setLocalReceiptVerification(null);
+        setInclusionProof(null);
+        setLocalInclusionValid(null);
+      });
+    return () => { active = false; };
+  }, [open, resolvedId, job?.proof_receipt?.available]);
 
   const createdAt =
     formatUnixSeconds(job?.timestamp) ||
@@ -497,6 +571,107 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
               );
             })()}
           </section>
+
+          {executionTimeline && executionTimeline.events.length > 0 && (
+            <section className="job-section">
+              <h4>Network execution</h4>
+              <p className="job-hint">
+                {executionTimeline.event_count} recorded events · {formatDurationMs(executionTimeline.total_elapsed_ms)} total
+              </p>
+              <div className="job-details-stack">
+                {executionTimeline.events.map((event) => (
+                  <div key={event.id} className="node-detail-row">
+                    <span>
+                      {event.sequence}. {event.stage.replaceAll("_", " ")}
+                      {event.node_id ? ` · ${event.node_id}` : ""}
+                    </span>
+                    <span title={event.message || event.status}>
+                      +{formatDurationMs(event.stage_latency_ms)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {proofReceipt && receiptVerification && (
+            <section className="job-section">
+              <h4>Proof of Creation</h4>
+              <div className="job-details-grid">
+                <div>
+                  <span className="job-label">Integrity</span>
+                  <span style={{ color: receiptVerification.integrity_valid ? "#8ff0b6" : "#ff8f8f" }}>
+                    {receiptVerification.integrity_valid ? "Verified" : "Invalid"}
+                  </span>
+                </div>
+                <div>
+                  <span className="job-label">Authenticity</span>
+                  <span>{receiptVerification.authenticity}</span>
+                </div>
+                <div>
+                  <span className="job-label">Browser verification</span>
+                  <span style={{ color: localReceiptVerification?.valid ? "#8ff0b6" : undefined }}>
+                    {localReceiptVerification?.valid
+                      ? "Locally verified"
+                      : localReceiptVerification?.supported === false
+                      ? "Not supported"
+                      : "Not verified"}
+                  </span>
+                </div>
+                <div>
+                  <span className="job-label">Artifact</span>
+                  <span>{receiptVerification.artifact_valid ? "SHA-256 verified" : "Mismatch"}</span>
+                </div>
+                <div>
+                  <span className="job-label">Schema</span>
+                  <span>{proofReceipt.schema_version}</span>
+                </div>
+                <div>
+                  <span className="job-label">Signing key</span>
+                  <span>{proofReceipt.key_id || proofReceipt.signature_algorithm}</span>
+                </div>
+                <div>
+                  <span className="job-label">Merkle inclusion</span>
+                  <span style={{ color: localInclusionValid ? "#8ff0b6" : undefined }}>
+                    {inclusionProof
+                      ? localInclusionValid
+                        ? `Verified · batch ${inclusionProof.batch_id}`
+                        : "Invalid proof"
+                      : "Awaiting batch"}
+                  </span>
+                </div>
+                {inclusionProof && (
+                  <div>
+                    <span className="job-label">Anchor status</span>
+                    <span>{inclusionProof.status}</span>
+                  </div>
+                )}
+              </div>
+              <div className="job-details-stack" style={{ marginTop: "0.75rem" }}>
+                <div>
+                  <span className="job-label">receipt_hash</span>
+                  <code style={{ overflowWrap: "anywhere" }}>{proofReceipt.receipt_hash}</code>
+                </div>
+                <div>
+                  <span className="job-label">artifact_sha256</span>
+                  <code style={{ overflowWrap: "anywhere" }}>{proofReceipt.artifact_sha256 || "--"}</code>
+                </div>
+                {inclusionProof && (
+                  <div>
+                    <span className="job-label">merkle_root</span>
+                    <code style={{ overflowWrap: "anywhere" }}>{inclusionProof.merkle_root}</code>
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                className="job-inline-button"
+                onClick={() => handleCopy(JSON.stringify(proofReceipt, null, 2))}
+              >
+                Copy receipt
+              </button>
+            </section>
+          )}
 
           <section className="job-section">
             <h4>Result</h4>
