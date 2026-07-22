@@ -6,3 +6,17 @@ node_modules/
 # Build output
 tsconfig.tsbuildinfo
 .next/
+
+# Python
+api/venv/
+__pycache__/
+*.pyc
+.env
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.aab
