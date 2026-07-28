@@ -1,5 +1,5 @@
 const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_HAVNAI_API_BASE || "http://api.joinhavn.io:5001")
+  (process.env.HAVNAI_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_HAVNAI_API_BASE || "https://api.joinhavn.io")
     .replace(/\/$/, "");
 
 const isDev = process.env.NODE_ENV !== "production";
@@ -15,7 +15,7 @@ const cspReportOnly = [
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https:",
   "media-src 'self' data: blob: https:",
-  "connect-src 'self' http://api.joinhavn.io:5001 https://api.joinhavn.io:5001 https://metamask-sdk.api.cx.metamask.io wss://metamask-sdk.api.cx.metamask.io https://mm-sdk-analytics.api.cx.metamask.io https://va.vercel-scripts.com",
+  "connect-src 'self' https://api.joinhavn.io https://metamask-sdk.api.cx.metamask.io wss://metamask-sdk.api.cx.metamask.io https://mm-sdk-analytics.api.cx.metamask.io https://va.vercel-scripts.com",
   "worker-src 'self' blob:",
 ].join("; ");
 
@@ -63,12 +63,16 @@ const nextConfig = {
     ];
   },
   async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${API_BASE}/:path*`,
-      },
-    ];
+    return {
+      beforeFiles: [],
+      afterFiles: [],
+      fallback: [
+        {
+          source: "/api/:path*",
+          destination: `${API_BASE}/:path*`,
+        },
+      ],
+    };
   },
   async headers() {
     return [

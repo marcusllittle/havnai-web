@@ -7,6 +7,7 @@ interface OutputCardProps {
   runtimeSeconds?: number | null;
   jobId?: string;
   onUseLastFrame?: (dataUrl: string) => void;
+  onAnimateImage?: () => void;
 }
 
 /** Clean up model name for display */
@@ -31,6 +32,7 @@ export const OutputCard: React.FC<OutputCardProps> = ({
   runtimeSeconds,
   jobId,
   onUseLastFrame,
+  onAnimateImage,
 }) => {
   const [frameBusy, setFrameBusy] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
@@ -161,6 +163,15 @@ export const OutputCard: React.FC<OutputCardProps> = ({
               disabled={frameBusy}
             >
               {frameBusy ? "Capturing\u2026" : "\u21BB Use last frame"}
+            </button>
+          ) : null}
+          {imageUrl && onAnimateImage ? (
+            <button
+              type="button"
+              onClick={onAnimateImage}
+              className="generator-download"
+            >
+              Animate image
             </button>
           ) : null}
         </div>

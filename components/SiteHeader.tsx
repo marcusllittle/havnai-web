@@ -13,6 +13,7 @@ interface NavItem {
 const PRIMARY_NAV: NavItem[] = [
   { href: "/astra", label: "Astra", accent: true },
   { href: "/create", label: "Create" },
+  { href: "/video-studio", label: "Video" },
   { href: "/library", label: "Collection" },
   { href: "/marketplace", label: "Marketplace" },
   { href: "/nodes", label: "Network" },
