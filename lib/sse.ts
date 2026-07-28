@@ -32,13 +32,15 @@ export type SSEEvent = SSEJobEvent | SSENodeEvent;
 
 type SSECallback = (event: SSEEvent) => void;
 
-function normalizeLifecycleStatus(raw: unknown): JobLifecycleStatus | null {
+export function normalizeLifecycleStatus(raw: unknown): JobLifecycleStatus | null {
   const value = String(raw || "").trim().toUpperCase();
-  if (value === "QUEUED") return "QUEUED";
-  if (value === "RUNNING") return "RUNNING";
+  if (value === "QUEUED" || value === "PENDING") return "QUEUED";
+  if (value === "RUNNING" || value === "LEASED" || value === "UPLOADING" || value === "CANCELLING") {
+    return "RUNNING";
+  }
   if (value === "SUCCEEDED" || value === "SUCCESS" || value === "COMPLETED") return "SUCCEEDED";
   if (value === "CANCELLED" || value === "CANCELED") return "CANCELLED";
-  if (value === "FAILED") return "FAILED";
+  if (value === "FAILED" || value === "EXPIRED") return "FAILED";
   return null;
 }
 

@@ -30,7 +30,7 @@ import {
 } from "../lib/havnai";
 import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
 import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
-import { getJobSSE, SSEEvent } from "../lib/sse";
+import { getJobSSE, normalizeLifecycleStatus, SSEEvent } from "../lib/sse";
 import { getApiBase } from "../lib/apiBase";
 import { getConnectButtonLabel } from "../lib/wallet";
 import { buildModelOptionLabel } from "../lib/modelMetadata";
@@ -170,6 +170,23 @@ const formatImageDefaultsSummary = (defaults?: RuntimeDefaults | null): string =
 const formatResolutionLabel = (width?: number, height?: number): string => {
   if (width == null || height == null) return "";
   return `${width}x${height}`;
+};
+
+const fetchCompletedResult = async (jobId: string): Promise<ResultResponse> => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      const result = await fetchResult(jobId);
+      if (result.image_url || result.video_url) return result;
+      lastError = new Error("Completed job has no output yet");
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < 5) {
+      await new Promise((resolve) => setTimeout(resolve, 750));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Completed job output is unavailable");
 };
 
 const pickPreferredVideoModel = (models: { id: string; label: string }[]): string => {
@@ -1183,7 +1200,7 @@ const TestPage: React.FC = () => {
       runtime = Math.max(0, job.completed_at - job.timestamp);
     }
 
-    const result = await fetchResult(id);
+    const result = await fetchCompletedResult(id);
     const resolvedImage = result.image_url;
     const resolvedVideo = result.video_url;
     if (!resolvedImage && !resolvedVideo) {
@@ -1271,7 +1288,8 @@ const TestPage: React.FC = () => {
 
         try {
           const job = await fetchJob(id);
-          const status = (job.status || "").toUpperCase();
+          const rawStatus = String(job.status || "").trim().toUpperCase();
+          const status = normalizeLifecycleStatus(rawStatus);
 
           if (status === "QUEUED") {
             const elapsed = (Date.now() - start) / 1000;
@@ -1292,13 +1310,13 @@ const TestPage: React.FC = () => {
             } else {
               setStatusMessage("Rendering on a HavnAI node...");
             }
-          } else if (status === "SUCCESS" || status === "COMPLETED") {
+          } else if (status === "SUCCEEDED") {
             setStatusMessage("Finalizing your output...");
             return "completed";
           } else if (status === "FAILED" || status === "CANCELLED") {
             return "failed";
           } else {
-            setStatusMessage(`Status: ${status || "Unknown"}`);
+            setStatusMessage(`Status: ${rawStatus || "Unknown"}`);
           }
         } catch (err: any) {
           setStatusMessage(err?.message || "Error while polling job.");
