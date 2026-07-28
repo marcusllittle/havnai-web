@@ -27,6 +27,7 @@ import {
   SubmitJobOptions,
   QuotaStatus,
   CreditBalance,
+  VideoJobRequest,
 } from "../lib/havnai";
 import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
 import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
@@ -39,6 +40,12 @@ import {
   loadActiveCreateJob,
   saveActiveCreateJob,
 } from "../lib/activeCreateJob";
+import {
+  ActiveVideoChain,
+  clearActiveVideoChain,
+  loadActiveVideoChain,
+  saveActiveVideoChain,
+} from "../lib/activeVideoChain";
 import {
   getWalletIdentityLabel,
   getWalletSourceLabel,
@@ -944,35 +951,84 @@ const TestPage: React.FC = () => {
     return request as import("../lib/havnai").VideoJobRequest;
   };
 
-  const runVideoChain = async (promptText: string, extraChunks: number) => {
-    const total = Math.max(1, 1 + extraChunks);
-    const jobIds: string[] = [];
+  const runVideoChain = async (
+    promptText: string,
+    extraChunks: number,
+    recovery?: ActiveVideoChain
+  ) => {
+    const total = recovery?.total ?? Math.max(2, Math.min(7, 1 + extraChunks));
+    const jobIds = [...(recovery?.completedJobIds || [])];
+    const shouldStitch = recovery?.autoStitch ?? autoStitch;
+    const startedAt = recovery?.startedAt ?? Date.now();
+    let currentIndex = recovery?.currentIndex ?? 0;
+    let currentJobId = recovery?.currentJobId;
     setChainSummary(null);
-    let initImage = (videoInitData || videoInitUrl).trim();
-    for (let index = 0; index < total; index += 1) {
-      const request = buildVideoRequest(promptText, initImage || undefined);
-      const id = await submitVideoJob(request);
+    let initImage = recovery ? "" : (videoInitData || videoInitUrl).trim();
+    const initialRequest = recovery?.request ?? buildVideoRequest(promptText, undefined);
+    const { initImage: _ignoredInitImage, extendChunks: _ignoredExtendChunks, ...requestTemplate } =
+      initialRequest;
+
+    if (recovery && !currentJobId && currentIndex > 0 && jobIds.length > 0) {
+      const previousResult = await fetchResult(jobIds[jobIds.length - 1]);
+      if (!previousResult.video_url) {
+        throw new Error("The previous chain clip has no video output.");
+      }
+      initImage = await captureLastFrameFromVideoUrl(previousResult.video_url);
+    }
+
+    while (currentIndex < total) {
+      if (!currentJobId) {
+        const request: VideoJobRequest = {
+          ...requestTemplate,
+          prompt: promptText,
+          ...(initImage ? { initImage } : {}),
+        };
+        currentJobId = await submitVideoJob(request);
+        saveActiveVideoChain({
+          prompt: promptText,
+          total,
+          currentIndex,
+          currentJobId,
+          completedJobIds: jobIds,
+          autoStitch: shouldStitch,
+          request: requestTemplate as VideoJobRequest,
+          startedAt,
+        });
+      }
+
+      const id = currentJobId;
       setJobId(id);
       saveActiveCreateJob({ id, prompt: promptText, mode: "video", startedAt: Date.now() });
-      setStatusMessage(`Waiting for available GPU capacity... (${index + 1}/${total})`);
+      setStatusMessage(`Waiting for available GPU capacity... (${currentIndex + 1}/${total})`);
       const result = await pollJob(id, promptText, 2400);
       if (!result || !result.videoUrl) {
         setStatusMessage("Clip generation stopped before a video output was returned.");
         return;
       }
-      jobIds.push(id);
+      if (!jobIds.includes(id)) jobIds.push(id);
       try {
         initImage = await captureLastFrameFromVideoUrl(result.videoUrl);
         setVideoInitData(initImage);
-        setVideoInitName(`clip-${index + 1}-lastframe.png`);
+        setVideoInitName(`clip-${currentIndex + 1}-lastframe.png`);
         setVideoInitUrl("");
       } catch (err: any) {
         setStatusMessage(err?.message || "Failed to capture last frame.");
         return;
       }
+      currentIndex += 1;
+      currentJobId = undefined;
+      saveActiveVideoChain({
+        prompt: promptText,
+        total,
+        currentIndex,
+        completedJobIds: jobIds,
+        autoStitch: shouldStitch,
+        request: requestTemplate as VideoJobRequest,
+        startedAt,
+      });
     }
 
-    if (autoStitch && jobIds.length > 1) {
+    if (shouldStitch && jobIds.length > 1) {
       setStatusMessage("Merging clips...");
       try {
         const stitched = await stitchVideos(jobIds);
@@ -980,12 +1036,14 @@ const TestPage: React.FC = () => {
         setImageUrl(undefined);
         setStatusMessage("Merged video ready.");
         setChainSummary({ clips: jobIds.length, stitched: true });
+        clearActiveVideoChain();
       } catch (err: any) {
         setStatusMessage(err?.message || "Automatic clip merge failed.");
         setChainSummary({ clips: jobIds.length, stitched: false });
       }
     } else if (jobIds.length > 1) {
       setChainSummary({ clips: jobIds.length, stitched: false });
+      clearActiveVideoChain();
     }
   };
 
@@ -1102,6 +1160,7 @@ const TestPage: React.FC = () => {
     setModel(undefined);
     setJobId(undefined);
     clearActiveCreateJob();
+    clearActiveVideoChain();
     setPollTimedOut(false);
     setLastUsedPrompt(effectivePrompt || "Face swap");
 
@@ -1443,6 +1502,22 @@ const TestPage: React.FC = () => {
   useEffect(() => {
     if (activeRecoveryStartedRef.current) return;
     activeRecoveryStartedRef.current = true;
+    const activeChain = loadActiveVideoChain();
+    if (activeChain) {
+      setMode("video");
+      setPrompt(activeChain.prompt);
+      setLastUsedPrompt(activeChain.prompt);
+      setJobId(activeChain.currentJobId);
+      setStatusMessage(
+        `Restoring video chain... (${Math.min(activeChain.currentIndex + 1, activeChain.total)}/${activeChain.total})`
+      );
+      setPollTimedOut(false);
+      setLoading(true);
+      void runVideoChain(activeChain.prompt, activeChain.total - 1, activeChain).finally(() =>
+        setLoading(false)
+      );
+      return;
+    }
     const activeJob = loadActiveCreateJob();
     if (!activeJob) return;
 
