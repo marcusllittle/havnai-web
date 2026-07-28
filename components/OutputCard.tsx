@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 interface OutputCardProps {
   imageUrl?: string;
@@ -6,6 +6,9 @@ interface OutputCardProps {
   model?: string;
   runtimeSeconds?: number | null;
   jobId?: string;
+  pending?: boolean;
+  statusMessage?: string;
+  onRetry?: () => void;
   onUseLastFrame?: (dataUrl: string) => void;
   onAnimateImage?: () => void;
 }
@@ -31,18 +34,48 @@ export const OutputCard: React.FC<OutputCardProps> = ({
   model,
   runtimeSeconds,
   jobId,
+  pending = false,
+  statusMessage,
+  onRetry,
   onUseLastFrame,
   onAnimateImage,
 }) => {
   const [frameBusy, setFrameBusy] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
-  if (!imageUrl && !videoUrl) return null;
+  const [mediaFailed, setMediaFailed] = useState(false);
+  const [mediaRevision, setMediaRevision] = useState(0);
+
+  useEffect(() => {
+    setMediaFailed(false);
+    setMediaRevision(0);
+  }, [imageUrl, videoUrl]);
+
+  if (!imageUrl && !videoUrl) {
+    return (
+      <div className="generator-output-card generator-output-placeholder" aria-live="polite">
+        <div className="generator-output-placeholder-body">
+          {pending ? <span className="status-spinner" aria-hidden="true" /> : null}
+          <span>{statusMessage || (jobId ? "Output unavailable." : "No output yet.")}</span>
+          {jobId && !pending && onRetry ? (
+            <button type="button" className="generator-mini-button" onClick={onRetry}>
+              Check status
+            </button>
+          ) : null}
+        </div>
+        {jobId ? <span className="generator-output-placeholder-id">#{jobId.slice(0, 12)}</span> : null}
+      </div>
+    );
+  }
   const runtimeDisplay =
     typeof runtimeSeconds === "number"
       ? runtimeSeconds.toFixed(1)
       : undefined;
   const label = videoUrl ? "Video" : "Image";
   const downloadName = `havnai-${(jobId || "output").slice(0, 8)}.${videoUrl ? "mp4" : "png"}`;
+  const mediaUrl = videoUrl || imageUrl!;
+  const mediaSrc = mediaRevision
+    ? `${mediaUrl}${mediaUrl.includes("?") ? "&" : "?"}retry=${mediaRevision}`
+    : mediaUrl;
 
   const handleDownload = async () => {
     if (!videoUrl && !imageUrl) return;
@@ -118,17 +151,31 @@ export const OutputCard: React.FC<OutputCardProps> = ({
     }
   };
 
+  const handleMediaRetry = () => {
+    setMediaFailed(false);
+    setMediaRevision((current) => current + 1);
+    onRetry?.();
+  };
+
   return (
     <div className="generator-output-card">
-      {videoUrl ? (
+      {mediaFailed ? (
+        <div className="generator-output-placeholder-body generator-output-media-error" role="alert">
+          <span>Output could not be loaded.</span>
+          <button type="button" className="generator-mini-button" onClick={handleMediaRetry}>
+            Retry
+          </button>
+        </div>
+      ) : videoUrl ? (
         <video
           className="generator-output-media"
-          src={videoUrl}
+          src={mediaSrc}
           controls
           playsInline
+          onError={() => setMediaFailed(true)}
         />
       ) : (
-        <img src={imageUrl} alt={jobId || "Generated image"} />
+        <img src={mediaSrc} alt={jobId || "Generated image"} onError={() => setMediaFailed(true)} />
       )}
 
       <div className="generator-output-meta">

@@ -2602,6 +2602,36 @@ main,
   padding: 0.9rem 1rem 1rem;
 }
 
+.generator-output-placeholder {
+  min-height: clamp(300px, 45vw, 580px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.generator-output-placeholder-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.45;
+}
+
+.generator-output-placeholder-id {
+  color: rgba(255, 255, 255, 0.42);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+}
+
+.generator-output-media-error {
+  min-height: 300px;
+}
+
 .generator-output-card img {
   width: 100%;
   height: auto;
