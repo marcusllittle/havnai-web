@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /wallet
+Disallow: /library
+Disallow: /analytics
+Disallow: /templates
+
+Sitemap: https://joinhavn.io/sitemap.xml

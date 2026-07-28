@@ -1,5 +1,6 @@
 import type { AppProps } from "next/app";
 import React from "react";
+import { Analytics } from "@vercel/analytics/next";
 import { WalletProvider } from "../components/WalletProvider";
 import "../style.css";
 
@@ -76,6 +77,7 @@ export default function HavnAIApp({ Component, pageProps }: AppProps) {
     <ErrorBoundary>
       <WalletProvider>
         <Component {...pageProps} />
+        <Analytics />
       </WalletProvider>
     </ErrorBoundary>
   );

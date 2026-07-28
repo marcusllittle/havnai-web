@@ -1,6 +1,6 @@
 import type { NextPage } from "next";
-import Head from "next/head";
 import { useEffect, useState } from "react";
+import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import {
   fetchAnalyticsOverview,
@@ -42,7 +42,12 @@ const AnalyticsPage: NextPage = () => {
 
   return (
     <>
-      <Head><title>HavnAI Analytics</title></Head>
+      <SeoHead
+        title="Network analytics"
+        description="Inspect live Public Alpha job volume, credit activity, and reward tracking across the JoinHavn network."
+        path="/analytics"
+        noindex
+      />
       <SiteHeader />
 
       <main className="library-page">

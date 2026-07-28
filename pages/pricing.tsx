@@ -1,8 +1,8 @@
 import type { NextPage } from "next";
-import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CinematicPageHero } from "../components/CinematicPageHero";
+import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
 import {
@@ -492,13 +492,12 @@ const PricingPage: NextPage = () => {
 
   return (
     <>
-      <Head>
-        <title>Buy Credits — HavnAI Public Alpha</title>
-        <meta
-          name="description"
-          content="Purchase HavnAI Public Alpha credits to generate images and videos on the GPU grid."
-        />
-      </Head>
+      <SeoHead
+        title="Credits and pricing"
+        description="See how JoinHavn credits work for AI image and video generation, funding paths, and Public Alpha usage across the creation stack."
+        path="/pricing"
+        image="/astra/scenes/solar_rift_briefing.png"
+      />
 
       <SiteHeader />
 
@@ -530,7 +529,7 @@ const PricingPage: NextPage = () => {
           ]}
           actions={
             <>
-              <Link href="/generator" className="jh-btn jh-btn-primary">
+              <Link href="/create" className="jh-btn jh-btn-primary">
                 Start Creating
               </Link>
               <Link href="/marketplace" className="jh-btn jh-btn-secondary">
@@ -544,11 +543,25 @@ const PricingPage: NextPage = () => {
           <div className="section-header">
             <h2>Buy Credits</h2>
             <p>
-              Credits are the main usage currency across HavnAI {PUBLIC_ALPHA_LABEL}. Sepolia HAI
+              Credits are the main usage currency across JoinHavn {PUBLIC_ALPHA_LABEL}. Sepolia HAI
               funding is the primary live path today, while card checkout appears only on
               deployments where it has been enabled.
             </p>
           </div>
+          <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", marginTop: "1rem" }}>
+            <Link href="/ai-image-generator" className="jh-btn jh-btn-secondary">
+              AI Image Generator
+            </Link>
+            <Link href="/how-it-works" className="jh-btn jh-btn-secondary">
+              How It Works
+            </Link>
+            <Link href="/ownership" className="jh-btn jh-btn-tertiary">
+              Ownership Flow
+            </Link>
+          </div>
+        </section>
+
+        <section className="pricing-section">
 
           {balance && (
             <div className="pricing-balance">
@@ -831,7 +844,7 @@ const PricingPage: NextPage = () => {
 
       <footer className="site-footer">
         <div className="footer-inner">
-          <p className="footer-copy">&copy; 2025 HavnAI Network</p>
+          <p className="footer-copy">&copy; 2025 JoinHavn</p>
         </div>
       </footer>
     </>

@@ -1,7 +1,13 @@
 import type { NextPage } from "next";
-import Head from "next/head";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { SeoHead, buildWebsiteSchema } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
+import {
+  fetchAnalyticsOverview,
+  fetchGalleryBrowse,
+  AnalyticsOverview,
+} from "../lib/havnai";
 
 const pilots = [
   {
@@ -21,39 +27,88 @@ const pilots = [
   },
 ];
 
+const shipImages = [
+  "/astra/ships/astra_interceptor.png",
+  "/astra/ships/valkyrie_lancer.png",
+  "/astra/ships/seraph_guard.png",
+];
+
+const outfitImages = [
+  "/astra/outfits/aurora_borealis.png",
+  "/astra/outfits/cloud_walker.png",
+  "/astra/outfits/cosmic_surge.png",
+  "/astra/outfits/crimson_wing.png",
+  "/astra/outfits/desert_storm.png",
+  "/astra/outfits/emerald_gale.png",
+  "/astra/outfits/frost_nova.png",
+  "/astra/outfits/iron_hawk.png",
+  "/astra/outfits/lunar_eclipse.png",
+  "/astra/outfits/neon_vanguard.png",
+  "/astra/outfits/ocean_drift.png",
+  "/astra/outfits/shadow_pulse.png",
+  "/astra/outfits/solar_flare.png",
+  "/astra/outfits/standard_flight_suit.png",
+  "/astra/outfits/starfall_armor.png",
+  "/astra/outfits/thunder_strike.png",
+  "/astra/outfits/violet_tempest.png",
+  "/astra/outfits/void_reaper.png",
+];
+
+function assetLabelFromPath(src: string): string {
+  return src
+    .split("/")
+    .pop()
+    ?.replace(/\.[^.]+$/, "")
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Astra asset";
+}
+
+function getOutfitAlt(src: string): string {
+  return `Astra Valkyries outfit ${assetLabelFromPath(src)}`;
+}
+
+function getShipAlt(src: string): string {
+  return `Astra Valkyries ship ${assetLabelFromPath(src)}`;
+}
+
+function pickTwoDistinct<T>(pool: T[], fallbackA: T, fallbackB: T): [T, T] {
+  if (pool.length < 2) return [fallbackA, fallbackB];
+  const a = Math.floor(Math.random() * pool.length);
+  let b = Math.floor(Math.random() * pool.length);
+  if (b === a) b = (a + 1) % pool.length;
+  return [pool[a], pool[b]];
+}
+
+function pickN<T>(pool: T[], n: number): T[] {
+  const copy = [...pool];
+  const out: T[] = [];
+  while (out.length < n && copy.length > 0) {
+    const idx = Math.floor(Math.random() * copy.length);
+    out.push(copy.splice(idx, 1)[0]);
+  }
+  // If pool is smaller than n, repeat from original to fill
+  while (out.length < n && pool.length > 0) {
+    out.push(pool[out.length % pool.length]);
+  }
+  return out;
+}
+
 const showcaseItems = [
   {
     label: "Shmup Combat",
     desc: "Arcade shooter action with bosses, combos, and scoring.",
-    img: "/astra/scenes/solar_rift_briefing.png",
+    img: "/astra/scenes/shmup_combat.png",
   },
   {
     label: "Spaceport Hub",
     desc: "Your base of operations between missions.",
-    img: "/astra/scenes/nebula_runway_briefing.png",
-  },
-  {
-    label: "Ship Loadouts",
-    desc: "Three ships. Weapon kits. Stat synergies.",
-    img: "/astra/ships/astra_interceptor.png",
-    contain: true,
-  },
-  {
-    label: "20+ Outfits",
-    desc: "Cosmetic gear across four rarity tiers.",
-    img: "/astra/outfits/aurora_borealis.webp",
-    contain: true,
+    img: "/astra/scenes/spaceport_hub.png",
   },
   {
     label: "Missions & Zones",
     desc: "Three zones. Twelve missions. Three bosses.",
     img: "/astra/scenes/abyss_crown_briefing.png",
-  },
-  {
-    label: "Collection",
-    desc: "Everything you earn, you keep.",
-    img: "/astra/outfits/void_reaper.webp",
-    contain: true,
   },
 ];
 
@@ -65,36 +120,61 @@ const pipelineSteps = [
   },
   {
     step: "Save",
-    desc: "Assets go to your Library",
+    desc: "Outputs go to your Library",
     icon: "\u2193",
   },
   {
-    step: "Claim",
-    desc: "Mint to establish ownership",
-    icon: "\u2b22",
-  },
-  {
-    step: "Own",
-    desc: "Stored in your Collection",
+    step: "Collect",
+    desc: "Claim and build your collection",
     icon: "\u25c7",
   },
   {
-    step: "Use",
-    desc: "Assets gain meaning in Astra",
+    step: "Trade",
+    desc: "List on the Marketplace",
     icon: "\u2192",
   },
 ];
 
 const HomePage: NextPage = () => {
+  const [networkStats, setNetworkStats] = useState<AnalyticsOverview | null>(null);
+  const [featuredImg, setFeaturedImg] = useState<string | null>(null);
+  // Rotate through Astra ships/outfits on each page load.
+  // Initialized to index 0 so SSR/CSR match, then randomized after mount.
+  const [shipImg, setShipImg] = useState<string>(shipImages[0]);
+  const [outfitImg, setOutfitImg] = useState<string>(outfitImages[0]);
+  const [collectionGrid, setCollectionGrid] = useState<string[]>(outfitImages);
+
+  useEffect(() => {
+    setShipImg(shipImages[Math.floor(Math.random() * shipImages.length)]);
+    const featuredOutfit =
+      outfitImages[Math.floor(Math.random() * outfitImages.length)];
+    setOutfitImg(featuredOutfit);
+    // Show all 18 outfits in a shuffled order so the mosaic feels alive.
+    setCollectionGrid(pickN(outfitImages, outfitImages.length));
+    fetchAnalyticsOverview()
+      .then(setNetworkStats)
+      .catch(() => {});
+    // Pull a batch of recent listings and pick one at random so the
+    // Create card showcases live renders without pinning to a single "newest".
+    fetchGalleryBrowse({ asset_type: "image", sort: "newest", limit: 24 })
+      .then((res) => {
+        const withImages = res.listings.filter((l) => !!l.image_url);
+        if (withImages.length === 0) return;
+        const pick = withImages[Math.floor(Math.random() * withImages.length)];
+        if (pick?.image_url) setFeaturedImg(pick.image_url);
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <>
-      <Head>
-        <title>JoinHavn | Enter the World</title>
-        <meta
-          name="description"
-          content="JoinHavn is a sci-fi ecosystem where you create with AI, own what you make, and use it in Astra Valkyries — a living world with combat, pilots, progression, and rewards."
-        />
-      </Head>
+      <SeoHead
+        title="Create AI assets, claim ownership, and use them in Astra"
+        description="JoinHavn connects AI creation, collection, marketplace flow, and Astra, a sci-fi world with combat, pilots, and progression."
+        path="/"
+        image="/astra/scenes/nebula_runway_briefing.png"
+        schema={buildWebsiteSchema()}
+      />
 
       <SiteHeader />
 
@@ -104,7 +184,7 @@ const HomePage: NextPage = () => {
           <div className="jh-hero-bg" aria-hidden="true">
             <img
               src="/astra/scenes/nebula_runway_briefing.png"
-              alt=""
+              alt="Astra Valkyries nebula runway briefing scene"
               className="jh-hero-bg-img"
             />
             <div className="jh-hero-bg-overlay" />
@@ -115,83 +195,64 @@ const HomePage: NextPage = () => {
               Enter the world.<br />Own what you create.
             </h1>
             <p className="jh-hero-subtitle">
-              Astra Valkyries is a living sci-fi world with combat, pilots, progression, and
-              rewards&mdash;powered by HavnAI, a creator-owned AI platform built on decentralized compute.
+              Astra Valkyries is a sci-fi world with combat, pilots, and progression.
+              Create with HavnAI. Collect what you make.
             </p>
             <div className="jh-hero-actions">
-              <a
-                href="https://play.joinhavn.io/"
-                className="jh-btn jh-btn-primary"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Enter Astra
-              </a>
-              <Link href="/generator" className="jh-btn jh-btn-secondary">
-                Start Creating
+              <Link href="/astra" className="jh-btn jh-btn-primary">
+                Explore Astra
               </Link>
-              <Link href="/join" className="jh-btn jh-btn-tertiary">
-                Run a Node
+              <Link href="/create" className="jh-btn jh-btn-secondary">
+                Open Generator
               </Link>
             </div>
           </div>
+        </section>
 
-          <div className="jh-hero-pilots">
-            {pilots.map((p) => (
-              <div key={p.name} className="jh-pilot-card">
-                <img src={p.img} alt={p.name} className="jh-pilot-img" />
-                <div className="jh-pilot-info">
-                  <strong>{p.name}</strong>
-                  <span>{p.role}</span>
-                </div>
+        {/* ── Entry Points ── */}
+        <section className="jh-entry">
+          <div className="jh-entry-grid">
+            <Link href="/astra" className="jh-entry-card">
+              <img
+                src="/astra/pilots/nova_starling.png"
+                alt="Play Astra"
+                className="jh-entry-img"
+              />
+              <div className="jh-entry-overlay">
+                <strong>Play</strong>
+                <span>Enter Astra Valkyries</span>
               </div>
-            ))}
+            </Link>
+            <Link href="/create" className="jh-entry-card">
+              <img
+                src={featuredImg || "/astra/scenes/abyss_crown_briefing.png"}
+                alt="Create"
+                className="jh-entry-img"
+              />
+              <div className="jh-entry-overlay">
+                <strong>Create</strong>
+                <span>Generate images and video</span>
+              </div>
+            </Link>
+            <Link href="/run-a-node" className="jh-entry-card">
+              <img
+                src="/astra/scenes/solar_rift_briefing.png"
+                alt="Operate"
+                className="jh-entry-img"
+              />
+              <div className="jh-entry-overlay">
+                <strong>Operate</strong>
+                <span>Power the Network</span>
+              </div>
+            </Link>
           </div>
         </section>
 
-        {/* ── Astra Showcase ── */}
-        <section className="jh-showcase">
-          <div className="jh-showcase-header">
-            <span className="jh-eyebrow">Astra Valkyries</span>
-            <h2>A real world. Already built.</h2>
-            <p>
-              Combat. Pilots. Loadouts. Missions. Progression. Collection. Leaderboards.
-            </p>
-          </div>
-          <div className="jh-showcase-grid">
-            {showcaseItems.map((item) => (
-              <article key={item.label} className="jh-showcase-card">
-                <div className="jh-showcase-img-wrap">
-                  <img
-                    src={item.img}
-                    alt={item.label}
-                    className={`jh-showcase-img${item.contain ? " contain" : ""}`}
-                  />
-                </div>
-                <div className="jh-showcase-card-body">
-                  <strong>{item.label}</strong>
-                  <span>{item.desc}</span>
-                </div>
-              </article>
-            ))}
-          </div>
-          <div className="jh-showcase-cta">
-            <a
-              href="https://play.joinhavn.io/"
-              className="jh-btn jh-btn-primary"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Play Now
-            </a>
-          </div>
-        </section>
-
-        {/* ── HavnAI Pipeline ── */}
+        {/* ── How It Works ── */}
         <section className="jh-pipeline">
           <div className="jh-pipeline-header">
-            <span className="jh-eyebrow">HavnAI Engine</span>
-            <h2>Create with AI. Claim what&rsquo;s yours. Use it in the world.</h2>
+            <span className="jh-eyebrow">How It Works</span>
+            <h2>Create with AI. Collect what you make. Trade on the Marketplace.</h2>
           </div>
           <div className="jh-pipeline-flow">
             {pipelineSteps.map((s, i) => (
@@ -205,9 +266,15 @@ const HomePage: NextPage = () => {
               </div>
             ))}
           </div>
-          <div className="jh-pipeline-cta">
-            <Link href="/generator" className="jh-btn jh-btn-secondary">
-              Start Creating
+          <div className="jh-pipeline-cta" style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", justifyContent: "center" }}>
+            <Link href="/how-it-works" className="jh-btn jh-btn-primary">
+              How It Works
+            </Link>
+            <Link href="/ai-image-generator" className="jh-btn jh-btn-secondary">
+              AI Image Generator
+            </Link>
+            <Link href="/ai-video-generator" className="jh-btn jh-btn-tertiary">
+              AI Video Generator
             </Link>
           </div>
         </section>
@@ -216,63 +283,211 @@ const HomePage: NextPage = () => {
         <section className="jh-network">
           <div className="jh-network-inner">
             <div className="jh-network-copy">
-              <span className="jh-eyebrow">Decentralized Compute</span>
+              <span className="jh-eyebrow">The Network</span>
               <h2>Run a node. Power the engine.</h2>
               <p>
                 JoinHavn runs on a decentralized compute network. Contribute your GPU, serve
                 live AI jobs, and earn rewards for powering the system.
               </p>
-              <Link href="/join" className="jh-btn jh-btn-tertiary">
-                Become an Operator
-              </Link>
+              {networkStats && (
+                <div className="jh-network-stats">
+                  <span className="jh-network-stat">
+                    <strong>{networkStats.online_nodes ?? networkStats.active_nodes}</strong> nodes online
+                  </span>
+                  <span className="jh-network-stat">
+                    <strong>{networkStats.total_jobs.toLocaleString()}</strong> jobs served
+                  </span>
+                  <span className="jh-network-stat">
+                    <strong>{Number(networkStats.success_rate || 0).toFixed(0)}%</strong> success rate
+                  </span>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap" }}>
+                <Link href="/run-a-node" className="jh-btn jh-btn-tertiary">
+                  Become an Operator
+                </Link>
+                <Link href="/pricing" className="jh-btn jh-btn-secondary">
+                  Credits & Pricing
+                </Link>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* ── Entry Points ── */}
-        <section className="jh-entry">
-          <div className="jh-entry-grid">
+        {/* ── Astra Showcase ── */}
+        <section className="jh-showcase">
+          <div className="jh-showcase-header">
+            <span className="jh-eyebrow">Astra Valkyries</span>
+            <h2>A real world. Already built.</h2>
+            <p>
+              Combat. Pilots. Loadouts. Missions. Progression. Collection. Leaderboards.
+            </p>
+            <div className="jh-pipeline-cta">
+              <Link href="/astra" className="jh-btn jh-btn-secondary">
+                See Astra
+              </Link>
+            </div>
+          </div>
+          <div className="jh-showcase-grid">
+            {showcaseItems.slice(0, 2).map((item) => (
+              <article key={item.label} className="jh-showcase-card">
+                <div className="jh-showcase-img-wrap">
+                  <img
+                    src={item.img}
+                    alt={item.label}
+                    className="jh-showcase-img"
+                  />
+                </div>
+                <div className="jh-showcase-card-body">
+                  <strong>{item.label}</strong>
+                  <span>{item.desc}</span>
+                </div>
+              </article>
+            ))}
+            <article className="jh-showcase-card">
+              <div className="jh-showcase-img-wrap">
+                <img
+                  src={shipImg}
+                  alt={getShipAlt(shipImg)}
+                  className="jh-showcase-img contain"
+                />
+              </div>
+              <div className="jh-showcase-card-body">
+                <strong>Ship Loadouts</strong>
+                <span>Three ships. Weapon kits. Stat synergies.</span>
+              </div>
+            </article>
+            <article className="jh-showcase-card">
+              <div className="jh-showcase-img-wrap">
+                <img
+                  src={outfitImg}
+                  alt={getOutfitAlt(outfitImg)}
+                  className="jh-showcase-img contain"
+                />
+              </div>
+              <div className="jh-showcase-card-body">
+                <strong>20+ Outfits</strong>
+                <span>Cosmetic gear across four rarity tiers.</span>
+              </div>
+            </article>
+            {showcaseItems.slice(2).map((item) => (
+              <article key={item.label} className="jh-showcase-card">
+                <div className="jh-showcase-img-wrap">
+                  <img
+                    src={item.img}
+                    alt={item.label}
+                    className="jh-showcase-img"
+                  />
+                </div>
+                <div className="jh-showcase-card-body">
+                  <strong>{item.label}</strong>
+                  <span>{item.desc}</span>
+                </div>
+              </article>
+            ))}
+            <article className="jh-showcase-card">
+              <div className="jh-showcase-img-wrap jh-collection-mosaic">
+                {collectionGrid.map((src, i) => (
+                  <img
+                    key={`${src}-${i}`}
+                    src={src}
+                    alt={getOutfitAlt(src)}
+                    className="jh-collection-tile"
+                  />
+                ))}
+              </div>
+              <div className="jh-showcase-card-body">
+                <strong>Collection</strong>
+                <span>Track what you've created and collected.</span>
+              </div>
+            </article>
+          </div>
+          <div className="jh-showcase-cta" style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", justifyContent: "center" }}>
             <a
-              href="https://play.joinhavn.io/"
-              className="jh-entry-card"
+              href="https://astra.joinhavn.io/"
+              className="jh-btn jh-btn-primary"
               target="_blank"
               rel="noreferrer"
             >
-              <img
-                src="/astra/pilots/nova_starling.png"
-                alt="Play Astra"
-                className="jh-entry-img"
-              />
-              <div className="jh-entry-overlay">
-                <strong>Play</strong>
-                <span>Enter Astra Valkyries</span>
-              </div>
+              Play Now
             </a>
-            <Link href="/generator" className="jh-entry-card">
-              <img
-                src="/astra/scenes/abyss_crown_briefing.png"
-                alt="Create"
-                className="jh-entry-img"
-              />
-              <div className="jh-entry-overlay">
-                <strong>Create</strong>
-                <span>Generate with HavnAI</span>
-              </div>
-            </Link>
-            <Link href="/join" className="jh-entry-card">
-              <img
-                src="/astra/ships/valkyrie_lancer.png"
-                alt="Build"
-                className="jh-entry-img"
-              />
-              <div className="jh-entry-overlay">
-                <strong>Build</strong>
-                <span>Run a Node</span>
-              </div>
+            <Link href="/ownership" className="jh-btn jh-btn-secondary">
+              Ownership Flow
             </Link>
           </div>
         </section>
+
+        {/* ── Characters ── */}
+        <section className="jh-characters">
+          <div className="jh-hero-pilots">
+            {pilots.map((p) => (
+              <div key={p.name} className="jh-pilot-card">
+                <img src={p.img} alt={p.name} className="jh-pilot-img" />
+                <div className="jh-pilot-info">
+                  <strong>{p.name}</strong>
+                  <span>{p.role}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
+
+      <footer className="site-footer">
+        <div className="footer-inner footer-layout">
+          <div className="footer-col footer-col-left">
+            <div className="footer-brand">
+              <img src="/HavnAI-logo.png" alt="JoinHavn" className="footer-logo" />
+              <div>
+                <div className="footer-brand-name">JoinHavn</div>
+                <p className="footer-tagline">Decentralized GPU network for AI creators.</p>
+              </div>
+            </div>
+            <p className="footer-copy">&copy; 2025 JoinHavn</p>
+          </div>
+
+          <div className="footer-col footer-col-center">
+            <h4>Explore</h4>
+            <ul>
+              <li><Link href="/astra">Astra</Link></li>
+              <li><Link href="/how-it-works">How It Works</Link></li>
+              <li><Link href="/ai-image-generator">AI Image Generator</Link></li>
+              <li><Link href="/ai-video-generator">AI Video Generator</Link></li>
+              <li><Link href="/ownership">Ownership</Link></li>
+              <li><Link href="/marketplace">Marketplace</Link></li>
+              <li><Link href="/run-a-node">Run a Node</Link></li>
+              <li><Link href="/pricing">Pricing</Link></li>
+            </ul>
+          </div>
+
+          <div className="footer-col">
+            <h4>Follow</h4>
+            <ul>
+              <li>
+                <a href="https://x.com/joinHAVNAI" target="_blank" rel="noreferrer">
+                  Twitter / X
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://www.patreon.com/cw/u38989793"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Patreon
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div className="footer-col footer-col-right">
+            <h4>Contact</h4>
+            <a className="footer-email" href="mailto:team@joinhavn.io">
+              team@joinhavn.io
+            </a>
+          </div>
+        </div>
+      </footer>
     </>
   );
 };

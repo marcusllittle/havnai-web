@@ -1,10 +1,20 @@
 import type { NextPage } from "next";
-import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { CinematicPageHero } from "../components/CinematicPageHero";
-import { fetchNodes, fetchOperatorWorkers, fetchLeaderboard, NodeInfo, LeaderboardEntry } from "../lib/havnai";
-import { getNodeSSE, SSEEvent } from "../lib/sse";
+import { SeoHead } from "../components/SeoHead";
+import {
+  fetchNodes,
+  fetchOperatorWorkers,
+  fetchLeaderboard,
+  fetchNetworkSummary,
+  fetchNetworkControlPlane,
+  NodeInfo,
+  LeaderboardEntry,
+  NetworkSummary,
+  NetworkControlPlane,
+} from "../lib/havnai";
+import { getJobSSE, getNodeSSE, SSEEvent } from "../lib/sse";
 import { SiteHeader } from "../components/SiteHeader";
 
 type ViewMode = "grid" | "leaderboard";
@@ -12,6 +22,8 @@ type ViewMode = "grid" | "leaderboard";
 const NodesPage: NextPage = () => {
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [network, setNetwork] = useState<NetworkSummary | null>(null);
+  const [controlPlane, setControlPlane] = useState<NetworkControlPlane | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<ViewMode>("grid");
   const [search, setSearch] = useState("");
@@ -20,7 +32,11 @@ const NodesPage: NextPage = () => {
     let active = true;
     setLoading(true);
     void (async () => {
-      const lb = await fetchLeaderboard().catch(() => []);
+      const [lb, networkSummary, control] = await Promise.all([
+        fetchLeaderboard().catch(() => []),
+        fetchNetworkSummary().catch(() => null),
+        fetchNetworkControlPlane().catch(() => null),
+      ]);
       let workers: NodeInfo[] = [];
       const operatorPayload = await fetchOperatorWorkers(300).catch(() => null);
       if (operatorPayload && Array.isArray(operatorPayload.workers) && operatorPayload.workers.length > 0) {
@@ -31,10 +47,31 @@ const NodesPage: NextPage = () => {
       if (!active) return;
       setNodes(workers);
       setLeaderboard(lb);
+      setNetwork(networkSummary);
+      setControlPlane(control);
       setLoading(false);
     })();
     return () => { active = false; };
   }, []);
+
+  const refreshControlPlane = useCallback(() => {
+    void fetchNetworkControlPlane().then(setControlPlane).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(refreshControlPlane, 15000);
+    return () => window.clearInterval(interval);
+  }, [refreshControlPlane]);
+
+  useEffect(() => {
+    const sse = getJobSSE();
+    sse.connect();
+    const unsubscribe = sse.subscribe(() => refreshControlPlane());
+    return () => {
+      unsubscribe();
+      sse.disconnect();
+    };
+  }, [refreshControlPlane]);
 
   // SSE for live node updates
   useEffect(() => {
@@ -86,16 +123,7 @@ const NodesPage: NextPage = () => {
     );
   }, [nodes, search]);
 
-  const onlineCount = useMemo(() => nodes.filter((n) => n.online).length, [nodes]);
-  const operatorCount = useMemo(() => {
-    const wallets = new Set(
-      nodes
-        .map((node) => (node.operator?.wallet || node.wallet || "").toLowerCase())
-        .filter(Boolean)
-    );
-    return wallets.size;
-  }, [nodes]);
-
+  const onlineCount = network?.nodes.online ?? nodes.filter((n) => n.online).length;
   const formatUptime = useCallback((lastSeen: string) => {
     const diff = Date.now() - new Date(lastSeen).getTime();
     if (diff < 60000) return "just now";
@@ -118,7 +146,12 @@ const NodesPage: NextPage = () => {
 
   return (
     <>
-      <Head><title>HavnAI Nodes</title></Head>
+      <SeoHead
+        title="GPU node network"
+        description="Track live operators, node uptime, and capacity across the JoinHavn GPU network."
+        path="/nodes"
+        image="/astra/scenes/spaceport_hub.png"
+      />
       <SiteHeader />
 
       <main className="library-page jh-page-shell">
@@ -132,9 +165,9 @@ const NodesPage: NextPage = () => {
           panelDescription="Use this view to monitor the machines powering image, face swap, and video jobs, then jump into onboarding when you are ready to add your own hardware."
           stats={[
             {
-              label: "Nodes",
-              value: nodes.length.toLocaleString(),
-              detail: "Machines currently tracked",
+              label: "Live Capacity",
+              value: `${((network?.capacity.total_vram_mb ?? 0) / 1024).toFixed(0)} GB`,
+              detail: "GPU VRAM reporting online",
             },
             {
               label: "Online",
@@ -142,14 +175,14 @@ const NodesPage: NextPage = () => {
               detail: "Reporting live heartbeats",
             },
             {
-              label: "Operators",
-              value: operatorCount.toLocaleString(),
-              detail: "Distinct wallets in view",
+              label: "Queue",
+              value: (network?.queue.queued ?? 0).toLocaleString(),
+              detail: `${network?.queue.running ?? 0} jobs currently running`,
             },
           ]}
           actions={
             <>
-              <Link href="/join" className="jh-btn jh-btn-primary">
+              <Link href="/run-a-node" className="jh-btn jh-btn-primary">
                 Run a Node
               </Link>
               <Link href="/analytics" className="jh-btn jh-btn-secondary">
@@ -160,13 +193,122 @@ const NodesPage: NextPage = () => {
         />
 
         <section className="page-container">
+          {controlPlane && (
+            <>
+              <div className="chart-section">
+                <div className="chart-header">
+                  <div>
+                    <p className="job-drawer-kicker" style={{ margin: 0 }}>Alpha Command Center</p>
+                    <h3 className="chart-title">Network control plane</h3>
+                  </div>
+                  <span className={`node-status ${controlPlane.health.status === "healthy" ? "online" : "offline"}`}>
+                    {controlPlane.health.status}
+                  </span>
+                </div>
+                {controlPlane.health.alerts.length === 0 ? (
+                  <p style={{ color: "#8ff0b6", marginBottom: 0 }}>All monitored network signals are within operating thresholds.</p>
+                ) : (
+                  <div className="job-details-stack" style={{ marginTop: "1rem" }}>
+                    {controlPlane.health.alerts.map((alert) => (
+                      <div key={alert.code} className="node-detail-row">
+                        <span style={{ color: alert.severity === "critical" ? "#ff8f8f" : "#ffcf70" }}>
+                          {alert.severity.toUpperCase()} · {alert.code.replaceAll("_", " ")}
+                        </span>
+                        <span>{alert.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-label">Ready Operators</div>
+                  <div className="stat-value">{controlPlane.nodes.ready}</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Busy Operators</div>
+                  <div className="stat-value">{controlPlane.nodes.busy}</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Oldest Queue Wait</div>
+                  <div className="stat-value">{controlPlane.queue.oldest_wait_seconds.toFixed(0)}s</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Queue P95 (24h)</div>
+                  <div className="stat-value">{controlPlane.latency_24h.queue_p95_seconds.toFixed(1)}s</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Runtime P95 (24h)</div>
+                  <div className="stat-value">{controlPlane.latency_24h.run_p95_seconds.toFixed(1)}s</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Claims at Risk</div>
+                  <div className="stat-value" style={{ color: controlPlane.claims.at_risk ? "#ffcf70" : "#8ff0b6" }}>
+                    {controlPlane.claims.at_risk}
+                  </div>
+                </div>
+              </div>
+
+              <div className="chart-section">
+                <div className="chart-header">
+                  <h3 className="chart-title">Active execution claims</h3>
+                  <span style={{ color: "var(--text-muted)" }}>{controlPlane.claims.active.length} running</span>
+                </div>
+                {controlPlane.claims.active.length > 0 ? (
+                  <div style={{ overflowX: "auto" }}>
+                    <table className="data-table">
+                      <thead>
+                        <tr><th>Job</th><th>Workload</th><th>Node</th><th>Lease</th><th>Score</th><th>Route</th></tr>
+                      </thead>
+                      <tbody>
+                        {controlPlane.claims.active.map((claim) => (
+                          <tr key={claim.job_id}>
+                            <td style={{ fontFamily: "monospace" }}>{claim.job_id.slice(0, 16)}</td>
+                            <td>{claim.task_type} · {claim.model}</td>
+                            <td>{claim.node_id}</td>
+                            <td style={{ color: claim.at_risk ? "#ffcf70" : undefined }}>{claim.lease_remaining_seconds.toFixed(0)}s</td>
+                            <td>{claim.dispatch_score?.toFixed(1) ?? "--"}</td>
+                            <td>{claim.dispatch_reason || "untracked"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p style={{ color: "var(--text-muted)", marginBottom: 0 }}>No jobs are currently executing.</p>
+                )}
+              </div>
+
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-label">Preferred Routes (24h)</div>
+                  <div className="stat-value">{controlPlane.scheduler_24h.preferred}</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Fallback Routes (24h)</div>
+                  <div className="stat-value">{controlPlane.scheduler_24h.fallback}</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Receipts Awaiting Batch</div>
+                  <div className="stat-value">{controlPlane.receipts.unbatched}</div>
+                </div>
+              </div>
+            </>
+          )}
+
           <div className="chart-section">
             <p style={{ margin: 0, color: "var(--text-muted)", lineHeight: 1.6 }}>
               Live node telemetry comes directly from the coordinator. Use this page to track current
               capacity, uptime, and operator visibility across the grid. Reward totals reflect Public
               Alpha tracking and may include Sepolia or testnet-era activity while settlement rails
-              continue to evolve. Want to appear here? <a href="/join" style={{ color: "var(--accent)" }}>Open the install guide</a>.
+              continue to evolve. Want to appear here? <a href="/run-a-node" style={{ color: "var(--accent)" }}>Open the install guide</a>.
             </p>
+            <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", marginTop: "1rem" }}>
+              <Link href="/how-it-works" className="jh-btn jh-btn-secondary">How It Works</Link>
+              <Link href="/pricing" className="jh-btn jh-btn-secondary">Credits & Pricing</Link>
+              <Link href="/ai-image-generator" className="jh-btn jh-btn-tertiary">AI Image Generator</Link>
+            </div>
           </div>
 
           {/* Stats bar */}
@@ -181,7 +323,32 @@ const NodesPage: NextPage = () => {
             </div>
             <div className="stat-card">
               <div className="stat-label">Offline</div>
-              <div className="stat-value" style={{ color: "#ffb3b3" }}>{nodes.length - onlineCount}</div>
+              <div className="stat-value" style={{ color: "#ffb3b3" }}>{network?.nodes.offline ?? nodes.length - onlineCount}</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Image Capacity</div>
+              <div className="stat-value">{network?.capacity.by_job_type.IMAGE_GEN ?? 0}</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Video Capacity</div>
+              <div className="stat-value">{(network?.capacity.by_job_type.VIDEO_GEN ?? 0) + (network?.capacity.by_job_type.LTX_VIDEO_GEN ?? 0)}</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Average GPU Load</div>
+              <div className="stat-value">{(network?.capacity.average_gpu_utilization ?? 0).toFixed(0)}%</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Recovered Jobs</div>
+              <div className="stat-value">{network?.recovery.jobs_retried ?? 0}</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Expired Claims</div>
+              <div
+                className="stat-value"
+                style={{ color: (network?.recovery.expired_claims ?? 0) > 0 ? "#ffcf70" : "#8ff0b6" }}
+              >
+                {network?.recovery.expired_claims ?? 0}
+              </div>
             </div>
           </div>
 
@@ -297,6 +464,10 @@ const NodesPage: NextPage = () => {
                         ? `${node.trust?.level || "new"}`
                         : `${node.trust.score.toFixed(1)} (${node.trust.level || "monitoring"})`}
                     </span>
+                  </div>
+                  <div className="node-detail-row">
+                    <span>Routing Score</span>
+                    <span>{node.scheduler?.score?.toFixed(1) ?? "--"}</span>
                   </div>
                   <div className="node-detail-row">
                     <span>Last Seen</span>
