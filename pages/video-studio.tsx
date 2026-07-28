@@ -5,6 +5,7 @@ import {
   cancelV1Job,
   createVideoJob,
   fetchV1Job,
+  fetchV1Jobs,
   fetchVideoCapabilities,
   mediaUrl,
   uploadStudioAsset,
@@ -18,6 +19,15 @@ import {
 
 const finalStates = new Set(["succeeded", "failed", "cancelled", "expired"]);
 const phases = ["queued", "loading", "encoding", "generation", "decoding", "finalizing", "uploading"];
+const activeJobStorageKey = "havnai_video_studio_job_id";
+
+function mergeJobs(jobs: V1Job[], next: V1Job): V1Job[] {
+  return [next, ...jobs.filter((item) => item.id !== next.id)]
+    .sort((left, right) =>
+      Number(right.updated_at || right.created_at || 0) - Number(left.updated_at || left.created_at || 0)
+    )
+    .slice(0, 10);
+}
 
 function normalizeStage(value?: string): string {
   const stage = String(value || "queued").toLowerCase();
@@ -43,6 +53,7 @@ export default function VideoStudioPage() {
   const [motion, setMotion] = useState(0.85);
   const [model, setModel] = useState("");
   const [job, setJob] = useState<V1Job | null>(null);
+  const [recentJobs, setRecentJobs] = useState<V1Job[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [studioKey, setStudioKey] = useState("");
@@ -65,13 +76,43 @@ export default function VideoStudioPage() {
     if (!job || finalStates.has(job.status)) return;
     pollRef.current = setTimeout(() => {
       fetchV1Job(job.id, studioKey)
-        .then(setJob)
+        .then((next) => {
+          setJob(next);
+          setRecentJobs((current) => mergeJobs(current, next));
+        })
         .catch((reason) => setError(reason.message));
     }, 1500);
     return () => {
       if (pollRef.current) clearTimeout(pollRef.current);
     };
-  }, [job]);
+  }, [job, studioKey]);
+
+  useEffect(() => {
+    if (!studioUnlocked || !studioKey) return;
+    const refresh = () => {
+      void fetchV1Jobs(studioKey).then((jobs) => {
+        setRecentJobs(jobs);
+        setJob((current) => {
+          const active = jobs.find((item) => !finalStates.has(item.status));
+          if (!current) return active || jobs[0] || null;
+          const updated = jobs.find((item) => item.id === current.id) || current;
+          return active && finalStates.has(updated.status) ? active : updated;
+        });
+      }).catch(() => undefined);
+    };
+    const interval = window.setInterval(refresh, 5000);
+    return () => window.clearInterval(interval);
+  }, [studioKey, studioUnlocked]);
+
+  useEffect(() => {
+    if (!job) return;
+    window.localStorage.setItem(activeJobStorageKey, job.id);
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("job") !== job.id) {
+      url.searchParams.set("job", job.id);
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+  }, [job?.id]);
 
   const videoModels = capabilities?.models.filter((item) =>
     item.available && item.capabilities?.includes("image_to_video")
@@ -79,6 +120,8 @@ export default function VideoStudioPage() {
   const output = mediaUrl(job?.artifacts.find((artifact) => artifact.kind === "video")?.url);
   const normalizedStage = normalizeStage(job?.stage);
   const stageIndex = Math.max(phases.indexOf(normalizedStage), 0);
+  const resolvedAspect = job?.resolved_spec?.aspect_ratio;
+  const frameAspect = resolvedAspect === "9:16" || resolvedAspect === "16:9" ? resolvedAspect : aspect;
 
   async function connectStudio(key: string) {
     const normalizedKey = key.trim();
@@ -86,8 +129,12 @@ export default function VideoStudioPage() {
     setCheckingAccess(true);
     setError("");
     try {
-      const value = await fetchVideoCapabilities(normalizedKey);
+      const [value, jobs] = await Promise.all([
+        fetchVideoCapabilities(normalizedKey),
+        fetchV1Jobs(normalizedKey),
+      ]);
       setCapabilities(value);
+      setRecentJobs(jobs);
       const available = value.models.find((item) =>
         item.available && item.capabilities?.includes("image_to_video")
       );
@@ -95,6 +142,17 @@ export default function VideoStudioPage() {
       setStudioKey(normalizedKey);
       setStudioUnlocked(true);
       window.sessionStorage.setItem("havnai_studio_key", normalizedKey);
+
+      const urlJobId = new URLSearchParams(window.location.search).get("job");
+      const savedJobId = window.localStorage.getItem(activeJobStorageKey);
+      const preferredJobId = urlJobId || savedJobId;
+      let selected = jobs.find((item) => item.id === preferredJobId);
+      if (!selected && preferredJobId) {
+        selected = await fetchV1Job(preferredJobId, normalizedKey).catch(() => undefined);
+        if (selected) setRecentJobs((current) => mergeJobs(current, selected));
+      }
+      const active = jobs.find((item) => !finalStates.has(item.status));
+      setJob(urlJobId ? selected || active || jobs[0] || null : active || selected || jobs[0] || null);
     } catch (reason) {
       window.sessionStorage.removeItem("havnai_studio_key");
       setStudioUnlocked(false);
@@ -115,6 +173,7 @@ export default function VideoStudioPage() {
     setStudioKey("");
     setCapabilities(null);
     setJob(null);
+    setRecentJobs([]);
     setError("");
   }
 
@@ -146,6 +205,7 @@ export default function VideoStudioPage() {
         motionStrength: motion,
       }, studioKey);
       setJob(created);
+      setRecentJobs((current) => mergeJobs(current, created));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Job submission failed");
     } finally {
@@ -158,7 +218,9 @@ export default function VideoStudioPage() {
     setBusy(true);
     try {
       await cancelV1Job(job.id, studioKey);
-      setJob(await fetchV1Job(job.id, studioKey));
+      const cancelled = await fetchV1Job(job.id, studioKey);
+      setJob(cancelled);
+      setRecentJobs((current) => mergeJobs(current, cancelled));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Cancellation failed");
     } finally {
@@ -258,12 +320,37 @@ export default function VideoStudioPage() {
           </form>
 
           <section className="video-output" aria-live="polite">
-            <div className={`video-frame aspect-${aspect.replace(":", "-")}`}>
+            <div className={`video-frame aspect-${frameAspect.replace(":", "-")}`}>
               {output ? <video src={output} controls playsInline /> : sourcePreview ? <img src={sourcePreview} alt="Video source" /> : <div className="video-empty">No active render</div>}
             </div>
-            <div className="video-progress-header"><strong>{job ? normalizedStage : "Ready"}</strong><span>{Math.round(job?.progress || 0)}%</span></div>
+            <div className="video-progress-header">
+              <div><strong>{job ? normalizedStage : "Ready"}</strong>{job && <code>{job.id}</code>}</div>
+              <span>{Math.round(job?.progress || 0)}%</span>
+            </div>
             <div className="video-progress"><span style={{ width: `${job?.progress || 0}%` }} /></div>
             <ol className="video-phases">{phases.map((phase, index) => <li key={phase} className={index <= stageIndex && job ? "active" : ""}>{phase}</li>)}</ol>
+            <section className="video-job-history" aria-label="Recent renders">
+              <div className="video-job-history-heading"><h2>Recent renders</h2><span>{recentJobs.length}</span></div>
+              {recentJobs.length ? (
+                <div className="video-job-list">
+                  {recentJobs.map((item) => {
+                    const itemStage = normalizeStage(item.stage);
+                    return (
+                      <button
+                        type="button"
+                        key={item.id}
+                        className={`video-job-row ${item.id === job?.id ? "is-active" : ""}`}
+                        onClick={() => setJob(item)}
+                        title={item.id}
+                      >
+                        <span className="video-job-id">{item.id}</span>
+                        <span className="video-job-meta"><span>{itemStage}</span><span>{Math.round(item.progress || 0)}%</span></span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : <p className="video-job-history-empty">No recent renders</p>}
+            </section>
             {job && <details className="video-spec"><summary>Resolved settings</summary><pre>{JSON.stringify(job.resolved_spec, null, 2)}</pre></details>}
           </section>
         </div>

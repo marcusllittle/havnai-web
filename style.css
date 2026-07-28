@@ -1585,10 +1585,33 @@ main,
 .video-progress-header {
   margin-top: 1rem;
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 1rem;
   color: #dce3e6;
   font-size: 0.8rem;
   text-transform: capitalize;
+}
+
+.video-progress-header > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.video-progress-header code {
+  overflow: hidden;
+  color: #738087;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.video-progress-header > span {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .video-progress {
@@ -1618,6 +1641,97 @@ main,
 
 .video-phases li.active {
   color: #70e1a1;
+}
+
+.video-job-history {
+  margin-top: 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.9rem;
+}
+
+.video-job-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.video-job-history-heading h2 {
+  margin: 0;
+  color: #dce3e6;
+  font-size: 0.82rem;
+  letter-spacing: 0;
+}
+
+.video-job-history-heading > span {
+  color: #738087;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.video-job-list {
+  margin-top: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.video-job-row {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.55rem 0.7rem;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0e1113;
+  color: #b7c2ca;
+  text-align: left;
+  cursor: pointer;
+}
+
+.video-job-row:last-child {
+  border-bottom: 0;
+}
+
+.video-job-row:hover {
+  background: #14191c;
+}
+
+.video-job-row.is-active {
+  box-shadow: inset 3px 0 #00bfd1;
+  background: #12191b;
+}
+
+.video-job-id {
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-job-meta {
+  min-width: 116px;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: #849198;
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  text-transform: capitalize;
+}
+
+.video-job-row.is-active .video-job-meta {
+  color: #70e1a1;
+}
+
+.video-job-history-empty {
+  margin: 0.6rem 0 0;
+  color: #68737a;
+  font-size: 0.76rem;
 }
 
 .video-spec {
