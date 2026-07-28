@@ -19,10 +19,14 @@ export interface V1Artifact {
 
 export interface V1Job {
   id: string;
+  type?: string;
   status: string;
   stage: string;
   progress: number;
   model: string;
+  created_at?: number | null;
+  updated_at?: number | null;
+  completed_at?: number | null;
   error_code?: string | null;
   resolved_spec: Record<string, unknown>;
   artifacts: V1Artifact[];
@@ -121,6 +125,15 @@ export async function fetchV1Job(jobId: string, accessKey: string): Promise<V1Jo
       cache: "no-store",
     })
   );
+}
+
+export async function fetchV1Jobs(accessKey: string): Promise<V1Job[]> {
+  const payload = await parseResponse<{ jobs?: V1Job[] }>(
+    await studioFetch("/api/owner/v1/jobs?type=image_to_video&limit=10", accessKey, {
+      cache: "no-store",
+    })
+  );
+  return payload.jobs || [];
 }
 
 export async function cancelV1Job(
