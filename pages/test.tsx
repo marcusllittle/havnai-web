@@ -100,7 +100,7 @@ type ModelListEntry = {
     video?: string;
     face_swap?: string;
   } | null;
-  // LTX-Video 2.3 model family fields
+  // Video runtime metadata reported by the coordinator.
   model_family?: string | null;
   model_version?: string | null;
   checkpoint_variant?: string | null;
@@ -111,7 +111,8 @@ type ModelListEntry = {
 type GeneratorMode = "image" | "face_swap" | "video";
 
 const pickPreferredVideoModel = (models: { id: string; label: string }[]): string => {
-  // Prefer LTX-Video 2.3 dev, then distilled, then AnimateDiff, then first available
+  const ltx23 = models.find((item) => item.id.toLowerCase() === "ltx23_wangp_distilled");
+  if (ltx23) return ltx23.id;
   const ltxDev = models.find((item) => item.id.toLowerCase() === "ltx_video_dev");
   if (ltxDev) return ltxDev.id;
   const ltxDistilled = models.find((item) => item.id.toLowerCase() === "ltx_video_distilled");
@@ -218,10 +219,6 @@ const TestPage: React.FC = () => {
   const [sfwMode, setSfwMode] = useState(false);
   const [loras, setLoras] = useState<LoraDraft[]>([]);
   const [autoStitch, setAutoStitch] = useState(false);
-  // LTX-Video 2.3 settings
-  const [ltxPipelineMode, setLtxPipelineMode] = useState("two_stage");
-  const [ltxUpscaler, setLtxUpscaler] = useState("");
-  const [ltxTemporalUpscale, setLtxTemporalUpscale] = useState(false);
   const [availableLoras, setAvailableLoras] = useState<string[]>([]);
   const [allLoraInfo, setAllLoraInfo] = useState<LoraInfo[]>([]);
   const [loraLoadError, setLoraLoadError] = useState<string | undefined>();
@@ -235,7 +232,7 @@ const TestPage: React.FC = () => {
   const [videoInitUrl, setVideoInitUrl] = useState("");
   const [videoInitData, setVideoInitData] = useState<string | undefined>();
   const [videoInitName, setVideoInitName] = useState<string | undefined>();
-  const [videoInitStrength, setVideoInitStrength] = useState("0.55");
+  const [videoInitStrength, setVideoInitStrength] = useState("1");
   const [faceSourceUrl, setFaceSourceUrl] = useState("");
   const [faceSourceData, setFaceSourceData] = useState<string | undefined>();
   const [faceSourceName, setFaceSourceName] = useState<string | undefined>();
@@ -313,8 +310,9 @@ const TestPage: React.FC = () => {
   const videoDefaultsBadge = summarizeDefaultsSource(selectedVideoModelMeta?.defaults_source?.video);
   const faceSwapDefaultsBadge = summarizeDefaultsSource(selectedFaceSwapModelMeta?.defaults_source?.face_swap);
   const isLtxVideoModel = selectedVideoModelMeta?.model_family === "ltx_video" ||
+    selectedVideoModelMeta?.model_family === "ltx23_wangp" ||
     String(selectedVideoModelMeta?.task_type || "").toUpperCase() === "LTX_VIDEO_GEN";
-  const ltxVideoModes = selectedVideoModelMeta?.available_modes || [];
+  const isLtx23Model = selectedVideoModelMeta?.model_family === "ltx23_wangp";
 
   useEffect(() => {
     let active = true;
@@ -415,9 +413,12 @@ const TestPage: React.FC = () => {
         const videoOptions = videoModelsData.map((m) => {
           const taskType = String(m.task_type || "").toUpperCase();
           const isAnimateDiff = taskType === "ANIMATEDIFF";
-          const isLtxVideo = m.model_family === "ltx_video" || taskType === "LTX_VIDEO_GEN";
-          const typeLabel = isLtxVideo
-            ? "LTX-Video 2.3 · DiT"
+          const isLtx23 = m.model_family === "ltx23_wangp";
+          const isLtxVideo = m.model_family === "ltx_video" || isLtx23 || taskType === "LTX_VIDEO_GEN";
+          const typeLabel = isLtx23
+            ? `LTX-2.3 ${m.model_version || "distilled"} · WanGP`
+            : isLtxVideo
+              ? `LTX-Video ${m.model_version || "0.9.x"} · DiT`
             : isAnimateDiff
               ? "AnimateDiff · SD1.5 motion"
               : "LTX2 · native video";
@@ -495,7 +496,7 @@ const TestPage: React.FC = () => {
       setHeight("");
       setFrames("");
       setFps("");
-      // Prefer AnimateDiff by default on consumer GPUs.
+      // Prefer the strongest verified video runtime advertised by the node.
       setSelectedModel(pickPreferredVideoModel(videoModels));
     } else if (mode === "face_swap") {
       // Reset video-specific options
@@ -703,7 +704,7 @@ const TestPage: React.FC = () => {
     return parsed.toLocaleString();
   };
 
-  const readFileAsDataUrl = (file: File): Promise<string> => {
+  const readFileAsDataUrl = (file: Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -820,12 +821,6 @@ const TestPage: React.FC = () => {
     }
     if (sfwMode) {
       request.sfwMode = true;
-    }
-    // LTX-Video 2.3 extended fields
-    if (isLtxVideoModel) {
-      if (ltxPipelineMode) request.pipelineMode = ltxPipelineMode;
-      if (ltxUpscaler) request.upscaler = ltxUpscaler;
-      if (ltxTemporalUpscale) request.temporalUpscale = true;
     }
     return request as import("../lib/havnai").VideoJobRequest;
   };
@@ -1191,7 +1186,12 @@ const TestPage: React.FC = () => {
             }
           } else if (status === "RUNNING") {
             const elapsed = (Date.now() - start) / 1000;
-            if (elapsed > 300) {
+            const progress = Number(job.progress);
+            const stage = String(job.stage || "").replaceAll("_", " ").trim();
+            if (Number.isFinite(progress) && progress > 0) {
+              const stageLabel = stage ? `${stage.charAt(0).toUpperCase()}${stage.slice(1)}` : "Rendering";
+              setStatusMessage(`${stageLabel} · ${Math.round(progress)}%`);
+            } else if (elapsed > 300) {
               setStatusMessage("This render is still running. If the worker stalls, it will be requeued automatically.");
             } else {
               setStatusMessage("Rendering on a HavnAI node...");
@@ -1343,6 +1343,17 @@ const TestPage: React.FC = () => {
     setVideoInitName("last-frame.png");
     setVideoInitUrl("");
     setStatusMessage("Loaded last frame as init image.");
+  };
+
+  const handleAnimateImage = () => {
+    if (!imageUrl) return;
+    const coordinatorPath = imageUrl.startsWith("/api/") ? imageUrl.slice(4) : imageUrl;
+    setMode("video");
+    setAdvancedOpen(true);
+    setVideoInitData(undefined);
+    setVideoInitName(undefined);
+    setVideoInitUrl(coordinatorPath);
+    setStatusMessage("Image loaded for animation.");
   };
 
   const openJobDetails = async (id: string, summary?: JobSummary) => {
@@ -1852,7 +1863,9 @@ const TestPage: React.FC = () => {
                     <span className="generator-label">Video settings</span>
                     <p className="generator-help">
                       {isLtxVideoModel
-                        ? "LTX-Video 2.3: up to 257 frames at 24fps (~10s). DiT model with audio+video sync."
+                        ? isLtx23Model
+                          ? "LTX-2.3 22B distilled image-to-video with native sound through the verified WanGP runtime."
+                          : "LTX-Video 0.9.x image-to-video. Available limits come from the verified node runtime."
                         : "LTX2 defaults to 16 frames at 8fps (~2s). AnimateDiff can go longer but is heavier."}
                     </p>
                     <label className="generator-label" htmlFor="video-model">
@@ -1874,54 +1887,6 @@ const TestPage: React.FC = () => {
                       <p className="generator-help">
                         Using recommended defaults for this model (source: {videoDefaultsBadge}). Leave fields blank to apply them automatically.
                       </p>
-                    )}
-                    {isLtxVideoModel && ltxVideoModes.length > 0 && (
-                      <>
-                        <label className="generator-label" htmlFor="ltx-pipeline-mode">
-                          Pipeline mode
-                        </label>
-                        <select
-                          id="ltx-pipeline-mode"
-                          value={ltxPipelineMode}
-                          onChange={(e) => setLtxPipelineMode(e.target.value)}
-                          className="generator-select"
-                        >
-                          {ltxVideoModes.map((m: string) => (
-                            <option key={m} value={m}>
-                              {m.replace(/_/g, " ")}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="generator-help">
-                          two stage = best quality. distilled fast = 8 steps. one stage = no upscale.
-                        </p>
-                        <div className="generator-row">
-                          <div>
-                            <label className="generator-label" htmlFor="ltx-upscaler">
-                              Spatial upscaler
-                            </label>
-                            <select
-                              id="ltx-upscaler"
-                              value={ltxUpscaler}
-                              onChange={(e) => setLtxUpscaler(e.target.value)}
-                              className="generator-select"
-                            >
-                              <option value="">None</option>
-                              <option value="spatial_upscaler_x2">Spatial upscale</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="generator-checkbox">
-                              <input
-                                type="checkbox"
-                                checked={ltxTemporalUpscale}
-                                onChange={(e) => setLtxTemporalUpscale(e.target.checked)}
-                              />
-                              <span>Temporal upscale (2x frames)</span>
-                            </label>
-                          </div>
-                        </div>
-                      </>
                     )}
                     <label className="generator-label" htmlFor="negative-prompt-video">
                       Negative prompt (optional)
@@ -1972,15 +1937,17 @@ const TestPage: React.FC = () => {
                       id="video-init-strength"
                       type="number"
                       min={0.1}
-                      max={0.95}
+                      max={1}
                       step={0.05}
                       className="generator-input"
-                      placeholder="0.55"
+                      placeholder="1.0"
                       value={videoInitStrength}
                       onChange={(e) => setVideoInitStrength(e.target.value)}
                     />
                     <p className="generator-help">
-                      Lower = more preservation (0.35–0.5). Higher = more motion/change (0.6–0.75). Start with 0.55 and adjust.
+                      {isLtx23Model
+                        ? "Higher preserves the source more closely; lower values allow more motion."
+                        : "Lower preserves more of the source; higher values allow more motion and change."}
                     </p>
                     <span className="generator-label">Generation settings</span>
                     <div className="generator-row">
@@ -2087,7 +2054,9 @@ const TestPage: React.FC = () => {
                     </div>
                     <p className="generator-help">
                       {isLtxVideoModel
-                        ? "LTX-Video 2.3: 97 frames default (~4s @ 24fps), up to 257 frames. Upscalers available for higher resolution."
+                        ? isLtx23Model
+                          ? "LTX-2.3 defaults to a 4-second, 97-frame clip at 24fps."
+                          : "LTX-Video 0.9.x: use model defaults unless the verified runtime reports a supported override."
                         : "AnimateDiff: 16 frames optimal, max 32 (4s @ 8fps). LTX2: max 16 frames (2s @ 8fps). Use auto-extend chunks below for longer videos."}
                     </p>
                     <div className="generator-row">
@@ -2172,6 +2141,7 @@ const TestPage: React.FC = () => {
                   runtimeSeconds={runtimeSeconds || null}
                   jobId={jobId}
                   onUseLastFrame={handleUseLastFrame}
+                  onAnimateImage={handleAnimateImage}
                 />
               </div>
             </div>

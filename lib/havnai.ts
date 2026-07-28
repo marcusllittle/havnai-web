@@ -32,6 +32,8 @@ export interface JobDetail {
   node_id?: string;
   timestamp?: number;
   completed_at?: number | null;
+  progress?: number | null;
+  stage?: string | null;
   retry_count?: number;
   reward?: number;
   reward_factors?: Record<string, unknown>;
@@ -120,11 +122,6 @@ export interface VideoJobRequest {
   extendChunks?: number;
   strength?: number;
   sfwMode?: boolean;
-  // LTX-Video 2.3 extended fields
-  pipelineMode?: string;
-  checkpointVariant?: string;
-  upscaler?: string;
-  temporalUpscale?: boolean;
 }
 
 export interface WanVideoStatus {
@@ -559,12 +556,6 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   if (request.extendChunks != null) body.extend_chunks = request.extendChunks;
   if (request.strength != null) body.strength = request.strength;
   if (request.sfwMode === true) body.sfw_mode = true;
-  // LTX-Video 2.3 extended fields
-  if (request.pipelineMode) body.pipeline_mode = request.pipelineMode;
-  if (request.checkpointVariant) body.checkpoint_variant = request.checkpointVariant;
-  if (request.upscaler) body.upscaler = request.upscaler;
-  if (request.temporalUpscale === true) body.temporal_upscale = true;
-
   const res = await fetch(apiUrl("/submit-job"), {
     method: "POST",
     headers: buildHeaders(true),
