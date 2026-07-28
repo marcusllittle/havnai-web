@@ -35,6 +35,11 @@ import { getApiBase } from "../lib/apiBase";
 import { getConnectButtonLabel } from "../lib/wallet";
 import { buildModelOptionLabel } from "../lib/modelMetadata";
 import {
+  clearActiveCreateJob,
+  loadActiveCreateJob,
+  saveActiveCreateJob,
+} from "../lib/activeCreateJob";
+import {
   getWalletIdentityLabel,
   getWalletSourceLabel,
   getWalletStatusCopy,
@@ -340,6 +345,7 @@ const TestPage: React.FC = () => {
   const imagePrefillKeyRef = useRef<string>("");
   const videoPrefillKeyRef = useRef<string>("");
   const faceSwapPrefillKeyRef = useRef<string>("");
+  const activeRecoveryStartedRef = useRef(false);
 
   const apiBase = getApiBase();
   const activeWallet = wallet.activeWallet || undefined;
@@ -947,6 +953,7 @@ const TestPage: React.FC = () => {
       const request = buildVideoRequest(promptText, initImage || undefined);
       const id = await submitVideoJob(request);
       setJobId(id);
+      saveActiveCreateJob({ id, prompt: promptText, mode: "video", startedAt: Date.now() });
       setStatusMessage(`Waiting for available GPU capacity... (${index + 1}/${total})`);
       const result = await pollJob(id, promptText, 2400);
       if (!result || !result.videoUrl) {
@@ -1094,6 +1101,7 @@ const TestPage: React.FC = () => {
     setRuntimeSeconds(null);
     setModel(undefined);
     setJobId(undefined);
+    clearActiveCreateJob();
     setPollTimedOut(false);
     setLastUsedPrompt(effectivePrompt || "Face swap");
 
@@ -1109,6 +1117,7 @@ const TestPage: React.FC = () => {
           options
         );
         setJobId(id);
+        saveActiveCreateJob({ id, prompt: effectivePrompt, mode: "image", startedAt: Date.now() });
         setStatusMessage("Waiting for available GPU capacity...");
         await pollJob(id, effectivePrompt, 1800);
       } else if (mode === "face_swap") {
@@ -1136,6 +1145,12 @@ const TestPage: React.FC = () => {
         if (guidanceValue !== undefined) request.guidance = guidanceValue;
         const id = await submitFaceSwapJob(request);
         setJobId(id);
+        saveActiveCreateJob({
+          id,
+          prompt: effectivePrompt || "Face swap",
+          mode: "face_swap",
+          startedAt: Date.now(),
+        });
         setStatusMessage("Waiting for available GPU capacity...");
         await pollJob(id, effectivePrompt || "Face swap", 1800);
       } else if (mode === "video") {
@@ -1145,6 +1160,7 @@ const TestPage: React.FC = () => {
           const request = buildVideoRequest(effectivePrompt);
           const id = await submitVideoJob(request);
           setJobId(id);
+          saveActiveCreateJob({ id, prompt: effectivePrompt, mode: "video", startedAt: Date.now() });
           setStatusMessage("Waiting for available GPU capacity...");
           await pollJob(id, effectivePrompt, 2400);
         }
@@ -1228,6 +1244,7 @@ const TestPage: React.FC = () => {
     setModel(job.model);
     setStatusMessage("Output ready.");
     setPollTimedOut(false);
+    clearActiveCreateJob(id);
 
     if (resolvedImage || resolvedVideo) {
       const item: HistoryItem = {
@@ -1248,14 +1265,23 @@ const TestPage: React.FC = () => {
     const start = Date.now();
     setPollTimedOut(false);
 
-    // Try SSE-accelerated polling: listen for real-time updates via SSE and
-    // only fall back to HTTP polling every 5s (instead of 1.5s) as a safety net.
+    // Listen for real-time updates and keep a short polling fallback because
+    // proxies may interrupt long-lived SSE connections.
     const sse = getJobSSE();
-    let sseResolved = false;
+    let sseOutcome: "completed" | "failed" | null = null;
+    let pollingStopped = false;
+    let unsubscribeSse: (() => void) | undefined;
+    let sseTimeout: ReturnType<typeof setTimeout> | undefined;
 
     const ssePromise = new Promise<"completed" | "failed" | null>((resolve) => {
-      const timeout = setTimeout(() => resolve(null), maxWaitSeconds * 1000);
-      const unsub = sse.subscribe((event: SSEEvent) => {
+      const finishSse = (outcome: "completed" | "failed" | null) => {
+        sseOutcome = outcome;
+        if (sseTimeout) clearTimeout(sseTimeout);
+        unsubscribeSse?.();
+        resolve(outcome);
+      };
+      sseTimeout = setTimeout(() => finishSse(null), maxWaitSeconds * 1000);
+      unsubscribeSse = sse.subscribe((event: SSEEvent) => {
         if (event.event !== "job_lifecycle") return;
         if (event.job_id !== id) return;
         const status = (event.lifecycle_status || event.status || "").toUpperCase();
@@ -1265,15 +1291,9 @@ const TestPage: React.FC = () => {
           setStatusMessage("Rendering on a HavnAI node...");
         } else if (status === "SUCCEEDED" || status === "SUCCESS" || status === "COMPLETED") {
           setStatusMessage("Finalizing your output...");
-          sseResolved = true;
-          clearTimeout(timeout);
-          unsub();
-          resolve("completed");
+          finishSse("completed");
         } else if (status === "FAILED" || status === "CANCELLED") {
-          sseResolved = true;
-          clearTimeout(timeout);
-          unsub();
-          resolve("failed");
+          finishSse("failed");
         }
       });
 
@@ -1283,8 +1303,8 @@ const TestPage: React.FC = () => {
 
     // Run SSE listener and fallback polling in parallel
     const pollFallback = async (): Promise<"completed" | "failed" | "timeout"> => {
-      while ((Date.now() - start) / 1000 < maxWaitSeconds) {
-        if (sseResolved) return "completed"; // SSE already resolved it
+      while (!pollingStopped && (Date.now() - start) / 1000 < maxWaitSeconds) {
+        if (sseOutcome) return sseOutcome;
 
         try {
           const job = await fetchJob(id);
@@ -1322,16 +1342,15 @@ const TestPage: React.FC = () => {
           setStatusMessage(err?.message || "Error while polling job.");
         }
 
-        // Poll every 5s (SSE handles fast updates)
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
       return "timeout";
     };
 
-    const result = await Promise.race([
-      ssePromise,
-      pollFallback(),
-    ]);
+    const result = await Promise.race([ssePromise, pollFallback()]);
+    pollingStopped = true;
+    if (sseTimeout) clearTimeout(sseTimeout);
+    unsubscribeSse?.();
 
     // Finalize based on result
     if (result === "completed") {
@@ -1340,6 +1359,7 @@ const TestPage: React.FC = () => {
         return await finalizeJob(id, usedPrompt, job);
       } catch {
         setStatusMessage("Job completed but failed to fetch result.");
+        setPollTimedOut(true);
         return null;
       }
     }
@@ -1347,6 +1367,7 @@ const TestPage: React.FC = () => {
     if (result === "failed") {
       setStatusMessage("Job failed on the grid.");
       setPollTimedOut(false);
+      clearActiveCreateJob(id);
       return null;
     }
 
@@ -1393,6 +1414,7 @@ const TestPage: React.FC = () => {
         saveHistory(next);
         setStatusMessage("Output ready.");
         setPollTimedOut(false);
+        clearActiveCreateJob(id);
         return { videoUrl: resolvedVideo, imageUrl: resolvedImage, job: job || undefined };
       }
     } catch {
@@ -1417,6 +1439,28 @@ const TestPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (activeRecoveryStartedRef.current) return;
+    activeRecoveryStartedRef.current = true;
+    const activeJob = loadActiveCreateJob();
+    if (!activeJob) return;
+
+    setMode(activeJob.mode);
+    setPrompt(activeJob.prompt);
+    setLastUsedPrompt(activeJob.prompt);
+    setJobId(activeJob.id);
+    setStatusMessage("Restoring your active render...");
+    setPollTimedOut(false);
+    setLoading(true);
+    void pollJob(
+      activeJob.id,
+      activeJob.prompt,
+      activeJob.mode === "video" ? 2400 : 1800
+    ).finally(() => setLoading(false));
+    // Polling intentionally starts once from the job snapshot saved by submission.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleHistorySelect = (item: HistoryItem) => {
     if (item.videoUrl) {
@@ -2306,6 +2350,9 @@ const TestPage: React.FC = () => {
                   model={model}
                   runtimeSeconds={runtimeSeconds || null}
                   jobId={jobId}
+                  pending={loading}
+                  statusMessage={statusMessage}
+                  onRetry={handleCheckStatus}
                   onUseLastFrame={handleUseLastFrame}
                   onAnimateImage={handleAnimateImage}
                 />
