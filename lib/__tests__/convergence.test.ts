@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { normalizeJobLifecycleEvent } from "../sse";
+import { normalizeJobLifecycleEvent, normalizeLifecycleStatus } from "../sse";
 
 async function importHavnaiFresh() {
   vi.resetModules();
@@ -38,6 +38,15 @@ describe("canonical job lifecycle event normalization", () => {
     expect(legacyQueued?.lifecycle_status).toBe("QUEUED");
     expect(legacyQueued?.job_type).toBe("VIDEO_GEN");
     expect(legacyCancelled?.lifecycle_status).toBe("CANCELLED");
+  });
+
+  it("normalizes coordinator polling statuses", () => {
+    expect(normalizeLifecycleStatus("succeeded")).toBe("SUCCEEDED");
+    expect(normalizeLifecycleStatus("success")).toBe("SUCCEEDED");
+    expect(normalizeLifecycleStatus("completed")).toBe("SUCCEEDED");
+    expect(normalizeLifecycleStatus("leased")).toBe("RUNNING");
+    expect(normalizeLifecycleStatus("uploading")).toBe("RUNNING");
+    expect(normalizeLifecycleStatus("expired")).toBe("FAILED");
   });
 });
 
