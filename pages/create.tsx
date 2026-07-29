@@ -45,6 +45,7 @@ import {
   clearActiveVideoChain,
   loadActiveVideoChain,
   saveActiveVideoChain,
+  shouldPrepareNextVideoClip,
 } from "../lib/activeVideoChain";
 import {
   getWalletIdentityLabel,
@@ -122,6 +123,12 @@ type ModelListEntry = {
 
 type GeneratorMode = "image" | "face_swap" | "video";
 type ImageQualityPreset = "fastest" | "balanced" | "best";
+type VideoChainProgress = {
+  completed: number;
+  current: number;
+  total: number;
+  stage: "rendering" | "preparing" | "stitching";
+};
 type ImageSizePreset =
   | "auto"
   | "21x9"
@@ -289,6 +296,7 @@ const TestPage: React.FC = () => {
   const [imageUrl, setImageUrl] = useState<string | undefined>();
   const [videoUrl, setVideoUrl] = useState<string | undefined>();
   const [chainSummary, setChainSummary] = useState<{ clips: number; stitched: boolean } | null>(null);
+  const [chainProgress, setChainProgress] = useState<VideoChainProgress | null>(null);
   const [model, setModel] = useState<string | undefined>();
   const [runtimeSeconds, setRuntimeSeconds] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -306,12 +314,12 @@ const TestPage: React.FC = () => {
   const [height, setHeight] = useState("");
   const [frames, setFrames] = useState("");
   const [fps, setFps] = useState("");
-  const [extendChunks, setExtendChunks] = useState("0");
+  const [extendChunks, setExtendChunks] = useState("1");
   const [sampler, setSampler] = useState("");
   const [seed, setSeed] = useState("");
   const [sfwMode, setSfwMode] = useState(false);
   const [loras, setLoras] = useState<LoraDraft[]>([]);
-  const [autoStitch, setAutoStitch] = useState(false);
+  const [autoStitch, setAutoStitch] = useState(true);
   const [availableLoras, setAvailableLoras] = useState<string[]>([]);
   const [allLoraInfo, setAllLoraInfo] = useState<LoraInfo[]>([]);
   const [loraLoadError, setLoraLoadError] = useState<string | undefined>();
@@ -963,6 +971,12 @@ const TestPage: React.FC = () => {
     let currentIndex = recovery?.currentIndex ?? 0;
     let currentJobId = recovery?.currentJobId;
     setChainSummary(null);
+    setChainProgress({
+      completed: jobIds.length,
+      current: Math.min(currentIndex + 1, total),
+      total,
+      stage: "rendering",
+    });
     let initImage = recovery ? "" : (videoInitData || videoInitUrl).trim();
     const initialRequest = recovery?.request ?? buildVideoRequest(promptText, undefined);
     const { initImage: _ignoredInitImage, extendChunks: _ignoredExtendChunks, ...requestTemplate } =
@@ -1003,17 +1017,28 @@ const TestPage: React.FC = () => {
       const result = await pollJob(id, promptText, 2400);
       if (!result || !result.videoUrl) {
         setStatusMessage("Clip generation stopped before a video output was returned.");
+        setChainProgress(null);
         return;
       }
       if (!jobIds.includes(id)) jobIds.push(id);
-      try {
-        initImage = await captureLastFrameFromVideoUrl(result.videoUrl);
-        setVideoInitData(initImage);
-        setVideoInitName(`clip-${currentIndex + 1}-lastframe.png`);
-        setVideoInitUrl("");
-      } catch (err: any) {
-        setStatusMessage(err?.message || "Failed to capture last frame.");
-        return;
+      const hasNextClip = shouldPrepareNextVideoClip(currentIndex, total);
+      if (hasNextClip) {
+        setChainProgress({
+          completed: jobIds.length,
+          current: currentIndex + 2,
+          total,
+          stage: "preparing",
+        });
+        try {
+          initImage = await captureLastFrameFromVideoUrl(result.videoUrl);
+          setVideoInitData(initImage);
+          setVideoInitName(`clip-${currentIndex + 1}-lastframe.png`);
+          setVideoInitUrl("");
+        } catch (err: any) {
+          setStatusMessage(err?.message || "Failed to capture last frame.");
+          setChainProgress(null);
+          return;
+        }
       }
       currentIndex += 1;
       currentJobId = undefined;
@@ -1026,10 +1051,24 @@ const TestPage: React.FC = () => {
         request: requestTemplate as VideoJobRequest,
         startedAt,
       });
+      if (currentIndex < total) {
+        setChainProgress({
+          completed: jobIds.length,
+          current: currentIndex + 1,
+          total,
+          stage: "rendering",
+        });
+      }
     }
 
     if (shouldStitch && jobIds.length > 1) {
       setStatusMessage("Merging clips...");
+      setChainProgress({
+        completed: jobIds.length,
+        current: total,
+        total,
+        stage: "stitching",
+      });
       try {
         const stitched = await stitchVideos(jobIds);
         setVideoUrl(stitched.video_url);
@@ -1040,10 +1079,13 @@ const TestPage: React.FC = () => {
       } catch (err: any) {
         setStatusMessage(err?.message || "Automatic clip merge failed.");
         setChainSummary({ clips: jobIds.length, stitched: false });
+      } finally {
+        setChainProgress(null);
       }
     } else if (jobIds.length > 1) {
       setChainSummary({ clips: jobIds.length, stitched: false });
       clearActiveVideoChain();
+      setChainProgress(null);
     }
   };
 
@@ -1159,12 +1201,13 @@ const TestPage: React.FC = () => {
     setRuntimeSeconds(null);
     setModel(undefined);
     setJobId(undefined);
+    setChainProgress(null);
     clearActiveCreateJob();
     clearActiveVideoChain();
     setPollTimedOut(false);
     setLastUsedPrompt(effectivePrompt || "Face swap");
 
-    const extendValue = parseOptionalInt(extendChunks) ?? 0;
+    const totalVideoClips = Math.max(1, Math.min(7, parseOptionalInt(extendChunks) ?? 1));
 
     try {
       if (mode === "image") {
@@ -1213,8 +1256,8 @@ const TestPage: React.FC = () => {
         setStatusMessage("Waiting for available GPU capacity...");
         await pollJob(id, effectivePrompt || "Face swap", 1800);
       } else if (mode === "video") {
-        if (extendValue > 0) {
-          await runVideoChain(effectivePrompt, extendValue);
+        if (totalVideoClips > 1) {
+          await runVideoChain(effectivePrompt, totalVideoClips - 1);
         } else {
           const request = buildVideoRequest(effectivePrompt);
           const id = await submitVideoJob(request);
@@ -1252,6 +1295,7 @@ const TestPage: React.FC = () => {
       } else {
         setStatusMessage(err?.message || "Failed to submit job.");
       }
+      setChainProgress(null);
     } finally {
       setLoading(false);
     }
@@ -1506,6 +1550,8 @@ const TestPage: React.FC = () => {
     if (activeChain) {
       setMode("video");
       setPrompt(activeChain.prompt);
+      setExtendChunks(String(activeChain.total));
+      setAutoStitch(activeChain.autoStitch);
       setLastUsedPrompt(activeChain.prompt);
       setJobId(activeChain.currentJobId);
       setStatusMessage(
@@ -2342,34 +2388,35 @@ const TestPage: React.FC = () => {
                         ? isLtx23Model
                           ? "LTX-2.3 defaults to a 4-second, 97-frame clip at 24fps."
                           : "LTX-Video 0.9.x: use model defaults unless the verified runtime reports a supported override."
-                        : "AnimateDiff: 16 frames optimal, max 32 (4s @ 8fps). LTX2: max 16 frames (2s @ 8fps). Use auto-extend chunks below for longer videos."}
+                        : "AnimateDiff: 16 frames optimal, max 32 (4s @ 8fps). LTX2: max 16 frames (2s @ 8fps). Use multiple clips below for longer videos."}
                     </p>
                     <div className="generator-row">
                       <div>
                         <label className="generator-label" htmlFor="extend-chunks">
-                          Auto-extend chunks
+                          Total clips
                         </label>
                         <input
                           id="extend-chunks"
                           type="number"
-                          min={0}
-                          max={6}
+                          min={1}
+                          max={7}
                           step={1}
                           className="generator-input"
-                          placeholder="0"
+                          placeholder="1"
                           value={extendChunks}
                           onChange={(e) => setExtendChunks(e.target.value)}
                         />
                         <p className="generator-help">
-                          Generates additional back-to-back clips (uses last frame as the next init image).
+                          Each clip continues from the previous clip's last frame.
                         </p>
                         <label className="generator-checkbox">
                           <input
                             type="checkbox"
                             checked={autoStitch}
                             onChange={(e) => setAutoStitch(e.target.checked)}
+                            disabled={(parseOptionalInt(extendChunks) ?? 1) <= 1}
                           />
-                          <span>Auto-stitch clips (requires ffmpeg on coordinator)</span>
+                          <span>Stitch clips into one video</span>
                         </label>
                       </div>
                     </div>
@@ -2394,6 +2441,28 @@ const TestPage: React.FC = () => {
                 )}
 
                 <StatusBox message={statusMessage} />
+                {chainProgress && (
+                  <div className="chain-progress" aria-live="polite">
+                    <div className="chain-progress-heading">
+                      <strong>
+                        {chainProgress.stage === "stitching"
+                          ? "Combining final video"
+                          : chainProgress.stage === "preparing"
+                            ? `Preparing clip ${chainProgress.current} of ${chainProgress.total}`
+                            : `Rendering clip ${chainProgress.current} of ${chainProgress.total}`}
+                      </strong>
+                      <span>{chainProgress.completed}/{chainProgress.total} complete</span>
+                    </div>
+                    <div className="chain-progress-track">
+                      <span style={{ width: `${(chainProgress.completed / chainProgress.total) * 100}%` }} />
+                    </div>
+                    <p>
+                      {chainProgress.stage === "stitching"
+                        ? "Final video pending."
+                        : "Latest completed clip shown until the final video is ready."}
+                    </p>
+                  </div>
+                )}
                 {chainSummary && (
                   <div className="chain-summary">
                     <span className="chain-summary-icon">{chainSummary.stitched ? "\u2714" : "\u26A0"}</span>

@@ -5,6 +5,7 @@ import {
   clearActiveVideoChain,
   loadActiveVideoChain,
   saveActiveVideoChain,
+  shouldPrepareNextVideoClip,
 } from "../activeVideoChain";
 
 const chain = {
@@ -56,5 +57,11 @@ describe("active video chain persistence", () => {
     saveActiveVideoChain(chain);
     clearActiveVideoChain();
     expect(loadActiveVideoChain()).toBeNull();
+  });
+
+  it("only prepares a continuation frame when another clip remains", () => {
+    expect(shouldPrepareNextVideoClip(0, 2)).toBe(true);
+    expect(shouldPrepareNextVideoClip(1, 2)).toBe(false);
+    expect(shouldPrepareNextVideoClip(2, 3)).toBe(false);
   });
 });
