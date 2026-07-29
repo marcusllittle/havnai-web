@@ -826,6 +826,21 @@ export async function stitchVideos(jobIds: string[], outputName?: string): Promi
   };
 }
 
+export async function extractVideoLastFrame(jobId: string): Promise<string> {
+  const res = await fetch(apiUrl(`/videos/${encodeURIComponent(jobId)}/last-frame`), {
+    method: "POST",
+    headers: buildHeaders(true),
+  });
+  if (!res.ok) {
+    throw await parseErrorResponse(res);
+  }
+  const json = (await res.json()) as { image_url?: string };
+  if (!json.image_url) {
+    throw new HavnaiApiError("Coordinator did not return a continuation frame.");
+  }
+  return json.image_url;
+}
+
 export async function fetchJobWithResult(
   jobId: string
 ): Promise<{ job: JobDetailResponse; result?: ResultResponse }> {

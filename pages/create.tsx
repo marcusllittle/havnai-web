@@ -19,6 +19,7 @@ import {
   fetchJobWithResult,
   fetchQuota,
   fetchCredits,
+  extractVideoLastFrame,
   stitchVideos,
   HavnaiApiError,
   JobDetailResponse,
@@ -844,38 +845,6 @@ const TestPage: React.FC = () => {
     });
   };
 
-  const captureLastFrameFromVideoUrl = async (url: string): Promise<string> => {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`download failed: ${res.status}`);
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    try {
-      const video = document.createElement("video");
-      video.src = objectUrl;
-      video.muted = true;
-      video.playsInline = true;
-      await new Promise<void>((resolve, reject) => {
-        video.onloadedmetadata = () => resolve();
-        video.onerror = () => reject(new Error("Failed to load video metadata"));
-      });
-      const targetTime = Math.max(0, (video.duration || 0) - 0.1);
-      video.currentTime = targetTime;
-      await new Promise<void>((resolve, reject) => {
-        video.onseeked = () => resolve();
-        video.onerror = () => reject(new Error("Failed to seek video"));
-      });
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth || 1;
-      canvas.height = video.videoHeight || 1;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas unavailable");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL("image/png");
-    } finally {
-      URL.revokeObjectURL(objectUrl);
-    }
-  };
-
   const buildLoraPayload = (): { name: string; weight?: number }[] => {
     return loras
       .map((entry) => {
@@ -987,7 +956,7 @@ const TestPage: React.FC = () => {
       if (!previousResult.video_url) {
         throw new Error("The previous chain clip has no video output.");
       }
-      initImage = await captureLastFrameFromVideoUrl(previousResult.video_url);
+      initImage = await extractVideoLastFrame(jobIds[jobIds.length - 1]);
     }
 
     while (currentIndex < total) {
@@ -1030,7 +999,7 @@ const TestPage: React.FC = () => {
           stage: "preparing",
         });
         try {
-          initImage = await captureLastFrameFromVideoUrl(result.videoUrl);
+          initImage = await extractVideoLastFrame(id);
           setVideoInitData(initImage);
           setVideoInitName(`clip-${currentIndex + 1}-lastframe.png`);
           setVideoInitUrl("");

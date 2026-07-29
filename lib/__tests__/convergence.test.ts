@@ -74,6 +74,23 @@ describe("API contract convergence", () => {
     expect(init.method).toBe("POST");
   });
 
+  it("extractVideoLastFrame delegates continuation extraction to the coordinator", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ image_url: "/static/outputs/videos/job-video_last.png" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const havnai = await importHavnaiFresh();
+    const imageUrl = await havnai.extractVideoLastFrame("job-video");
+
+    expect(imageUrl).toBe("/static/outputs/videos/job-video_last.png");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("/api/videos/job-video/last-frame");
+    expect(init.method).toBe("POST");
+  });
+
   it("fetchWanVideoJob is gated when legacy endpoint support is disabled", async () => {
     delete process.env.NEXT_PUBLIC_ENABLE_LEGACY_WAN_STATUS;
     const fetchMock = vi.fn();
