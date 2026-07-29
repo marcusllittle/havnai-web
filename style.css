@@ -5597,6 +5597,46 @@ details[open] .faq-icon {
   flex-shrink: 0;
 }
 
+.chain-progress {
+  margin-top: 0.65rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid rgba(0, 234, 255, 0.22);
+  border-bottom: 1px solid rgba(0, 234, 255, 0.14);
+}
+
+.chain-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.chain-progress-heading span,
+.chain-progress p {
+  color: var(--text-muted);
+}
+
+.chain-progress-track {
+  height: 4px;
+  margin-top: 0.55rem;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chain-progress-track span {
+  display: block;
+  height: 100%;
+  background: var(--accent-strong);
+  transition: width 180ms ease;
+}
+
+.chain-progress p {
+  margin: 0.45rem 0 0;
+  font-size: 0.76rem;
+}
+
 /* ── Polish: Job drawer raw JSON wrapper ── */
 
 .job-raw-wrapper {
