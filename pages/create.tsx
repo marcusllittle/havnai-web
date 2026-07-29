@@ -296,6 +296,7 @@ const TestPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | undefined>();
   const [videoUrl, setVideoUrl] = useState<string | undefined>();
+  const [stitchedVideoUrl, setStitchedVideoUrl] = useState<string | undefined>();
   const [chainSummary, setChainSummary] = useState<{ clips: number; stitched: boolean } | null>(null);
   const [chainProgress, setChainProgress] = useState<VideoChainProgress | null>(null);
   const [model, setModel] = useState<string | undefined>();
@@ -1040,10 +1041,28 @@ const TestPage: React.FC = () => {
       });
       try {
         const stitched = await stitchVideos(jobIds);
+        setStitchedVideoUrl(stitched.video_url);
         setVideoUrl(stitched.video_url);
         setImageUrl(undefined);
         setStatusMessage("Merged video ready.");
         setChainSummary({ clips: jobIds.length, stitched: true });
+        const stitchedHistoryItem: HistoryItem = {
+          jobId: jobIds[jobIds.length - 1],
+          prompt: promptText,
+          videoUrl: stitched.video_url,
+          model: selectedModel || undefined,
+          timestamp: Date.now(),
+        };
+        setHistory((current) => {
+          const next = [
+            stitchedHistoryItem,
+            ...current.filter((item) => !jobIds.includes(item.jobId)),
+          ].slice(0, 5);
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+          }
+          return next;
+        });
         clearActiveVideoChain();
       } catch (err: any) {
         setStatusMessage(err?.message || "Automatic clip merge failed.");
@@ -1167,6 +1186,7 @@ const TestPage: React.FC = () => {
     setStatusMessage("Submitting to the grid...");
     setImageUrl(undefined);
     setVideoUrl(undefined);
+    setStitchedVideoUrl(undefined);
     setRuntimeSeconds(null);
     setModel(undefined);
     setJobId(undefined);
@@ -1553,6 +1573,7 @@ const TestPage: React.FC = () => {
   }, []);
 
   const handleHistorySelect = (item: HistoryItem) => {
+    setStitchedVideoUrl(undefined);
     if (item.videoUrl) {
       setVideoUrl(item.videoUrl);
       setImageUrl(undefined);
@@ -1575,6 +1596,7 @@ const TestPage: React.FC = () => {
   };
 
   const handleHistoryClear = () => {
+    setStitchedVideoUrl(undefined);
     saveHistory([]);
     setImageUrl(undefined);
     setVideoUrl(undefined);
@@ -2459,7 +2481,7 @@ const TestPage: React.FC = () => {
                 <label className="generator-label">Output</label>
                 <OutputCard
                   imageUrl={imageUrl}
-                  videoUrl={videoUrl}
+                  videoUrl={stitchedVideoUrl || videoUrl}
                   model={model}
                   runtimeSeconds={runtimeSeconds || null}
                   jobId={jobId}
