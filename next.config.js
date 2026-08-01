@@ -15,7 +15,7 @@ const cspReportOnly = [
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https:",
   "media-src 'self' data: blob: https:",
-  "connect-src 'self' https://api.joinhavn.io https://metamask-sdk.api.cx.metamask.io wss://metamask-sdk.api.cx.metamask.io https://mm-sdk-analytics.api.cx.metamask.io https://va.vercel-scripts.com",
+  "connect-src 'self' https://api.joinhavn.io https://astra.joinhavn.io https://metamask-sdk.api.cx.metamask.io wss://metamask-sdk.api.cx.metamask.io https://mm-sdk-analytics.api.cx.metamask.io https://va.vercel-scripts.com",
   "worker-src 'self' blob:",
 ].join("; ");
 

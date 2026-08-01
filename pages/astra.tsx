@@ -1,27 +1,93 @@
+import { useEffect, useState } from "react";
 import type { NextPage } from "next";
 import Link from "next/link";
 import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
+import { useWallet } from "../lib/WalletContext";
+import { apiGet } from "../lib/api";
+import { resolveAssetUrl } from "../lib/havnai";
 
-const gameplayCards = [
+const GAME_URL = "https://astra.joinhavn.io/";
+
+const zones = [
   {
-    title: "Choose your pilot and loadout",
-    description: "Build around different pilots, ships, outfits, and combat style before you launch.",
-    image: "/astra/pilots/nova_starling.png",
+    name: "Nebula Runway",
+    description: "The proving ground. Formation waves over the runway lights, ending at the Aegis Dreadnought.",
+    image: "/astra/scenes/nebula_runway_briefing.png",
   },
   {
-    title: "Run combat missions",
-    description: "Fight through arcade shooter encounters, bosses, and scoring-driven combat loops.",
-    image: "/astra/scenes/shmup_combat.png",
+    name: "Solar Rift",
+    description: "Ember light and heat lattices. Faster waves, aimed fire, and the Helios Tyrant waiting at the end.",
+    image: "/astra/scenes/solar_rift_briefing.png",
   },
   {
-    title: "Return to the spaceport",
-    description: "Come back to the hub, track progression, manage collection flow, and go deeper on the next run.",
-    image: "/astra/scenes/spaceport_hub.png",
+    name: "Abyss Crown",
+    description: "The cold dark. Pincer pressure and cryo swarms building to the Cryo Leviathan.",
+    image: "/astra/scenes/abyss_crown_briefing.png",
   },
 ];
 
+const pilots = [
+  {
+    name: "Nova Starling",
+    role: "The ace. Reads a crowded corridor like an open lane.",
+    image: "/astra/pilots/nova_starling.png",
+  },
+  {
+    name: "Rex Thunderbolt",
+    role: "The hammer. Aggression as technically responsible behavior.",
+    image: "/astra/pilots/rex_thunderbolt.png",
+  },
+  {
+    name: "Yuki Frostweaver",
+    role: "The calm. The void only feels infinite if you panic.",
+    image: "/astra/pilots/yuki_frostweaver.png",
+  },
+];
+
+const loopSteps = [
+  { title: "Play", text: "Fly combat runs. Grades B and up earn shared HavnAI credits, capped daily." },
+  { title: "Earn", text: "Rewarded runs also queue a personalized render of your pilot on the GPU grid." },
+  { title: "Collect", text: "Generated art lands in your in-game Collection. Spend credits on gacha pulls." },
+  { title: "Create", text: "The same credits power the JoinHavn generator. One wallet, one balance." },
+];
+
+interface RecentCreation {
+  job_id: string;
+  pilot_id: string;
+  map_id: string;
+  grade: string;
+  pilot_short: string;
+  image_url?: string;
+  preview_url?: string;
+}
+
 const AstraPage: NextPage = () => {
+  const wallet = useWallet();
+  const [creations, setCreations] = useState<RecentCreation[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiGet("/astra/recent?limit=8")
+      .then((data) => {
+        if (cancelled) return;
+        const list = Array.isArray(data?.creations) ? data.creations : [];
+        setCreations(list.filter((c: RecentCreation) => c.image_url || c.preview_url));
+      })
+      .catch(() => {
+        // Strip simply doesn't render if the feed is unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Display hint only: the game always re-authorizes with its own
+  // signature handshake. Never treat a URL wallet as authentication.
+  const playUrl = wallet.address
+    ? `${GAME_URL}?wallet=${encodeURIComponent(wallet.address)}`
+    : GAME_URL;
+
   const schema = {
     "@context": "https://schema.org",
     "@type": "VideoGame",
@@ -29,20 +95,16 @@ const AstraPage: NextPage = () => {
     url: "https://joinhavn.io/astra",
     image: "https://joinhavn.io/astra/scenes/shmup_combat.png",
     description:
-      "Astra Valkyries is the sci-fi world connected to JoinHavn, where combat, pilots, progression, and collected assets gain meaning.",
+      "Astra Valkyries is the sci-fi world connected to JoinHavn: arcade combat where victories earn shared credits and the GPU network paints your pilot's wins.",
     genre: ["Shooter", "Sci-Fi", "Action"],
-    publisher: {
-      "@type": "Organization",
-      name: "JoinHavn",
-      url: "https://joinhavn.io",
-    },
+    publisher: { "@type": "Organization", name: "JoinHavn", url: "https://joinhavn.io" },
   };
 
   return (
     <>
       <SeoHead
-        title="Astra Valkyries sci-fi game world"
-        description="Explore Astra Valkyries, the sci-fi game world connected to JoinHavn where combat, pilots, progression, and collected assets come together."
+        title="Astra Valkyries — play, earn, and let the network paint your victories"
+        description="Arcade space combat wired into the JoinHavn economy: win runs, earn shared credits, and receive AI-generated art of your own pilot, rendered by the GPU grid."
         path="/astra"
         image="/astra/scenes/shmup_combat.png"
         schema={schema}
@@ -51,71 +113,135 @@ const AstraPage: NextPage = () => {
       <SiteHeader />
 
       <main className="jh-page-shell">
+        {/* ── Hero ── */}
         <section className="jh-hero">
           <div className="jh-hero-bg" aria-hidden="true">
             <img src="/astra/scenes/shmup_combat.png" alt="" className="jh-hero-bg-img" />
             <div className="jh-hero-bg-overlay" />
           </div>
-
           <div className="jh-hero-inner">
-            <h1 className="jh-hero-title">Astra Valkyries is where the ecosystem becomes a world.</h1>
+            <span className="jh-eyebrow">Astra Valkyries</span>
+            <h1 className="jh-hero-title">Win the run. The network paints it.</h1>
             <p className="jh-hero-subtitle">
-              Play combat runs, choose pilots and loadouts, return to the spaceport, and give claimed assets a real place to matter.
+              Arcade space combat wired into a real economy. Victories earn shared HavnAI
+              credits — and the GPU grid renders your pilot, your outfit, your zone, your grade.
             </p>
             <div className="jh-hero-actions">
-              <a
-                href="https://astra.joinhavn.io/"
-                className="jh-btn jh-btn-primary"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Play Astra
+              <a href={playUrl} className="jh-btn jh-btn-primary" target="_blank" rel="noreferrer">
+                {wallet.shortAddress ? `Play as ${wallet.shortAddress}` : "Play Astra"}
               </a>
               <Link href="/create" className="jh-btn jh-btn-secondary">
-                Start Creating
+                Open Generator
               </Link>
               <Link href="/marketplace" className="jh-btn jh-btn-tertiary">
-                Explore Marketplace
+                Marketplace
               </Link>
             </div>
           </div>
         </section>
 
-        <section className="page-container" style={{ paddingTop: "2rem", paddingBottom: "2rem" }}>
-          <div className="chart-section">
-            <div className="chart-header">
-              <h2 className="chart-title">Why Astra matters</h2>
-            </div>
-            <p style={{ color: "var(--text-muted)", lineHeight: 1.75 }}>
-              Astra is not just an outbound play link. It is the front door of the JoinHavn ecosystem, the place where creation,
-              collection, and progression connect to an actual game loop instead of staying abstract.
+        {/* ── The loop ── */}
+        <section className="jh-pipeline">
+          <div className="jh-pipeline-header">
+            <span className="jh-eyebrow">One wallet, one economy</span>
+            <h2>Play. Earn. Collect. Create.</h2>
+            <p>
+              Astra is not a promo page for the platform — it is the platform, playable.
+              The credits you win are the credits that generate.
             </p>
           </div>
+          <div className="jh-pipeline-flow">
+            {loopSteps.map((step, i) => (
+              <div key={step.title} style={{ display: "contents" }}>
+                <div className="jh-pipeline-step">
+                  <span className="jh-pipeline-icon">{i + 1}</span>
+                  <strong>{step.title}</strong>
+                  <span>{step.text}</span>
+                </div>
+                {i < loopSteps.length - 1 && <span className="jh-pipeline-connector" aria-hidden="true" />}
+              </div>
+            ))}
+          </div>
+        </section>
 
-          <div className="gallery-grid" style={{ marginTop: "1.5rem" }}>
-            {gameplayCards.map((card) => (
-              <article key={card.title} className="output-card">
-                <img src={card.image} alt={card.title} style={{ width: "100%", borderRadius: "16px", marginBottom: "1rem" }} />
-                <h3 style={{ marginTop: 0 }}>{card.title}</h3>
-                <p style={{ color: "var(--text-muted)", lineHeight: 1.7 }}>{card.description}</p>
+        {/* ── Fresh from the grid ── */}
+        {creations.length > 0 && (
+          <section className="jh-showcase">
+            <div className="jh-showcase-header">
+              <span className="jh-eyebrow">Fresh from the grid</span>
+              <h2>Player victories, painted by the network.</h2>
+              <p>
+                Every one of these was generated for a real run — pilot, outfit, zone,
+                and grade straight from the mission that earned it.
+              </p>
+            </div>
+            <div className="jh-showcase-grid">
+              {creations.map((creation) => (
+                <article key={creation.job_id} className="jh-showcase-card">
+                  <div className="jh-showcase-img-wrap">
+                    <img
+                      src={resolveAssetUrl(creation.image_url ?? creation.preview_url)}
+                      alt={`Grade ${creation.grade} victory render on ${creation.map_id.replace(/-/g, " ")}`}
+                      className="jh-showcase-img"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className="jh-showcase-card-body">
+                    <strong>Grade {creation.grade} — {creation.map_id.replace(/-/g, " ")}</strong>
+                    <span>flown by {creation.pilot_short}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Zones ── */}
+        <section className="jh-showcase">
+          <div className="jh-showcase-header">
+            <span className="jh-eyebrow">Three zones</span>
+            <h2>Eighteen waves. Three bosses. One route at a time.</h2>
+            <p>Clear a zone at grade B or better to unlock the next.</p>
+          </div>
+          <div className="jh-showcase-grid">
+            {zones.map((zone) => (
+              <article key={zone.name} className="jh-showcase-card">
+                <div className="jh-showcase-img-wrap">
+                  <img src={zone.image} alt={zone.name} className="jh-showcase-img" loading="lazy" />
+                </div>
+                <div className="jh-showcase-card-body">
+                  <strong>{zone.name}</strong>
+                  <span>{zone.description}</span>
+                </div>
               </article>
             ))}
           </div>
+        </section>
 
-          <div className="chart-section" style={{ marginTop: "1.5rem" }}>
-            <div className="chart-header">
-              <h2 className="chart-title">How Astra connects back to JoinHavn</h2>
-            </div>
-            <div style={{ display: "grid", gap: "1rem", color: "var(--text-muted)", lineHeight: 1.75 }}>
-              <p><strong style={{ color: "var(--text)" }}>Create</strong> on the JoinHavn generator and build outputs that can move into your broader ecosystem flow.</p>
-              <p><strong style={{ color: "var(--text)" }}>Collect</strong> through library, inbox, claim, and collection paths so owned assets feel persistent.</p>
-              <p><strong style={{ color: "var(--text)" }}>Use</strong> Astra as the world layer where progression, identity, and atmosphere make those assets mean something.</p>
-            </div>
-            <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", marginTop: "1.25rem" }}>
-              <Link href="/create" className="jh-btn jh-btn-secondary">Create Assets</Link>
-              <Link href="/pricing" className="jh-btn jh-btn-secondary">View Credits</Link>
-              <Link href="/run-a-node" className="jh-btn jh-btn-tertiary">Run a Node</Link>
-            </div>
+        {/* ── Pilots ── */}
+        <section className="jh-characters">
+          <div className="jh-showcase-header">
+            <span className="jh-eyebrow">The Valkyries</span>
+            <h2>Three pilots. Distinct voices. Real dialogue.</h2>
+          </div>
+          <div className="jh-hero-pilots">
+            {pilots.map((pilot) => (
+              <article key={pilot.name} className="jh-pilot-card">
+                <img src={pilot.image} alt={pilot.name} className="jh-pilot-img" loading="lazy" />
+                <div className="jh-pilot-info">
+                  <strong>{pilot.name}</strong>
+                  <span>{pilot.role}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="jh-hero-actions" style={{ justifyContent: "center", marginTop: "2rem" }}>
+            <a href={playUrl} className="jh-btn jh-btn-primary" target="_blank" rel="noreferrer">
+              Launch Astra Valkyries
+            </a>
+            <Link href="/pricing" className="jh-btn jh-btn-tertiary">
+              Credits &amp; Pricing
+            </Link>
           </div>
         </section>
       </main>
