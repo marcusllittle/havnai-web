@@ -794,6 +794,37 @@ export async function verifyProofReceiptLocally(
   }
 }
 
+export interface MyJobSummary {
+  job_id: string;
+  model?: string;
+  task_type?: string;
+  type: "image" | "video";
+  status: string;
+  timestamp: number;
+  completed_at?: number | null;
+}
+
+/**
+ * A wallet's own generation history, straight from the server.
+ *
+ * The Library page was localStorage-only, so it lost everything on a
+ * cleared browser and showed nothing on a second device. This backs it.
+ */
+export async function fetchMyJobs(
+  wallet: string,
+  options: { limit?: number; offset?: number } = {}
+): Promise<MyJobSummary[]> {
+  const params = new URLSearchParams({ wallet });
+  if (options.limit != null) params.set("limit", String(options.limit));
+  if (options.offset != null) params.set("offset", String(options.offset));
+  const res = await fetchWithTimeout(apiUrl(`/jobs/mine?${params.toString()}`), {
+    headers: buildHeaders(false),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.jobs) ? data.jobs : [];
+}
+
 export async function fetchResult(jobId: string): Promise<ResultResponse> {
   const res = await fetch(apiUrl(`/result/${encodeURIComponent(jobId)}`));
   if (!res.ok) {

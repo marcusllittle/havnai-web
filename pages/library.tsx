@@ -9,6 +9,7 @@ import { SiteHeader } from "../components/SiteHeader";
 import { downloadAsset } from "../lib/download";
 import {
   fetchJob,
+  fetchMyJobs,
   fetchResult,
   createGalleryListingWithMetaMask,
   formatApiError,
@@ -18,6 +19,7 @@ import {
 } from "../lib/havnai";
 import {
   loadLibrary,
+  mergeServerJobs,
   removeFromLibrary,
   bulkRemoveFromLibrary,
   LibraryEntry,
@@ -226,10 +228,41 @@ const LibraryPage: NextPage = () => {
     setSellLoading(false);
   };
 
+  // Seed from localStorage immediately so the grid paints without waiting on
+  // the network, then reconcile against the wallet's real server-side history.
+  // Before this, the Collection was localStorage-only: a cleared browser, a
+  // private window, or a second device showed nothing, and generation 201
+  // silently evicted the oldest entry.
   useEffect(() => {
-    const stored = loadLibrary();
-    setEntries(stored);
+    setEntries(loadLibrary());
   }, []);
+
+  const activeWallet = wallet.activeWallet;
+  useEffect(() => {
+    if (!activeWallet) return;
+    let active = true;
+    (async () => {
+      try {
+        const jobs = await fetchMyJobs(activeWallet, { limit: 500 });
+        if (!active) return;
+        setEntries(
+          mergeServerJobs(
+            jobs.map((job) => ({
+              job_id: job.job_id,
+              created_at: new Date((job.timestamp || 0) * 1000).toISOString(),
+              type: job.type,
+            }))
+          )
+        );
+      } catch {
+        // Offline or an older backend without /jobs/mine: the local cache
+        // is still showing, so there is nothing useful to surface here.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [activeWallet]);
 
   useEffect(() => {
     let active = true;
