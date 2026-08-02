@@ -18,7 +18,7 @@ const principles = [
   },
   {
     title: "Owned assets can move",
-    body: "Items in your Collection can be used in Astra's game world, listed on the marketplace, or held in your inventory indefinitely.",
+    body: "Items in your Collection can be flown as decor in Astra's hangar, listed on the marketplace, or held in your inventory indefinitely.",
   },
 ];
 
@@ -138,8 +138,9 @@ const OwnershipPage: NextPage = () => (
           </div>
           <div style={{ display: "grid", gap: "1rem", color: "var(--text-muted)", lineHeight: 1.75, marginTop: "1rem" }}>
             <p>
-              <strong style={{ color: "var(--text)" }}>Use in Astra</strong> — Claimed pilots, ships, and equipment appear in Astra's
-              game world and carry meaning inside the game loop.
+              <strong style={{ color: "var(--text)" }}>Fly in Astra</strong> — Claimed assets appear in Astra under
+              Collection &rarr; Owned, and can be flown as hangar decor. Cosmetic only, on purpose: owned assets never
+              change a stat, so nothing on the marketplace can buy an advantage in a run.
             </p>
             <p>
               <strong style={{ color: "var(--text)" }}>List on the marketplace</strong> — Assets in your Collection can be listed for

@@ -31,7 +31,7 @@ const steps = [
   { step: "2", label: "Generate and compare", detail: "Run multiple outputs and compare results side by side." },
   { step: "3", label: "Save to your Library", detail: "Keep what you like. Your Library is your working output history." },
   { step: "4", label: "Claim into your Collection", detail: "Move selected assets into your Collection via the inbox and claim flow." },
-  { step: "5", label: "Use in Astra and beyond", detail: "Bring assets into the Astra game world or list them on the marketplace." },
+  { step: "5", label: "Use in Astra and beyond", detail: "Fly owned assets as decor in Astra's hangar, or list them on the marketplace." },
 ];
 
 const schema = {

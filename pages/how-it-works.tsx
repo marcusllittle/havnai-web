@@ -43,7 +43,7 @@ const pipeline = [
     stage: "Astra / Marketplace",
     label: "Use what you own",
     detail:
-      "Bring your Collection into Astra where assets gain game-world context: pilots, ships, and atmosphere become meaningful inside a real game loop. Or list items on the marketplace.",
+      "Bring your Collection into Astra and fly what you own as hangar decor — cosmetic only, so the marketplace never sells an advantage. Or list items for sale.",
     cta: { label: "Explore Astra", href: "/astra" },
   },
 ];
@@ -59,7 +59,7 @@ const faqs = [
   },
   {
     q: "How do assets get from Collection into Astra?",
-    a: "Claimed assets in your Collection are recognized inside Astra's game world. Pilots, ships, and loadout items you own carry through into the game loop.",
+    a: "Connect the same wallet in Astra and open Collection → Owned. Anything you have claimed on JoinHavn shows up there, and you can fly one as hangar decor. Owned assets are cosmetic by design — they never change a stat, so no one can buy an advantage in a run. Sell an asset and it retires from your hangar automatically.",
   },
   {
     q: "Can I sell assets from my Collection on the marketplace?",
