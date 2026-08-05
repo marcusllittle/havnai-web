@@ -15,11 +15,15 @@ const reasons = [
 const setupSteps = [
   {
     title: "Run the installer",
-    body: "Install the node runtime, pull the client, and set up the working environment on your GPU machine.",
+    body: "Installs the full node runtime — image, face swap and video modules — plus the Python environment and a supervised service.",
   },
   {
-    title: "Connect your wallet",
-    body: "Attach the wallet address used for Public Alpha reward attribution and future settlement flows.",
+    title: "Download model weights",
+    body: "Checkpoints are the bulk of the download. Open-license weights come from Hugging Face; the rest stream from the coordinator.",
+  },
+  {
+    title: "Verify with the preflight check",
+    body: "havnai-doctor reports exactly what your machine can serve and what is blocking anything it cannot. Run it before going online.",
   },
   {
     title: "Start serving jobs",
@@ -43,6 +47,18 @@ const faqs = [
   {
     q: "How do I know my node is online?",
     a: "After install, check the Nodes page or the coordinator dashboard. If the process is healthy and can reach the coordinator, your operator should appear there as online.",
+  },
+  {
+    q: "How do I know my node can actually serve the jobs it accepts?",
+    a: "Run ~/.havnai/bin/havnai-doctor. It reports image, face swap and video readiness separately, checking dependencies, GPU and CUDA, model weights and coordinator reachability, and prints a fix for anything blocking. The installer runs it automatically as its final step.",
+  },
+  {
+    q: "Where do the model weights come from?",
+    a: "Each model in the registry declares its source. Open-license weights are pulled from the Hugging Face CDN, weights the grid hosts stream from the coordinator using your join token, and a small number carry restricted licences you supply yourself — havnai-fetch-models names the exact file and directory for those. Downloads resume where they left off and are checksummed before use.",
+  },
+  {
+    q: "Is there a version I can use without the terminal?",
+    a: "Yes. A desktop app wraps the same tooling: it installs the node, shows the preflight results, downloads weights with progress, and starts and stops the node.",
   },
 ];
 
@@ -169,8 +185,11 @@ const RunANodePage: NextPage = () => {
               <h2 className="chart-title">Quick install</h2>
             </div>
             <p style={{ color: "var(--text-muted)", marginBottom: "1rem", lineHeight: 1.7 }}>
-              Run this on the machine that will serve jobs. It pulls the installer, sets up the runtime,
-              and registers the node against the JoinHavn coordinator.
+              Run this on the machine that will serve jobs. It installs the complete runtime — image,
+              face swap and video — sets up the Python environment, downloads model weights, and
+              finishes by running a preflight check that tells you exactly what your machine can serve.
+              Re-running it is safe: the new runtime is staged and verified before it replaces the
+              running one.
             </p>
             <div style={{ position: "relative" }}>
               <pre style={{ padding: "1rem", borderRadius: "12px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.85rem", lineHeight: 1.5 }}>
@@ -226,7 +245,7 @@ const RunANodePage: NextPage = () => {
                   </tr>
                   <tr>
                     <td>Disk</td>
-                    <td>Roughly 20 GB free for models, environment setup, and cache.</td>
+                    <td>25 GB free minimum. Checkpoints are 2–7 GB each, so 150 GB+ is realistic if you serve many models.</td>
                   </tr>
                   <tr>
                     <td>Network</td>
@@ -271,9 +290,28 @@ const RunANodePage: NextPage = () => {
                 <code>{`# ~/.havnai/.env\nJOIN_TOKEN=your-token-here`}</code>
               </pre>
 
-              <p style={{ marginBottom: "0.5rem" }}><strong style={{ color: "var(--text)" }}>3. Start the node</strong></p>
+              <p style={{ marginBottom: "0.5rem" }}><strong style={{ color: "var(--text)" }}>3. Download model weights</strong></p>
               <pre style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
-                <code>{`# Linux\nsystemctl --user start havnai-node\nsystemctl --user enable havnai-node\n\n# Or run directly\ncd ~/.havnai && ./venv/bin/python havnai_client.py`}</code>
+                <code>{`~/.havnai/bin/havnai-fetch-models --face-assets`}</code>
+              </pre>
+              <p style={{ marginBottom: "1rem", fontSize: "0.85rem" }}>
+                The installer does this for you on GPU machines. Re-run it any time the model
+                registry gains an entry. Transfers resume where they left off.
+              </p>
+
+              <p style={{ marginBottom: "0.5rem" }}><strong style={{ color: "var(--text)" }}>4. Check what your node can serve</strong></p>
+              <pre style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
+                <code>{`~/.havnai/bin/havnai-doctor`}</code>
+              </pre>
+              <p style={{ marginBottom: "1rem", fontSize: "0.85rem" }}>
+                Reports image, face swap and video readiness separately, with a fix for anything
+                blocking. Worth running before you go online — a node that starts with a broken
+                capability will accept those jobs and fail them.
+              </p>
+
+              <p style={{ marginBottom: "0.5rem" }}><strong style={{ color: "var(--text)" }}>5. Start the node</strong></p>
+              <pre style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
+                <code>{`# Linux\nsystemctl --user start havnai-node\nsystemctl --user enable havnai-node\n\n# Or run directly\n~/.havnai/bin/havnai-node`}</code>
               </pre>
 
               <p>
