@@ -2,6 +2,7 @@ import type { NextPage } from "next";
 import Link from "next/link";
 import { useState } from "react";
 import { CinematicPageHero } from "../components/CinematicPageHero";
+import { NodeAppDownload } from "../components/NodeAppDownload";
 import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import { getApiBase } from "../lib/apiBase";
@@ -180,9 +181,11 @@ const RunANodePage: NextPage = () => {
             </ul>
           </div>
 
+          <NodeAppDownload />
+
           <div className="chart-section" id="quick-install">
             <div className="chart-header">
-              <h2 className="chart-title">Quick install</h2>
+              <h2 className="chart-title">Or install from the terminal</h2>
             </div>
             <p style={{ color: "var(--text-muted)", marginBottom: "1rem", lineHeight: 1.7 }}>
               Run this on the machine that will serve jobs. It installs the complete runtime — image,
