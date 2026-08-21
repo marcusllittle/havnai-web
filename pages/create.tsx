@@ -29,6 +29,7 @@ import {
   QuotaStatus,
   CreditBalance,
   VideoJobRequest,
+  resolveAssetUrl,
 } from "../lib/havnai";
 import {
   getPreferredVideoWorkflow,
@@ -458,6 +459,11 @@ const TestPage: React.FC = () => {
             selectedImageModelMeta?.image_defaults?.height
           )
       : formatResolutionLabel(selectedImageSizePreset.width, selectedImageSizePreset.height);
+  const imageReferencePreviewUrl = imageReferenceData || (
+    imageReferenceUrl.trim().startsWith("/")
+      ? resolveAssetUrl(imageReferenceUrl.trim())
+      : imageReferenceUrl.trim()
+  );
 
   useEffect(() => {
     let active = true;
@@ -1693,6 +1699,19 @@ const TestPage: React.FC = () => {
     setStatusMessage("Image loaded for animation.");
   };
 
+  const handleRefineImage = () => {
+    if (!imageUrl) return;
+    const coordinatorPath = imageUrl.startsWith("/api/") ? imageUrl.slice(4) : imageUrl;
+    setMode("image");
+    setAdvancedOpen(true);
+    setImageReferenceData(undefined);
+    setImageReferenceName(undefined);
+    setImageReferenceUrl(coordinatorPath);
+    setImagePreservation("maximum");
+    setImageSizePreset("auto");
+    setStatusMessage("Output loaded as the refinement reference.");
+  };
+
   const openJobDetails = async (id: string, summary?: JobSummary) => {
     setDrawerOpen(true);
     setDrawerLoading(true);
@@ -2211,11 +2230,11 @@ const TestPage: React.FC = () => {
                       {imageReferenceName && (
                         <p className="generator-help">Using uploaded file: {imageReferenceName}</p>
                       )}
-                      {(imageReferenceData || imageReferenceUrl.trim()) && (
+                      {imageReferencePreviewUrl && (
                         <>
                           <div className="generator-face-preview">
                             <img
-                              src={imageReferenceData || imageReferenceUrl.trim()}
+                              src={imageReferencePreviewUrl}
                               alt="Reference preview"
                             />
                           </div>
@@ -2686,6 +2705,7 @@ const TestPage: React.FC = () => {
                   onRetry={handleCheckStatus}
                   onUseLastFrame={handleUseLastFrame}
                   onAnimateImage={handleAnimateImage}
+                  onRefineImage={handleRefineImage}
                 />
               </div>
             </div>

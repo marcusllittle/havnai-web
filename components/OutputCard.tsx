@@ -11,6 +11,7 @@ interface OutputCardProps {
   onRetry?: () => void;
   onUseLastFrame?: (dataUrl: string) => void;
   onAnimateImage?: () => void;
+  onRefineImage?: () => void;
 }
 
 /** Clean up model name for display */
@@ -39,6 +40,7 @@ export const OutputCard: React.FC<OutputCardProps> = ({
   onRetry,
   onUseLastFrame,
   onAnimateImage,
+  onRefineImage,
 }) => {
   const [frameBusy, setFrameBusy] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
@@ -219,6 +221,15 @@ export const OutputCard: React.FC<OutputCardProps> = ({
               className="generator-download"
             >
               Animate image
+            </button>
+          ) : null}
+          {imageUrl && onRefineImage ? (
+            <button
+              type="button"
+              onClick={onRefineImage}
+              className="generator-download"
+            >
+              Refine image
             </button>
           ) : null}
         </div>
