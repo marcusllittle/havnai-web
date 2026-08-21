@@ -34,6 +34,7 @@ export const isVideoWorkflowInitImageMissing = (
 const FIDELITY_WORKFLOW_IDS = new Set([
   "faithful_i2v",
   "faithful_portrait_i2v",
+  "faithful_square_i2v",
 ]);
 
 export const getSourceOrientedFidelityWorkflow = (
@@ -46,9 +47,20 @@ export const getSourceOrientedFidelityWorkflow = (
   if (!selectedWorkflowId || !FIDELITY_WORKFLOW_IDS.has(selectedWorkflowId)) {
     return undefined;
   }
-  if (sourceWidth === sourceHeight) return undefined;
-
-  const targetId =
-    sourceHeight > sourceWidth ? "faithful_portrait_i2v" : "faithful_i2v";
-  return workflows.find((workflow) => workflow.id === targetId);
+  const sourceAspect = sourceWidth / sourceHeight;
+  const candidates = workflows.filter((workflow) => {
+    const width = workflow.settings?.width || 0;
+    const height = workflow.settings?.height || 0;
+    return FIDELITY_WORKFLOW_IDS.has(workflow.id) && width > 0 && height > 0;
+  });
+  return candidates.reduce<VideoWorkflow | undefined>((closest, workflow) => {
+    if (!closest) return workflow;
+    const workflowAspect =
+      (workflow.settings?.width || 1) / (workflow.settings?.height || 1);
+    const closestAspect =
+      (closest.settings?.width || 1) / (closest.settings?.height || 1);
+    const distance = Math.abs(Math.log(sourceAspect / workflowAspect));
+    const closestDistance = Math.abs(Math.log(sourceAspect / closestAspect));
+    return distance < closestDistance ? workflow : closest;
+  }, undefined);
 };

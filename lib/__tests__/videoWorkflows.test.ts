@@ -25,8 +25,21 @@ describe("getPreferredVideoWorkflow", () => {
 
 describe("getSourceOrientedFidelityWorkflow", () => {
   const workflows: VideoWorkflow[] = [
-    { id: "faithful_i2v", label: "Maximum fidelity" },
-    { id: "faithful_portrait_i2v", label: "Maximum fidelity - Portrait" },
+    {
+      id: "faithful_i2v",
+      label: "Maximum fidelity",
+      settings: { width: 1280, height: 704 },
+    },
+    {
+      id: "faithful_portrait_i2v",
+      label: "Maximum fidelity - Portrait",
+      settings: { width: 704, height: 1280 },
+    },
+    {
+      id: "faithful_square_i2v",
+      label: "Maximum fidelity - Square",
+      settings: { width: 960, height: 960 },
+    },
     { id: "balanced_i2v", label: "Balanced motion" },
   ];
 
@@ -59,10 +72,18 @@ describe("getSourceOrientedFidelityWorkflow", () => {
     ).toBeUndefined();
   });
 
-  it("does not guess an orientation for a square or invalid source", () => {
+  it("selects square fidelity for square and near-square sources", () => {
     expect(
       getSourceOrientedFidelityWorkflow(workflows, 1024, 1024, "faithful_i2v")
-    ).toBeUndefined();
+        ?.id
+    ).toBe("faithful_square_i2v");
+    expect(
+      getSourceOrientedFidelityWorkflow(workflows, 1200, 1000, "faithful_i2v")
+        ?.id
+    ).toBe("faithful_square_i2v");
+  });
+
+  it("does not select a workflow for invalid source dimensions", () => {
     expect(
       getSourceOrientedFidelityWorkflow(workflows, 0, 1024, "faithful_i2v")
     ).toBeUndefined();
