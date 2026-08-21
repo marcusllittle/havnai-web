@@ -332,6 +332,7 @@ export interface SubmitJobOptions {
   referenceFaceUrl?: string;
   initImage?: string;
   img2imgStrength?: number;
+  preserveReferenceAspect?: boolean;
   loras?: LoraConfig[];
   hardcoreMode?: boolean;
   sfwMode?: boolean;
@@ -528,6 +529,9 @@ export async function submitAutoJob(
       body.init_image = options.initImage.trim();
       if (options.img2imgStrength != null) {
         body.img2img_strength = options.img2imgStrength;
+      }
+      if (options.preserveReferenceAspect != null) {
+        body.preserve_reference_aspect = options.preserveReferenceAspect;
       }
     }
     if (options.sampler && options.sampler.trim().length > 0) {

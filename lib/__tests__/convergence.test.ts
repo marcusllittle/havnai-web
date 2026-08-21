@@ -85,6 +85,7 @@ describe("API contract convergence", () => {
     await havnai.submitAutoJob("preserve composition", "sdxl-model", "", {
       initImage: "data:image/png;base64,abc",
       img2imgStrength: 0.2,
+      preserveReferenceAspect: true,
     });
 
     const [url, init] = fetchMock.mock.calls[0];
@@ -94,6 +95,7 @@ describe("API contract convergence", () => {
       model: "sdxl-model",
       init_image: "data:image/png;base64,abc",
       img2img_strength: 0.2,
+      preserve_reference_aspect: true,
     });
   });
 

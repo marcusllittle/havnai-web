@@ -451,10 +451,12 @@ const TestPage: React.FC = () => {
     IMAGE_SIZE_PRESETS.find((preset) => preset.id === imageSizePreset) || IMAGE_SIZE_PRESETS[0];
   const selectedImageResolution =
     imageSizePreset === "auto"
-      ? formatResolutionLabel(
-          selectedImageModelMeta?.image_defaults?.width,
-          selectedImageModelMeta?.image_defaults?.height
-        )
+      ? imageReferenceData || imageReferenceUrl.trim()
+        ? "Reference aspect"
+        : formatResolutionLabel(
+            selectedImageModelMeta?.image_defaults?.width,
+            selectedImageModelMeta?.image_defaults?.height
+          )
       : formatResolutionLabel(selectedImageSizePreset.width, selectedImageSizePreset.height);
 
   useEffect(() => {
@@ -921,6 +923,7 @@ const TestPage: React.FC = () => {
     if (imageReference) {
       options.initImage = imageReference;
       options.img2imgStrength = IMAGE_PRESERVATION_STRENGTH[imagePreservation];
+      options.preserveReferenceAspect = imageSizePreset === "auto";
     }
     if (requestedLoras.length > 0) options.loras = requestedLoras;
     if (sfwMode) options.sfwMode = true;
@@ -2290,7 +2293,9 @@ const TestPage: React.FC = () => {
                         })}
                       </select>
                       <p className="generator-help">
-                        Auto uses the selected model&apos;s recommended resolution. Presets use SDXL-safe aspect ratios.
+                        {imageReferenceData || imageReferenceUrl.trim()
+                          ? "Auto follows the reference image. Presets crop to the selected aspect ratio."
+                          : "Auto uses the selected model's recommended resolution. Presets use SDXL-safe aspect ratios."}
                       </p>
                       <label className="generator-label" htmlFor="image-seed">
                         Seed (optional)
