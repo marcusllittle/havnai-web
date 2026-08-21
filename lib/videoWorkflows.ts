@@ -7,6 +7,7 @@ export type VideoWorkflowSettings = {
   fps?: number;
   strength?: number;
   lora_strength?: number;
+  prompt_enhancer?: "T" | "TI" | "T1" | "TI1";
 };
 
 export type VideoWorkflow = {

@@ -309,6 +309,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     height: jobData.height ?? jobData.overrides?.height,
     fps: jobData.fps,
     frames: jobData.frames,
+    prompt_enhancer: jobData.prompt_enhancer,
     sampler: jobData.sampler ?? jobData.overrides?.sampler,
   };
 
