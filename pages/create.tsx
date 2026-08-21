@@ -51,6 +51,7 @@ import {
 } from "../lib/activeCreateJob";
 import {
   ActiveVideoChain,
+  buildVideoChainClipRequest,
   clearActiveVideoChain,
   loadActiveVideoChain,
   saveActiveVideoChain,
@@ -1101,8 +1102,12 @@ const TestPage: React.FC = () => {
     });
     let initImage = recovery ? "" : (videoInitData || videoInitUrl).trim();
     const initialRequest = recovery?.request ?? buildVideoRequest(promptText, undefined);
-    const { initImage: _ignoredInitImage, extendChunks: _ignoredExtendChunks, ...requestTemplate } =
-      initialRequest;
+    const {
+      initImage: _ignoredInitImage,
+      extendChunks: _ignoredExtendChunks,
+      continuation: _ignoredContinuation,
+      ...requestTemplate
+    } = initialRequest;
 
     if (recovery && !currentJobId && currentIndex > 0 && jobIds.length > 0) {
       const previousResult = await fetchResult(jobIds[jobIds.length - 1]);
@@ -1114,11 +1119,12 @@ const TestPage: React.FC = () => {
 
     while (currentIndex < total) {
       if (!currentJobId) {
-        const request: VideoJobRequest = {
-          ...requestTemplate,
-          prompt: promptText,
-          ...(initImage ? { initImage } : {}),
-        };
+        const request = buildVideoChainClipRequest(
+          requestTemplate as VideoJobRequest,
+          promptText,
+          initImage,
+          currentIndex
+        );
         currentJobId = await submitVideoJob(request);
         saveActiveVideoChain({
           prompt: promptText,

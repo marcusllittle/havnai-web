@@ -114,6 +114,7 @@ describe("API contract convergence", () => {
       prompt: "preserve source motion",
       workflowId: "faithful_i2v",
       initImage: "data:image/png;base64,source",
+      continuation: true,
       strength: 0.9,
       frames: 121,
     });
@@ -124,6 +125,7 @@ describe("API contract convergence", () => {
       model: "ltx23_wangp_distilled",
       workflow_id: "faithful_i2v",
       init_image: "data:image/png;base64,source",
+      continuation: true,
       strength: 0.9,
       frames: 121,
     });

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   ACTIVE_VIDEO_CHAIN_KEY,
   ACTIVE_VIDEO_CHAIN_MAX_AGE_MS,
+  buildVideoChainClipRequest,
   clearActiveVideoChain,
   loadActiveVideoChain,
   saveActiveVideoChain,
@@ -63,5 +64,25 @@ describe("active video chain persistence", () => {
     expect(shouldPrepareNextVideoClip(0, 2)).toBe(true);
     expect(shouldPrepareNextVideoClip(1, 2)).toBe(false);
     expect(shouldPrepareNextVideoClip(2, 3)).toBe(false);
+  });
+
+  it("marks only clips after the first as continuations", () => {
+    const request = {
+      prompt: "original",
+      model: "ltx23_wangp_distilled",
+      workflowId: "faithful_i2v",
+    };
+
+    expect(buildVideoChainClipRequest(request, "motion", "source.png", 0)).toEqual({
+      ...request,
+      prompt: "motion",
+      initImage: "source.png",
+    });
+    expect(buildVideoChainClipRequest(request, "motion", "last-frame.png", 1)).toEqual({
+      ...request,
+      prompt: "motion",
+      initImage: "last-frame.png",
+      continuation: true,
+    });
   });
 });

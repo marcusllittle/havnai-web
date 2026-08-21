@@ -221,6 +221,7 @@ export interface VideoJobRequest {
   fps?: number;
   initImage?: string;
   extendChunks?: number;
+  continuation?: boolean;
   strength?: number;
   workflowId?: string;
   sfwMode?: boolean;
@@ -672,6 +673,7 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   if (request.fps != null) body.fps = request.fps;
   if (request.initImage) body.init_image = request.initImage;
   if (request.extendChunks != null) body.extend_chunks = request.extendChunks;
+  if (request.continuation === true) body.continuation = true;
   if (request.strength != null) body.strength = request.strength;
   if (request.workflowId) body.workflow_id = request.workflowId;
   if (request.sfwMode === true) body.sfw_mode = true;
