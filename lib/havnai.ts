@@ -69,6 +69,7 @@ export interface JobDetail {
   };
   input_assets?: {
     init_image?: boolean;
+    reference_image?: boolean;
     inpaint_mask?: boolean;
     base_image?: boolean;
     reference_face?: boolean;
@@ -220,6 +221,7 @@ export interface VideoJobRequest {
   frames?: number;
   fps?: number;
   initImage?: string;
+  referenceImage?: string;
   extendChunks?: number;
   continuation?: boolean;
   strength?: number;
@@ -689,6 +691,7 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   if (request.frames != null) body.frames = request.frames;
   if (request.fps != null) body.fps = request.fps;
   if (request.initImage) body.init_image = request.initImage;
+  if (request.referenceImage) body.reference_image = request.referenceImage;
   if (request.extendChunks != null) body.extend_chunks = request.extendChunks;
   if (request.continuation === true) body.continuation = true;
   if (request.strength != null) body.strength = request.strength;

@@ -382,6 +382,9 @@ const TestPage: React.FC = () => {
   const [videoInitUrl, setVideoInitUrl] = useState("");
   const [videoInitData, setVideoInitData] = useState<string | undefined>();
   const [videoInitName, setVideoInitName] = useState<string | undefined>();
+  const [videoReferenceUrl, setVideoReferenceUrl] = useState("");
+  const [videoReferenceData, setVideoReferenceData] = useState<string | undefined>();
+  const [videoReferenceName, setVideoReferenceName] = useState<string | undefined>();
   const [videoInitStrength, setVideoInitStrength] = useState("1");
   const [selectedVideoWorkflowId, setSelectedVideoWorkflowId] = useState("");
   const [faceSourceUrl, setFaceSourceUrl] = useState("");
@@ -449,6 +452,9 @@ const TestPage: React.FC = () => {
     mode === "video" && selectedModel ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
   const isLtx23Model =
     mode === "video" && selectedVideoModelMeta?.model_family === "ltx23_wangp";
+  const supportsLtxReferenceSheet =
+    mode === "video" &&
+    selectedVideoModelMeta?.capabilities?.includes("ingredients_reference_sheet") === true;
   const isLtxVideoModel =
     mode === "video" &&
     !!selectedModel &&
@@ -1066,6 +1072,10 @@ const TestPage: React.FC = () => {
     if (initImageValue) {
       request.initImage = initImageValue;
     }
+    const referenceImageValue = (videoReferenceData || videoReferenceUrl).trim();
+    if (supportsLtxReferenceSheet && referenceImageValue) {
+      request.referenceImage = referenceImageValue;
+    }
     const strengthValue = parseOptionalFloat(videoInitStrength);
     if (strengthValue !== undefined) {
       request.strength = strengthValue;
@@ -1303,6 +1313,19 @@ const TestPage: React.FC = () => {
       setVideoInitUrl("");
     } catch (err: any) {
       setStatusMessage(err?.message || "Failed to read init image file.");
+    }
+  };
+
+  const handleVideoReferenceUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await readFileAsDataUrl(file);
+      setVideoReferenceData(data);
+      setVideoReferenceName(file.name);
+      setVideoReferenceUrl("");
+    } catch (err: any) {
+      setStatusMessage(err?.message || "Failed to read detail reference sheet.");
     }
   };
 
@@ -2569,6 +2592,43 @@ const TestPage: React.FC = () => {
                     />
                     {videoInitName && (
                       <p className="generator-help">Using uploaded file: {videoInitName}</p>
+                    )}
+                    {supportsLtxReferenceSheet && (
+                      <>
+                        <span className="generator-label">Detail reference sheet (optional)</span>
+                        <label className="generator-label" htmlFor="video-reference-url">
+                          Reference sheet URL
+                        </label>
+                        <input
+                          id="video-reference-url"
+                          type="text"
+                          className="generator-input"
+                          placeholder="https://... or data:image/..."
+                          value={videoReferenceUrl}
+                          onChange={(e) => {
+                            setVideoReferenceUrl(e.target.value);
+                            if (e.target.value.trim()) {
+                              setVideoReferenceData(undefined);
+                              setVideoReferenceName(undefined);
+                            }
+                          }}
+                        />
+                        <label className="generator-label" htmlFor="video-reference-upload">
+                          Upload reference sheet
+                        </label>
+                        <input
+                          id="video-reference-upload"
+                          type="file"
+                          accept="image/*"
+                          className="generator-input"
+                          onChange={handleVideoReferenceUpload}
+                        />
+                        {videoReferenceName && (
+                          <p className="generator-help">
+                            Using uploaded file: {videoReferenceName}
+                          </p>
+                        )}
+                      </>
                     )}
                     <label className="generator-label" htmlFor="video-init-strength">
                       Init image strength
