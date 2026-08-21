@@ -24,3 +24,8 @@ export const getPreferredVideoWorkflow = (
   if (!workflows?.length) return undefined;
   return workflows.find((workflow) => workflow.default) || workflows[0];
 };
+
+export const isVideoWorkflowInitImageMissing = (
+  workflow: VideoWorkflow | undefined,
+  initImage: string | undefined
+): boolean => Boolean(workflow?.requires_init_image && !initImage?.trim());

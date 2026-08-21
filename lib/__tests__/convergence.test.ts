@@ -101,6 +101,34 @@ describe("API contract convergence", () => {
     });
   });
 
+  it("submitVideoJob keeps workflow identity with explicit overrides", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ job_id: "job-video" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const havnai = await importHavnaiFresh();
+    await havnai.submitVideoJob({
+      model: "ltx23_wangp_distilled",
+      prompt: "preserve source motion",
+      workflowId: "faithful_i2v",
+      initImage: "data:image/png;base64,source",
+      strength: 0.9,
+      frames: 121,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("/api/submit-job");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      model: "ltx23_wangp_distilled",
+      workflow_id: "faithful_i2v",
+      init_image: "data:image/png;base64,source",
+      strength: 0.9,
+      frames: 121,
+    });
+  });
+
   it("extractVideoLastFrame delegates continuation extraction to the coordinator", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

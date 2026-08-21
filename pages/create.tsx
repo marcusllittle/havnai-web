@@ -34,6 +34,7 @@ import {
 } from "../lib/havnai";
 import {
   getPreferredVideoWorkflow,
+  isVideoWorkflowInitImageMissing,
   type VideoWorkflow,
 } from "../lib/videoWorkflows";
 import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
@@ -433,6 +434,10 @@ const TestPage: React.FC = () => {
   const videoWorkflows = selectedVideoModelMeta?.video_workflows || [];
   const selectedVideoWorkflow = videoWorkflows.find(
     (workflow) => workflow.id === selectedVideoWorkflowId
+  );
+  const videoWorkflowMissingInitImage = isVideoWorkflowInitImageMissing(
+    selectedVideoWorkflow,
+    videoInitData || videoInitUrl
   );
   const selectedFaceSwapModelMeta = faceswapModel
     ? modelRuntimeDefaults[faceswapModel.toLowerCase()]
@@ -1258,6 +1263,11 @@ const TestPage: React.FC = () => {
     }
     if (mode === "video" && !selectedVideoModelAvailable) {
       setStatusMessage("No online video capacity right now. Select an available video model and try again.");
+      return;
+    }
+    if (mode === "video" && videoWorkflowMissingInitImage) {
+      setAdvancedOpen(true);
+      setStatusMessage(`${selectedVideoWorkflow?.label || "This workflow"} requires an init image.`);
       return;
     }
     if (mode === "face_swap" && faceSwapModels.length === 0) {
@@ -2452,7 +2462,9 @@ const TestPage: React.FC = () => {
                       onChange={(e) => setNegativePrompt(e.target.value)}
                       rows={2}
                     />
-                    <span className="generator-label">Init image (optional)</span>
+                    <span className="generator-label">
+                      Init image{selectedVideoWorkflow?.requires_init_image ? "" : " (optional)"}
+                    </span>
                     <label className="generator-label" htmlFor="video-init-url">
                       Init image URL
                     </label>
@@ -2495,10 +2507,7 @@ const TestPage: React.FC = () => {
                       className="generator-input"
                       placeholder="1.0"
                       value={videoInitStrength}
-                      onChange={(e) => {
-                        setVideoInitStrength(e.target.value);
-                        setSelectedVideoWorkflowId("");
-                      }}
+                      onChange={(e) => setVideoInitStrength(e.target.value)}
                     />
                     <p className="generator-help">
                       {isLtx23Model
@@ -2520,10 +2529,7 @@ const TestPage: React.FC = () => {
                           className="generator-input"
                           placeholder="Recommended"
                           value={steps}
-                          onChange={(e) => {
-                            setSteps(e.target.value);
-                            setSelectedVideoWorkflowId("");
-                          }}
+                          onChange={(e) => setSteps(e.target.value)}
                         />
                       </div>
                       <div>
@@ -2539,10 +2545,7 @@ const TestPage: React.FC = () => {
                           className="generator-input"
                           placeholder="Recommended"
                           value={guidance}
-                          onChange={(e) => {
-                            setGuidance(e.target.value);
-                            setSelectedVideoWorkflowId("");
-                          }}
+                          onChange={(e) => setGuidance(e.target.value)}
                         />
                       </div>
                     </div>
@@ -2560,10 +2563,7 @@ const TestPage: React.FC = () => {
                           className="generator-input"
                           placeholder="Recommended"
                           value={width}
-                          onChange={(e) => {
-                            setWidth(e.target.value);
-                            setSelectedVideoWorkflowId("");
-                          }}
+                          onChange={(e) => setWidth(e.target.value)}
                         />
                       </div>
                       <div>
@@ -2579,10 +2579,7 @@ const TestPage: React.FC = () => {
                           className="generator-input"
                           placeholder="Recommended"
                           value={height}
-                          onChange={(e) => {
-                            setHeight(e.target.value);
-                            setSelectedVideoWorkflowId("");
-                          }}
+                          onChange={(e) => setHeight(e.target.value)}
                         />
                       </div>
                     </div>
@@ -2600,10 +2597,7 @@ const TestPage: React.FC = () => {
                           className="generator-input"
                           placeholder="Recommended"
                           value={frames}
-                          onChange={(e) => {
-                            setFrames(e.target.value);
-                            setSelectedVideoWorkflowId("");
-                          }}
+                          onChange={(e) => setFrames(e.target.value)}
                         />
                       </div>
                       <div>
@@ -2619,10 +2613,7 @@ const TestPage: React.FC = () => {
                           className="generator-input"
                           placeholder="Recommended"
                           value={fps}
-                          onChange={(e) => {
-                            setFps(e.target.value);
-                            setSelectedVideoWorkflowId("");
-                          }}
+                          onChange={(e) => setFps(e.target.value)}
                         />
                       </div>
                     </div>
