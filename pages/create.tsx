@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { SeoHead } from "../components/SeoHead";
 import { CinematicPageHero } from "../components/CinematicPageHero";
@@ -34,6 +34,7 @@ import {
 } from "../lib/havnai";
 import {
   getPreferredVideoWorkflow,
+  getSourceOrientedFidelityWorkflow,
   isVideoWorkflowInitImageMissing,
   type VideoWorkflow,
 } from "../lib/videoWorkflows";
@@ -236,6 +237,29 @@ const pickPreferredVideoModel = (models: { id: string; label: string }[]): strin
   return models.length > 0 ? models[0].id : "";
 };
 
+const readImageDimensions = (
+  source: string
+): Promise<{ width: number; height: number }> => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined") {
+      reject(new Error("Image dimensions are unavailable"));
+      return;
+    }
+    const image = new window.Image();
+    image.onload = () => {
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+        resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      } else {
+        reject(new Error("Image dimensions are unavailable"));
+      }
+    };
+    image.onerror = () => reject(new Error("Failed to inspect init image"));
+    image.src = /^(data:|blob:)/i.test(source)
+      ? source
+      : resolveAssetUrl(source) || source;
+  });
+};
+
 const inspectPromptIdentityAnchor = (promptText: string): {
   hasAnchorTag: boolean;
   slug?: string;
@@ -385,6 +409,7 @@ const TestPage: React.FC = () => {
   const imagePrefillKeyRef = useRef<string>("");
   const videoPrefillKeyRef = useRef<string>("");
   const faceSwapPrefillKeyRef = useRef<string>("");
+  const orientedVideoSourceRef = useRef<string>("");
   const activeRecoveryStartedRef = useRef(false);
 
   const apiBase = getApiBase();
@@ -439,6 +464,17 @@ const TestPage: React.FC = () => {
     selectedVideoWorkflow,
     videoInitData || videoInitUrl
   );
+  const applyVideoWorkflowSelection = useCallback((workflow: VideoWorkflow) => {
+    const values = workflow.settings || {};
+    setSelectedVideoWorkflowId(workflow.id);
+    setSteps(values.steps == null ? "" : String(values.steps));
+    setGuidance(values.guidance == null ? "" : String(values.guidance));
+    setWidth(values.width == null ? "" : String(values.width));
+    setHeight(values.height == null ? "" : String(values.height));
+    setFrames(values.frames == null ? "" : String(values.frames));
+    setFps(values.fps == null ? "" : String(values.fps));
+    setVideoInitStrength(values.strength == null ? "1" : String(values.strength));
+  }, []);
   const selectedFaceSwapModelMeta = faceswapModel
     ? modelRuntimeDefaults[faceswapModel.toLowerCase()]
     : undefined;
@@ -727,16 +763,58 @@ const TestPage: React.FC = () => {
       setSelectedVideoWorkflowId("");
       return;
     }
-    const values = workflow.settings || {};
-    setSelectedVideoWorkflowId(workflow.id);
-    setSteps(values.steps == null ? "" : String(values.steps));
-    setGuidance(values.guidance == null ? "" : String(values.guidance));
-    setWidth(values.width == null ? "" : String(values.width));
-    setHeight(values.height == null ? "" : String(values.height));
-    setFrames(values.frames == null ? "" : String(values.frames));
-    setFps(values.fps == null ? "" : String(values.fps));
-    setVideoInitStrength(values.strength == null ? "1" : String(values.strength));
-  }, [mode, selectedModel, selectedVideoModelMeta?.video_workflows]);
+    applyVideoWorkflowSelection(workflow);
+  }, [
+    applyVideoWorkflowSelection,
+    mode,
+    selectedModel,
+    selectedVideoModelMeta?.video_workflows,
+  ]);
+
+  useEffect(() => {
+    const source = (videoInitData || videoInitUrl).trim();
+    if (mode !== "video" || !isLtx23Model || !source || videoWorkflows.length === 0) {
+      if (!source) orientedVideoSourceRef.current = "";
+      return;
+    }
+    const sourceKey = `${selectedModel}:${source}`;
+    if (orientedVideoSourceRef.current === sourceKey) return;
+
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void readImageDimensions(source)
+        .then(({ width: sourceWidth, height: sourceHeight }) => {
+          if (!active) return;
+          const workflow = getSourceOrientedFidelityWorkflow(
+            videoWorkflows,
+            sourceWidth,
+            sourceHeight,
+            selectedVideoWorkflowId
+          );
+          orientedVideoSourceRef.current = sourceKey;
+          if (workflow && workflow.id !== selectedVideoWorkflowId) {
+            applyVideoWorkflowSelection(workflow);
+          }
+        })
+        .catch(() => {
+          if (active) orientedVideoSourceRef.current = sourceKey;
+        });
+    }, 150);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [
+    applyVideoWorkflowSelection,
+    isLtx23Model,
+    mode,
+    selectedModel,
+    selectedVideoWorkflowId,
+    videoInitData,
+    videoInitUrl,
+    videoWorkflows,
+  ]);
 
   useEffect(() => {
     if (mode !== "face_swap" || !selectedFaceSwapModelMeta) {
@@ -2426,16 +2504,7 @@ const TestPage: React.FC = () => {
                             setSelectedVideoWorkflowId(workflowId);
                             const workflow = videoWorkflows.find((item) => item.id === workflowId);
                             if (!workflow) return;
-                            const values = workflow.settings || {};
-                            setSteps(values.steps == null ? "" : String(values.steps));
-                            setGuidance(values.guidance == null ? "" : String(values.guidance));
-                            setWidth(values.width == null ? "" : String(values.width));
-                            setHeight(values.height == null ? "" : String(values.height));
-                            setFrames(values.frames == null ? "" : String(values.frames));
-                            setFps(values.fps == null ? "" : String(values.fps));
-                            setVideoInitStrength(
-                              values.strength == null ? "1" : String(values.strength)
-                            );
+                            applyVideoWorkflowSelection(workflow);
                           }}
                           className="generator-select"
                         >
