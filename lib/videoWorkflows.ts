@@ -6,6 +6,7 @@ export type VideoWorkflowSettings = {
   frames?: number;
   fps?: number;
   strength?: number;
+  lora_strength?: number;
 };
 
 export type VideoWorkflow = {
