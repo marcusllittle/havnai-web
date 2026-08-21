@@ -67,6 +67,16 @@ export interface JobDetail {
     receipt_hash?: string | null;
     signed: boolean;
   };
+  input_assets?: {
+    init_image?: boolean;
+    reference_image?: boolean;
+    inpaint_mask?: boolean;
+    base_image?: boolean;
+    reference_face?: boolean;
+    pose_image?: boolean;
+    source_image?: boolean;
+    audio?: boolean;
+  };
   data?: any;
 }
 
@@ -211,8 +221,11 @@ export interface VideoJobRequest {
   frames?: number;
   fps?: number;
   initImage?: string;
+  referenceImage?: string;
   extendChunks?: number;
+  continuation?: boolean;
   strength?: number;
+  workflowId?: string;
   sfwMode?: boolean;
 }
 
@@ -329,6 +342,10 @@ export interface SubmitJobOptions {
   sampler?: string;
   seed?: number;
   referenceFaceUrl?: string;
+  initImage?: string;
+  inpaintMask?: string;
+  img2imgStrength?: number;
+  preserveReferenceAspect?: boolean;
   loras?: LoraConfig[];
   hardcoreMode?: boolean;
   sfwMode?: boolean;
@@ -488,8 +505,25 @@ async function parseErrorResponse(res: Response): Promise<HavnaiApiError> {
       // fall through
     }
   }
-  const text = await res.text();
-  return new HavnaiApiError(`request failed: ${res.status} ${text}`, undefined, undefined, res.status);
+  const text = (await res.text()).trim();
+  const htmlResponse =
+    contentType.includes("text/html") || /^\s*(?:<!doctype\s+html|<html\b)/i.test(text);
+  const data = { error: "http_error", status: res.status };
+  if (htmlResponse) {
+    return new HavnaiApiError(
+      `Request failed (${res.status}). The server returned an HTML page instead of API data.`,
+      "http_error",
+      data,
+      res.status
+    );
+  }
+  const detail = text.replace(/\s+/g, " ").slice(0, 240);
+  return new HavnaiApiError(
+    detail ? `Request failed (${res.status}): ${detail}` : `Request failed (${res.status}).`,
+    "http_error",
+    data,
+    res.status
+  );
 }
 
 export async function submitAutoJob(
@@ -520,6 +554,18 @@ export async function submitAutoJob(
     if (options.seed != null) body.seed = options.seed;
     if (options.referenceFaceUrl && options.referenceFaceUrl.trim().length > 0) {
       body.reference_face_url = options.referenceFaceUrl.trim();
+    }
+    if (options.initImage && options.initImage.trim().length > 0) {
+      body.init_image = options.initImage.trim();
+      if (options.inpaintMask && options.inpaintMask.trim().length > 0) {
+        body.inpaint_mask = options.inpaintMask.trim();
+      }
+      if (options.img2imgStrength != null) {
+        body.img2img_strength = options.img2imgStrength;
+      }
+      if (options.preserveReferenceAspect != null) {
+        body.preserve_reference_aspect = options.preserveReferenceAspect;
+      }
     }
     if (options.sampler && options.sampler.trim().length > 0) {
       body.sampler = options.sampler;
@@ -645,8 +691,11 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   if (request.frames != null) body.frames = request.frames;
   if (request.fps != null) body.fps = request.fps;
   if (request.initImage) body.init_image = request.initImage;
+  if (request.referenceImage) body.reference_image = request.referenceImage;
   if (request.extendChunks != null) body.extend_chunks = request.extendChunks;
+  if (request.continuation === true) body.continuation = true;
   if (request.strength != null) body.strength = request.strength;
+  if (request.workflowId) body.workflow_id = request.workflowId;
   if (request.sfwMode === true) body.sfw_mode = true;
   const res = await fetch(apiUrl("/submit-job"), {
     method: "POST",
@@ -848,7 +897,16 @@ export async function stitchVideos(jobIds: string[], outputName?: string): Promi
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw await parseErrorResponse(res);
+    const error = await parseErrorResponse(res);
+    if (res.status === 404) {
+      throw new HavnaiApiError(
+        "Video stitching is temporarily unavailable. The coordinator may need to be updated or restarted.",
+        "stitch_unavailable",
+        error.data,
+        res.status
+      );
+    }
+    throw error;
   }
   const json = (await res.json()) as StitchResponse;
   return {

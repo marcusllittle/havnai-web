@@ -74,6 +74,65 @@ describe("API contract convergence", () => {
     expect(init.method).toBe("POST");
   });
 
+  it("submitAutoJob forwards image-to-image reference settings", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ job_id: "job-img2img" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const havnai = await importHavnaiFresh();
+    await havnai.submitAutoJob("preserve composition", "sdxl-model", "", {
+      initImage: "data:image/png;base64,abc",
+      inpaintMask: "data:image/png;base64,mask",
+      img2imgStrength: 0.2,
+      preserveReferenceAspect: true,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("/api/submit-job");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      prompt: "preserve composition",
+      model: "sdxl-model",
+      init_image: "data:image/png;base64,abc",
+      inpaint_mask: "data:image/png;base64,mask",
+      img2img_strength: 0.2,
+      preserve_reference_aspect: true,
+    });
+  });
+
+  it("submitVideoJob keeps workflow identity with explicit overrides", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ job_id: "job-video" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const havnai = await importHavnaiFresh();
+    await havnai.submitVideoJob({
+      model: "ltx23_wangp_distilled",
+      prompt: "preserve source motion",
+      workflowId: "faithful_i2v",
+      initImage: "data:image/png;base64,source",
+      referenceImage: "data:image/png;base64,reference",
+      continuation: true,
+      strength: 0.9,
+      frames: 121,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("/api/submit-job");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      model: "ltx23_wangp_distilled",
+      workflow_id: "faithful_i2v",
+      init_image: "data:image/png;base64,source",
+      reference_image: "data:image/png;base64,reference",
+      continuation: true,
+      strength: 0.9,
+      frames: 121,
+    });
+  });
+
   it("extractVideoLastFrame delegates continuation extraction to the coordinator", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -89,6 +148,25 @@ describe("API contract convergence", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe("/api/videos/job-video/last-frame");
     expect(init.method).toBe("POST");
+  });
+
+  it("stitchVideos replaces an HTML 404 with an actionable error", async () => {
+    const html = "<!doctype html><html><body>not found</body><script>noise</script></html>";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      headers: new Headers({ "content-type": "text/html" }),
+      text: async () => html,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const havnai = await importHavnaiFresh();
+    await expect(havnai.stitchVideos(["job-one", "job-two"])).rejects.toMatchObject({
+      code: "stitch_unavailable",
+      status: 404,
+      message:
+        "Video stitching is temporarily unavailable. The coordinator may need to be updated or restarted.",
+    });
   });
 
   it("fetchWanVideoJob is gated when legacy endpoint support is disabled", async () => {
