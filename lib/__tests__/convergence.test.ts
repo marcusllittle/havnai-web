@@ -74,6 +74,29 @@ describe("API contract convergence", () => {
     expect(init.method).toBe("POST");
   });
 
+  it("submitAutoJob forwards image-to-image reference settings", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ job_id: "job-img2img" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const havnai = await importHavnaiFresh();
+    await havnai.submitAutoJob("preserve composition", "sdxl-model", "", {
+      initImage: "data:image/png;base64,abc",
+      img2imgStrength: 0.2,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("/api/submit-job");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      prompt: "preserve composition",
+      model: "sdxl-model",
+      init_image: "data:image/png;base64,abc",
+      img2img_strength: 0.2,
+    });
+  });
+
   it("extractVideoLastFrame delegates continuation extraction to the coordinator", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

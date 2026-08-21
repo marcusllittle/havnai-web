@@ -129,6 +129,7 @@ type ModelListEntry = {
 
 type GeneratorMode = "image" | "face_swap" | "video";
 type ImageQualityPreset = "fastest" | "balanced" | "best";
+type ImagePreservationPreset = "maximum" | "balanced" | "creative";
 type VideoChainProgress = {
   completed: number;
   current: number;
@@ -166,6 +167,12 @@ const IMAGE_SIZE_PRESETS: Array<{
   { id: "2x3", label: "2:3", width: 832, height: 1216 },
   { id: "9x16", label: "9:16", width: 768, height: 1344 },
 ];
+
+const IMAGE_PRESERVATION_STRENGTH: Record<ImagePreservationPreset, number> = {
+  maximum: 0.2,
+  balanced: 0.35,
+  creative: 0.55,
+};
 
 const clampStepValue = (value: number): number => {
   if (!Number.isFinite(value)) return 30;
@@ -315,6 +322,11 @@ const TestPage: React.FC = () => {
   const [modelRuntimeDefaults, setModelRuntimeDefaults] = useState<Record<string, ModelListEntry>>({});
   const [imageQualityPreset, setImageQualityPreset] = useState<ImageQualityPreset>("balanced");
   const [imageSizePreset, setImageSizePreset] = useState<ImageSizePreset>("auto");
+  const [imageReferenceUrl, setImageReferenceUrl] = useState("");
+  const [imageReferenceData, setImageReferenceData] = useState<string | undefined>();
+  const [imageReferenceName, setImageReferenceName] = useState<string | undefined>();
+  const [imagePreservation, setImagePreservation] =
+    useState<ImagePreservationPreset>("maximum");
   const [steps, setSteps] = useState("30");
   const [guidance, setGuidance] = useState("");
   const [width, setWidth] = useState("");
@@ -905,6 +917,11 @@ const TestPage: React.FC = () => {
     else if (modelDefaults?.height != null) options.height = modelDefaults.height;
     if (modelDefaults?.sampler) options.sampler = String(modelDefaults.sampler);
     if (seedValue !== undefined) options.seed = seedValue;
+    const imageReference = imageReferenceData || imageReferenceUrl.trim();
+    if (imageReference) {
+      options.initImage = imageReference;
+      options.img2imgStrength = IMAGE_PRESERVATION_STRENGTH[imagePreservation];
+    }
     if (requestedLoras.length > 0) options.loras = requestedLoras;
     if (sfwMode) options.sfwMode = true;
 
@@ -1140,6 +1157,19 @@ const TestPage: React.FC = () => {
       setBaseImageUrl("");
     } catch (err: any) {
       setStatusMessage(err?.message || "Failed to read base image file.");
+    }
+  };
+
+  const handleImageReferenceUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await readFileAsDataUrl(file);
+      setImageReferenceData(data);
+      setImageReferenceName(file.name);
+      setImageReferenceUrl("");
+    } catch (err: any) {
+      setStatusMessage(err?.message || "Failed to read reference image.");
     }
   };
 
@@ -2147,6 +2177,74 @@ const TestPage: React.FC = () => {
                           {imageDefaultsSummary ? `: ${imageDefaultsSummary}.` : "."}
                         </p>
                       )}
+                      <span className="adv-group-title">Reference image</span>
+                      <label className="generator-label" htmlFor="image-reference-url">
+                        Image URL
+                      </label>
+                      <input
+                        id="image-reference-url"
+                        type="text"
+                        className="generator-input"
+                        placeholder="https://... or data:image/..."
+                        value={imageReferenceUrl}
+                        onChange={(e) => {
+                          setImageReferenceUrl(e.target.value);
+                          if (e.target.value.trim()) {
+                            setImageReferenceData(undefined);
+                            setImageReferenceName(undefined);
+                          }
+                        }}
+                      />
+                      <label className="generator-label" htmlFor="image-reference-upload">
+                        Upload image
+                      </label>
+                      <input
+                        id="image-reference-upload"
+                        type="file"
+                        accept="image/*"
+                        className="generator-input"
+                        onChange={handleImageReferenceUpload}
+                      />
+                      {imageReferenceName && (
+                        <p className="generator-help">Using uploaded file: {imageReferenceName}</p>
+                      )}
+                      {(imageReferenceData || imageReferenceUrl.trim()) && (
+                        <>
+                          <div className="generator-face-preview">
+                            <img
+                              src={imageReferenceData || imageReferenceUrl.trim()}
+                              alt="Reference preview"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            className="generator-mini-button"
+                            onClick={() => {
+                              setImageReferenceUrl("");
+                              setImageReferenceData(undefined);
+                              setImageReferenceName(undefined);
+                            }}
+                          >
+                            Remove reference
+                          </button>
+                        </>
+                      )}
+                      <label className="generator-label" htmlFor="image-preservation">
+                        Preservation
+                      </label>
+                      <select
+                        id="image-preservation"
+                        className="generator-select"
+                        value={imagePreservation}
+                        disabled={!imageReferenceData && !imageReferenceUrl.trim()}
+                        onChange={(e) =>
+                          setImagePreservation(e.target.value as ImagePreservationPreset)
+                        }
+                      >
+                        <option value="maximum">Maximum</option>
+                        <option value="balanced">Balanced</option>
+                        <option value="creative">Creative</option>
+                      </select>
                       <span className="adv-group-title">Generation settings</span>
                       <label className="generator-label" htmlFor="image-steps">
                         Steps

@@ -330,6 +330,8 @@ export interface SubmitJobOptions {
   sampler?: string;
   seed?: number;
   referenceFaceUrl?: string;
+  initImage?: string;
+  img2imgStrength?: number;
   loras?: LoraConfig[];
   hardcoreMode?: boolean;
   sfwMode?: boolean;
@@ -521,6 +523,12 @@ export async function submitAutoJob(
     if (options.seed != null) body.seed = options.seed;
     if (options.referenceFaceUrl && options.referenceFaceUrl.trim().length > 0) {
       body.reference_face_url = options.referenceFaceUrl.trim();
+    }
+    if (options.initImage && options.initImage.trim().length > 0) {
+      body.init_image = options.initImage.trim();
+      if (options.img2imgStrength != null) {
+        body.img2img_strength = options.img2imgStrength;
+      }
     }
     if (options.sampler && options.sampler.trim().length > 0) {
       body.sampler = options.sampler;
