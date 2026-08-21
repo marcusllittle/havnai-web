@@ -67,6 +67,15 @@ export interface JobDetail {
     receipt_hash?: string | null;
     signed: boolean;
   };
+  input_assets?: {
+    init_image?: boolean;
+    inpaint_mask?: boolean;
+    base_image?: boolean;
+    reference_face?: boolean;
+    pose_image?: boolean;
+    source_image?: boolean;
+    audio?: boolean;
+  };
   data?: any;
 }
 
