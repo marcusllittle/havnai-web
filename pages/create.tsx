@@ -8,6 +8,7 @@ import { HavnAIPrompt } from "../components/HavnAIPrompt";
 import { HavnAIButton } from "../components/HavnAIButton";
 import { StatusBox } from "../components/StatusBox";
 import { OutputCard } from "../components/OutputCard";
+import { ImageMaskEditor } from "../components/ImageMaskEditor";
 import { HistoryFeed, HistoryItem } from "../components/HistoryFeed";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
 import {
@@ -326,6 +327,8 @@ const TestPage: React.FC = () => {
   const [imageReferenceUrl, setImageReferenceUrl] = useState("");
   const [imageReferenceData, setImageReferenceData] = useState<string | undefined>();
   const [imageReferenceName, setImageReferenceName] = useState<string | undefined>();
+  const [imageMaskEnabled, setImageMaskEnabled] = useState(false);
+  const [imageMaskData, setImageMaskData] = useState<string | undefined>();
   const [imagePreservation, setImagePreservation] =
     useState<ImagePreservationPreset>("maximum");
   const [steps, setSteps] = useState("30");
@@ -464,6 +467,11 @@ const TestPage: React.FC = () => {
       ? resolveAssetUrl(imageReferenceUrl.trim())
       : imageReferenceUrl.trim()
   );
+
+  useEffect(() => {
+    setImageMaskEnabled(false);
+    setImageMaskData(undefined);
+  }, [imageReferenceData, imageReferenceUrl]);
 
   useEffect(() => {
     let active = true;
@@ -928,6 +936,7 @@ const TestPage: React.FC = () => {
     const imageReference = imageReferenceData || imageReferenceUrl.trim();
     if (imageReference) {
       options.initImage = imageReference;
+      if (imageMaskEnabled && imageMaskData) options.inpaintMask = imageMaskData;
       options.img2imgStrength = IMAGE_PRESERVATION_STRENGTH[imagePreservation];
       options.preserveReferenceAspect = imageSizePreset === "auto";
     }
@@ -1237,6 +1246,10 @@ const TestPage: React.FC = () => {
     }
     if (mode === "image" && !selectedModel) {
       setStatusMessage("Select an available image model before generating.");
+      return;
+    }
+    if (mode === "image" && imageMaskEnabled && !imageMaskData) {
+      setStatusMessage("Paint the image area to edit before generating.");
       return;
     }
     if (mode === "video" && videoModels.length === 0) {
@@ -1707,6 +1720,8 @@ const TestPage: React.FC = () => {
     setImageReferenceData(undefined);
     setImageReferenceName(undefined);
     setImageReferenceUrl(coordinatorPath);
+    setImageMaskEnabled(false);
+    setImageMaskData(undefined);
     setImagePreservation("maximum");
     setImageSizePreset("auto");
     setStatusMessage("Output loaded as the refinement reference.");
@@ -2232,12 +2247,19 @@ const TestPage: React.FC = () => {
                       )}
                       {imageReferencePreviewUrl && (
                         <>
-                          <div className="generator-face-preview">
-                            <img
+                          {imageMaskEnabled ? (
+                            <ImageMaskEditor
                               src={imageReferencePreviewUrl}
-                              alt="Reference preview"
+                              onMaskChange={setImageMaskData}
                             />
-                          </div>
+                          ) : (
+                            <div className="generator-face-preview">
+                              <img
+                                src={imageReferencePreviewUrl}
+                                alt="Reference preview"
+                              />
+                            </div>
+                          )}
                           <button
                             type="button"
                             className="generator-mini-button"
@@ -2249,6 +2271,21 @@ const TestPage: React.FC = () => {
                           >
                             Remove reference
                           </button>
+                          <label className="image-mask-toggle">
+                            <input
+                              type="checkbox"
+                              checked={imageMaskEnabled}
+                              onChange={(event) => {
+                                setImageMaskEnabled(event.target.checked);
+                                if (event.target.checked) {
+                                  setImagePreservation("creative");
+                                } else {
+                                  setImageMaskData(undefined);
+                                }
+                              }}
+                            />
+                            <span>Edit selected area</span>
+                          </label>
                         </>
                       )}
                       <label className="generator-label" htmlFor="image-preservation">

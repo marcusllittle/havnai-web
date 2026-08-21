@@ -84,6 +84,7 @@ describe("API contract convergence", () => {
     const havnai = await importHavnaiFresh();
     await havnai.submitAutoJob("preserve composition", "sdxl-model", "", {
       initImage: "data:image/png;base64,abc",
+      inpaintMask: "data:image/png;base64,mask",
       img2imgStrength: 0.2,
       preserveReferenceAspect: true,
     });
@@ -94,6 +95,7 @@ describe("API contract convergence", () => {
       prompt: "preserve composition",
       model: "sdxl-model",
       init_image: "data:image/png;base64,abc",
+      inpaint_mask: "data:image/png;base64,mask",
       img2img_strength: 0.2,
       preserve_reference_aspect: true,
     });

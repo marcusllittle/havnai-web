@@ -331,6 +331,7 @@ export interface SubmitJobOptions {
   seed?: number;
   referenceFaceUrl?: string;
   initImage?: string;
+  inpaintMask?: string;
   img2imgStrength?: number;
   preserveReferenceAspect?: boolean;
   loras?: LoraConfig[];
@@ -527,6 +528,9 @@ export async function submitAutoJob(
     }
     if (options.initImage && options.initImage.trim().length > 0) {
       body.init_image = options.initImage.trim();
+      if (options.inpaintMask && options.inpaintMask.trim().length > 0) {
+        body.inpaint_mask = options.inpaintMask.trim();
+      }
       if (options.img2imgStrength != null) {
         body.img2img_strength = options.img2imgStrength;
       }
