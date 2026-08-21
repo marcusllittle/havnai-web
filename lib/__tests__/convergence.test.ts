@@ -148,6 +148,25 @@ describe("API contract convergence", () => {
     expect(init.method).toBe("POST");
   });
 
+  it("stitchVideos replaces an HTML 404 with an actionable error", async () => {
+    const html = "<!doctype html><html><body>not found</body><script>noise</script></html>";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      headers: new Headers({ "content-type": "text/html" }),
+      text: async () => html,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const havnai = await importHavnaiFresh();
+    await expect(havnai.stitchVideos(["job-one", "job-two"])).rejects.toMatchObject({
+      code: "stitch_unavailable",
+      status: 404,
+      message:
+        "Video stitching is temporarily unavailable. The coordinator may need to be updated or restarted.",
+    });
+  });
+
   it("fetchWanVideoJob is gated when legacy endpoint support is disabled", async () => {
     delete process.env.NEXT_PUBLIC_ENABLE_LEGACY_WAN_STATUS;
     const fetchMock = vi.fn();

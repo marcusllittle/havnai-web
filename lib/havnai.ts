@@ -503,8 +503,25 @@ async function parseErrorResponse(res: Response): Promise<HavnaiApiError> {
       // fall through
     }
   }
-  const text = await res.text();
-  return new HavnaiApiError(`request failed: ${res.status} ${text}`, undefined, undefined, res.status);
+  const text = (await res.text()).trim();
+  const htmlResponse =
+    contentType.includes("text/html") || /^\s*(?:<!doctype\s+html|<html\b)/i.test(text);
+  const data = { error: "http_error", status: res.status };
+  if (htmlResponse) {
+    return new HavnaiApiError(
+      `Request failed (${res.status}). The server returned an HTML page instead of API data.`,
+      "http_error",
+      data,
+      res.status
+    );
+  }
+  const detail = text.replace(/\s+/g, " ").slice(0, 240);
+  return new HavnaiApiError(
+    detail ? `Request failed (${res.status}): ${detail}` : `Request failed (${res.status}).`,
+    "http_error",
+    data,
+    res.status
+  );
 }
 
 export async function submitAutoJob(
@@ -877,7 +894,16 @@ export async function stitchVideos(jobIds: string[], outputName?: string): Promi
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw await parseErrorResponse(res);
+    const error = await parseErrorResponse(res);
+    if (res.status === 404) {
+      throw new HavnaiApiError(
+        "Video stitching is temporarily unavailable. The coordinator may need to be updated or restarted.",
+        "stitch_unavailable",
+        error.data,
+        res.status
+      );
+    }
+    throw error;
   }
   const json = (await res.json()) as StitchResponse;
   return {
