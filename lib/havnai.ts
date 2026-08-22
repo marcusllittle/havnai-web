@@ -137,11 +137,65 @@ export interface ReceiptInclusionProof {
   schema_version: "receipt-merkle-batch.v1";
   merkle_root: string;
   leaf_count: number;
-  status: "ready" | "anchored";
+  status: "ready" | "pending" | "anchored";
   anchor_network?: string | null;
   anchor_tx_hash?: string | null;
   anchored_at?: number | null;
   valid: boolean;
+}
+
+export interface ReceiptAnchorPayload {
+  schema: "havnai.receipt-root.v1";
+  network: "sepolia";
+  chain_id: 11155111;
+  from?: string | null;
+  to?: string | null;
+  value: "0x0";
+  calldata: string;
+}
+
+export interface AstraReceiptBatch {
+  batch_id: number;
+  schema_version: "receipt-merkle-batch.v1";
+  merkle_root: string;
+  leaf_count: number;
+  status: "ready" | "pending" | "anchored";
+  created_at: number;
+  anchor_network?: string | null;
+  anchor_chain_id?: number | null;
+  anchor_tx_hash?: string | null;
+  anchor_block?: number | null;
+  anchor_from?: string | null;
+  anchor_to?: string | null;
+  anchored_at?: number | null;
+  anchor_payload: ReceiptAnchorPayload;
+  explorer_url?: string | null;
+}
+
+export interface AstraReceiptBatchesResponse {
+  batches: AstraReceiptBatch[];
+  unbatched_receipt_count: number;
+  network: "sepolia";
+  chain_id: 11155111;
+  treasury_wallet?: string | null;
+  minimum_confirmations: number;
+}
+
+export interface AstraReceiptBatchCreateResponse {
+  created: boolean;
+  batch: AstraReceiptBatch | null;
+  unbatched_receipt_count?: number;
+}
+
+export interface AstraReceiptAnchorResponse {
+  status: "pending" | "anchored" | "rejected";
+  batch?: AstraReceiptBatch;
+  verified?: boolean;
+  pending?: boolean;
+  tx_hash?: string;
+  confirmations?: number;
+  required_confirmations?: number;
+  error?: string;
 }
 
 export interface ProofReceiptVerification {
@@ -759,6 +813,28 @@ export async function fetchReceiptInclusionProof(jobId: string): Promise<Receipt
   return (await res.json()) as ReceiptInclusionProof;
 }
 
+export async function fetchAstraReceiptBatches(limit = 50): Promise<AstraReceiptBatchesResponse> {
+  const safeLimit = Math.max(1, Math.min(Math.trunc(limit), 200));
+  const res = await fetchWithTimeout(apiUrl(`/astra/receipts/batches?limit=${safeLimit}`), {
+    headers: buildHeaders(true),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as AstraReceiptBatchesResponse;
+}
+
+export async function submitAstraReceiptBatchAnchor(
+  batchId: number,
+  txHash: string
+): Promise<AstraReceiptAnchorResponse> {
+  const res = await fetchWithTimeout(apiUrl(`/astra/receipts/batches/${batchId}/anchor`), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ tx_hash: txHash }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as AstraReceiptAnchorResponse;
+}
+
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
 }
@@ -1123,7 +1199,8 @@ type WalletNoncePurpose =
   | "gallery_relist"
   | "gallery_delist"
   | "identity_anchor_create"
-  | "identity_anchor_delete";
+  | "identity_anchor_delete"
+  | "receipt_batch_flush";
 
 interface WalletNonceRequest {
   wallet: string;
@@ -1242,6 +1319,33 @@ async function signWalletNonce(
     "Unable to resolve a wallet signer. Open MetaMask and make sure the correct account is unlocked.",
     "wallet_unavailable"
   );
+}
+
+export async function createAstraReceiptBatchWithMetaMask(
+  treasuryWallet: string,
+  limit = 100,
+  minCount = 1,
+  onProgress?: (step: WalletNonceProgress) => void
+): Promise<AstraReceiptBatchCreateResponse> {
+  const signed = await signWalletNonce(
+    {
+      wallet: getAddress(treasuryWallet),
+      amount: 1,
+      purpose: "receipt_batch_flush",
+    },
+    onProgress
+  );
+  const res = await fetchWithTimeout(apiUrl("/astra/receipts/batches"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      ...signed,
+      limit: Math.max(1, Math.min(Math.trunc(limit), 1000)),
+      min_count: Math.max(1, Math.min(Math.trunc(minCount), Math.trunc(limit))),
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as AstraReceiptBatchCreateResponse;
 }
 
 export async function convertCredits(payload: ConvertCreditsPayload): Promise<CreditConversion> {
