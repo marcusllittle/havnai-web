@@ -1,8 +1,16 @@
-const API_BASE =
-  (process.env.HAVNAI_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_HAVNAI_API_BASE || "https://api.joinhavn.io")
-    .replace(/\/$/, "");
-
 const isDev = process.env.NODE_ENV !== "production";
+const developmentApiBase = isDev
+  ? process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_HAVNAI_API_BASE
+  : undefined;
+const API_BASE = (
+  process.env.HAVNAI_API_BASE_URL ||
+  developmentApiBase ||
+  "https://api.joinhavn.io"
+).replace(/\/$/, "");
+
+if (!/^https?:\/\//i.test(API_BASE)) {
+  throw new Error("HAVNAI_API_BASE_URL must be an absolute HTTP(S) coordinator origin");
+}
 
 const cspReportOnly = [
   "default-src 'self'",
