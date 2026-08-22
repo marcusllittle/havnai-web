@@ -198,6 +198,100 @@ export interface AstraReceiptAnchorResponse {
   error?: string;
 }
 
+export interface NodeRewardPublishPayload {
+  network: "sepolia";
+  chain_id: 11155111;
+  from?: string | null;
+  to?: string | null;
+  value: "0x0";
+  calldata: string;
+}
+
+export interface NodeRewardBatch {
+  batch_id: number;
+  schema_version: "havnai-node-payout-claims.v1";
+  merkle_root: string;
+  leaf_count: number;
+  payout_count: number;
+  total_amount_wei: string;
+  total_amount_hai: string;
+  status: "ready" | "pending" | "published";
+  created_at: number;
+  published_at?: number | null;
+  publish_tx_hash?: string | null;
+  publish_block?: number | null;
+  network: "sepolia";
+  chain_id: 11155111;
+  treasury_wallet?: string | null;
+  claim_contract?: string | null;
+  token_address?: string | null;
+  minimum_confirmations: number;
+  publish_payload: NodeRewardPublishPayload;
+  explorer_url?: string | null;
+}
+
+export interface NodeRewardBatchesResponse {
+  batches: NodeRewardBatch[];
+  unbatched_payout_count: number;
+  network: "sepolia";
+  chain_id: 11155111;
+  treasury_wallet?: string | null;
+  claim_contract?: string | null;
+  token_address?: string | null;
+  minimum_confirmations: number;
+}
+
+export interface NodeRewardBatchCreateResponse {
+  created: boolean;
+  batch: NodeRewardBatch | null;
+  unbatched_payout_count?: number;
+}
+
+export interface NodeRewardClaim {
+  schema_version: "havnai-node-payout-claims.v1";
+  batch_id: number;
+  leaf_index: number;
+  wallet: string;
+  amount_wei: string;
+  amount_hai: string;
+  leaf_hash: string;
+  merkle_root: string;
+  proof: string[];
+  node_ids: string[];
+  payout_count: number;
+  batch_status: "ready" | "pending" | "published";
+  publish_tx_hash?: string | null;
+  claimed: boolean;
+  claimed_tx_hash?: string | null;
+  claimed_at?: number | null;
+  valid: boolean;
+  network: "sepolia";
+  chain_id: 11155111;
+  claim_contract?: string | null;
+  token_address?: string | null;
+  minimum_confirmations: number;
+  explorer_url?: string | null;
+}
+
+export interface NodeRewardClaimsResponse {
+  wallet: string;
+  claims: NodeRewardClaim[];
+}
+
+export interface NodeRewardPublishResponse {
+  status: "pending" | "published" | "rejected";
+  batch?: NodeRewardBatch;
+  verification?: Record<string, unknown>;
+  idempotent?: boolean;
+}
+
+export interface NodeRewardClaimResponse {
+  status: "pending" | "claimed" | "rejected";
+  claim?: NodeRewardClaim;
+  verification?: Record<string, unknown>;
+  idempotent?: boolean;
+}
+
 export interface ProofReceiptVerification {
   job_id: string;
   valid: boolean;
@@ -835,6 +929,55 @@ export async function submitAstraReceiptBatchAnchor(
   return (await res.json()) as AstraReceiptAnchorResponse;
 }
 
+export async function fetchNodeRewardBatches(limit = 50): Promise<NodeRewardBatchesResponse> {
+  const safeLimit = Math.max(1, Math.min(Math.trunc(limit), 200));
+  const res = await fetchWithTimeout(apiUrl(`/payouts/claim-batches?limit=${safeLimit}`), {
+    headers: buildHeaders(true),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as NodeRewardBatchesResponse;
+}
+
+export async function fetchNodeRewardClaims(wallet: string): Promise<NodeRewardClaimsResponse> {
+  const normalized = getAddress(wallet);
+  const res = await fetchWithTimeout(
+    apiUrl(`/payouts/claims?wallet=${encodeURIComponent(normalized)}`),
+    { headers: buildHeaders(true) }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as NodeRewardClaimsResponse;
+}
+
+export async function submitNodeRewardBatchPublish(
+  batchId: number,
+  txHash: string
+): Promise<NodeRewardPublishResponse> {
+  const res = await fetchWithTimeout(apiUrl(`/payouts/claim-batches/${batchId}/publish`), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ tx_hash: txHash }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as NodeRewardPublishResponse;
+}
+
+export async function confirmNodeRewardClaim(
+  batchId: number,
+  leafIndex: number,
+  txHash: string
+): Promise<NodeRewardClaimResponse> {
+  const res = await fetchWithTimeout(
+    apiUrl(`/payouts/claims/${batchId}/${leafIndex}/confirm`),
+    {
+      method: "POST",
+      headers: buildHeaders(true),
+      body: JSON.stringify({ tx_hash: txHash }),
+    }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as NodeRewardClaimResponse;
+}
+
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
 }
@@ -1200,7 +1343,8 @@ type WalletNoncePurpose =
   | "gallery_delist"
   | "identity_anchor_create"
   | "identity_anchor_delete"
-  | "receipt_batch_flush";
+  | "receipt_batch_flush"
+  | "node_payout_batch_flush";
 
 interface WalletNonceRequest {
   wallet: string;
@@ -1346,6 +1490,34 @@ export async function createAstraReceiptBatchWithMetaMask(
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as AstraReceiptBatchCreateResponse;
+}
+
+export async function createNodeRewardBatchWithMetaMask(
+  treasuryWallet: string,
+  limit = 500,
+  minCount = 1,
+  onProgress?: (step: WalletNonceProgress) => void
+): Promise<NodeRewardBatchCreateResponse> {
+  const signed = await signWalletNonce(
+    {
+      wallet: getAddress(treasuryWallet),
+      amount: 1,
+      purpose: "node_payout_batch_flush",
+    },
+    onProgress
+  );
+  const safeLimit = Math.max(1, Math.min(Math.trunc(limit), 2000));
+  const res = await fetchWithTimeout(apiUrl("/payouts/claim-batches"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      ...signed,
+      limit: safeLimit,
+      min_count: Math.max(1, Math.min(Math.trunc(minCount), safeLimit)),
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as NodeRewardBatchCreateResponse;
 }
 
 export async function convertCredits(payload: ConvertCreditsPayload): Promise<CreditConversion> {
