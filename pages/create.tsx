@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { SeoHead } from "../components/SeoHead";
 import { CinematicPageHero } from "../components/CinematicPageHero";
@@ -8,6 +8,7 @@ import { HavnAIPrompt } from "../components/HavnAIPrompt";
 import { HavnAIButton } from "../components/HavnAIButton";
 import { StatusBox } from "../components/StatusBox";
 import { OutputCard } from "../components/OutputCard";
+import { ImageMaskEditor } from "../components/ImageMaskEditor";
 import { HistoryFeed, HistoryItem } from "../components/HistoryFeed";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
 import {
@@ -29,7 +30,14 @@ import {
   QuotaStatus,
   CreditBalance,
   VideoJobRequest,
+  resolveAssetUrl,
 } from "../lib/havnai";
+import {
+  getPreferredVideoWorkflow,
+  getSourceOrientedFidelityWorkflow,
+  isVideoWorkflowInitImageMissing,
+  type VideoWorkflow,
+} from "../lib/videoWorkflows";
 import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
 import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 import { getJobSSE, normalizeLifecycleStatus, SSEEvent } from "../lib/sse";
@@ -43,6 +51,7 @@ import {
 } from "../lib/activeCreateJob";
 import {
   ActiveVideoChain,
+  buildVideoChainClipRequest,
   clearActiveVideoChain,
   loadActiveVideoChain,
   saveActiveVideoChain,
@@ -120,10 +129,12 @@ type ModelListEntry = {
   checkpoint_variant?: string | null;
   capabilities?: string[] | null;
   available_modes?: string[] | null;
+  video_workflows?: VideoWorkflow[] | null;
 };
 
 type GeneratorMode = "image" | "face_swap" | "video";
 type ImageQualityPreset = "fastest" | "balanced" | "best";
+type ImagePreservationPreset = "maximum" | "balanced" | "creative";
 type VideoChainProgress = {
   completed: number;
   current: number;
@@ -161,6 +172,12 @@ const IMAGE_SIZE_PRESETS: Array<{
   { id: "2x3", label: "2:3", width: 832, height: 1216 },
   { id: "9x16", label: "9:16", width: 768, height: 1344 },
 ];
+
+const IMAGE_PRESERVATION_STRENGTH: Record<ImagePreservationPreset, number> = {
+  maximum: 0.2,
+  balanced: 0.35,
+  creative: 0.55,
+};
 
 const clampStepValue = (value: number): number => {
   if (!Number.isFinite(value)) return 30;
@@ -219,6 +236,29 @@ const pickPreferredVideoModel = (models: { id: string; label: string }[]): strin
   const animatediff = models.find((item) => item.id.toLowerCase() === "animatediff");
   if (animatediff) return animatediff.id;
   return models.length > 0 ? models[0].id : "";
+};
+
+const readImageDimensions = (
+  source: string
+): Promise<{ width: number; height: number }> => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined") {
+      reject(new Error("Image dimensions are unavailable"));
+      return;
+    }
+    const image = new window.Image();
+    image.onload = () => {
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+        resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      } else {
+        reject(new Error("Image dimensions are unavailable"));
+      }
+    };
+    image.onerror = () => reject(new Error("Failed to inspect init image"));
+    image.src = /^(data:|blob:)/i.test(source)
+      ? source
+      : resolveAssetUrl(source) || source;
+  });
 };
 
 const inspectPromptIdentityAnchor = (promptText: string): {
@@ -310,6 +350,13 @@ const TestPage: React.FC = () => {
   const [modelRuntimeDefaults, setModelRuntimeDefaults] = useState<Record<string, ModelListEntry>>({});
   const [imageQualityPreset, setImageQualityPreset] = useState<ImageQualityPreset>("balanced");
   const [imageSizePreset, setImageSizePreset] = useState<ImageSizePreset>("auto");
+  const [imageReferenceUrl, setImageReferenceUrl] = useState("");
+  const [imageReferenceData, setImageReferenceData] = useState<string | undefined>();
+  const [imageReferenceName, setImageReferenceName] = useState<string | undefined>();
+  const [imageMaskEnabled, setImageMaskEnabled] = useState(false);
+  const [imageMaskData, setImageMaskData] = useState<string | undefined>();
+  const [imagePreservation, setImagePreservation] =
+    useState<ImagePreservationPreset>("maximum");
   const [steps, setSteps] = useState("30");
   const [guidance, setGuidance] = useState("");
   const [width, setWidth] = useState("");
@@ -335,7 +382,11 @@ const TestPage: React.FC = () => {
   const [videoInitUrl, setVideoInitUrl] = useState("");
   const [videoInitData, setVideoInitData] = useState<string | undefined>();
   const [videoInitName, setVideoInitName] = useState<string | undefined>();
+  const [videoReferenceUrl, setVideoReferenceUrl] = useState("");
+  const [videoReferenceData, setVideoReferenceData] = useState<string | undefined>();
+  const [videoReferenceName, setVideoReferenceName] = useState<string | undefined>();
   const [videoInitStrength, setVideoInitStrength] = useState("1");
+  const [selectedVideoWorkflowId, setSelectedVideoWorkflowId] = useState("");
   const [faceSourceUrl, setFaceSourceUrl] = useState("");
   const [faceSourceData, setFaceSourceData] = useState<string | undefined>();
   const [faceSourceName, setFaceSourceName] = useState<string | undefined>();
@@ -362,6 +413,7 @@ const TestPage: React.FC = () => {
   const imagePrefillKeyRef = useRef<string>("");
   const videoPrefillKeyRef = useRef<string>("");
   const faceSwapPrefillKeyRef = useRef<string>("");
+  const orientedVideoSourceRef = useRef<string>("");
   const activeRecoveryStartedRef = useRef(false);
 
   const apiBase = getApiBase();
@@ -400,6 +452,9 @@ const TestPage: React.FC = () => {
     mode === "video" && selectedModel ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
   const isLtx23Model =
     mode === "video" && selectedVideoModelMeta?.model_family === "ltx23_wangp";
+  const supportsLtxReferenceSheet =
+    mode === "video" &&
+    selectedVideoModelMeta?.capabilities?.includes("ingredients_reference_sheet") === true;
   const isLtxVideoModel =
     mode === "video" &&
     !!selectedModel &&
@@ -408,6 +463,25 @@ const TestPage: React.FC = () => {
       String(selectedVideoModelMeta?.task_type || "").toUpperCase() === "LTX_VIDEO_GEN" ||
       selectedModel.toLowerCase().includes("ltx"));
   const ltxVideoModes = selectedVideoModelMeta?.available_modes || [];
+  const videoWorkflows = selectedVideoModelMeta?.video_workflows || [];
+  const selectedVideoWorkflow = videoWorkflows.find(
+    (workflow) => workflow.id === selectedVideoWorkflowId
+  );
+  const videoWorkflowMissingInitImage = isVideoWorkflowInitImageMissing(
+    selectedVideoWorkflow,
+    videoInitData || videoInitUrl
+  );
+  const applyVideoWorkflowSelection = useCallback((workflow: VideoWorkflow) => {
+    const values = workflow.settings || {};
+    setSelectedVideoWorkflowId(workflow.id);
+    setSteps(values.steps == null ? "" : String(values.steps));
+    setGuidance(values.guidance == null ? "" : String(values.guidance));
+    setWidth(values.width == null ? "" : String(values.width));
+    setHeight(values.height == null ? "" : String(values.height));
+    setFrames(values.frames == null ? "" : String(values.frames));
+    setFps(values.fps == null ? "" : String(values.fps));
+    setVideoInitStrength(values.strength == null ? "1" : String(values.strength));
+  }, []);
   const selectedFaceSwapModelMeta = faceswapModel
     ? modelRuntimeDefaults[faceswapModel.toLowerCase()]
     : undefined;
@@ -429,11 +503,23 @@ const TestPage: React.FC = () => {
     IMAGE_SIZE_PRESETS.find((preset) => preset.id === imageSizePreset) || IMAGE_SIZE_PRESETS[0];
   const selectedImageResolution =
     imageSizePreset === "auto"
-      ? formatResolutionLabel(
-          selectedImageModelMeta?.image_defaults?.width,
-          selectedImageModelMeta?.image_defaults?.height
-        )
+      ? imageReferenceData || imageReferenceUrl.trim()
+        ? "Reference aspect"
+        : formatResolutionLabel(
+            selectedImageModelMeta?.image_defaults?.width,
+            selectedImageModelMeta?.image_defaults?.height
+          )
       : formatResolutionLabel(selectedImageSizePreset.width, selectedImageSizePreset.height);
+  const imageReferencePreviewUrl = imageReferenceData || (
+    imageReferenceUrl.trim().startsWith("/")
+      ? resolveAssetUrl(imageReferenceUrl.trim())
+      : imageReferenceUrl.trim()
+  );
+
+  useEffect(() => {
+    setImageMaskEnabled(false);
+    setImageMaskData(undefined);
+  }, [imageReferenceData, imageReferenceUrl]);
 
   useEffect(() => {
     let active = true;
@@ -675,6 +761,69 @@ const TestPage: React.FC = () => {
   }, [mode, selectedModel, selectedVideoModelMeta]);
 
   useEffect(() => {
+    if (mode !== "video") {
+      setSelectedVideoWorkflowId("");
+      return;
+    }
+    const workflow = getPreferredVideoWorkflow(selectedVideoModelMeta?.video_workflows);
+    if (!workflow) {
+      setSelectedVideoWorkflowId("");
+      return;
+    }
+    applyVideoWorkflowSelection(workflow);
+  }, [
+    applyVideoWorkflowSelection,
+    mode,
+    selectedModel,
+    selectedVideoModelMeta?.video_workflows,
+  ]);
+
+  useEffect(() => {
+    const source = (videoInitData || videoInitUrl).trim();
+    if (mode !== "video" || !isLtx23Model || !source || videoWorkflows.length === 0) {
+      if (!source) orientedVideoSourceRef.current = "";
+      return;
+    }
+    const sourceKey = `${selectedModel}:${source}`;
+    if (orientedVideoSourceRef.current === sourceKey) return;
+
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void readImageDimensions(source)
+        .then(({ width: sourceWidth, height: sourceHeight }) => {
+          if (!active) return;
+          const workflow = getSourceOrientedFidelityWorkflow(
+            videoWorkflows,
+            sourceWidth,
+            sourceHeight,
+            selectedVideoWorkflowId
+          );
+          orientedVideoSourceRef.current = sourceKey;
+          if (workflow && workflow.id !== selectedVideoWorkflowId) {
+            applyVideoWorkflowSelection(workflow);
+          }
+        })
+        .catch(() => {
+          if (active) orientedVideoSourceRef.current = sourceKey;
+        });
+    }, 150);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [
+    applyVideoWorkflowSelection,
+    isLtx23Model,
+    mode,
+    selectedModel,
+    selectedVideoWorkflowId,
+    videoInitData,
+    videoInitUrl,
+    videoWorkflows,
+  ]);
+
+  useEffect(() => {
     if (mode !== "face_swap" || !selectedFaceSwapModelMeta) {
       if (mode !== "face_swap") faceSwapPrefillKeyRef.current = "";
       return;
@@ -874,6 +1023,13 @@ const TestPage: React.FC = () => {
     else if (modelDefaults?.height != null) options.height = modelDefaults.height;
     if (modelDefaults?.sampler) options.sampler = String(modelDefaults.sampler);
     if (seedValue !== undefined) options.seed = seedValue;
+    const imageReference = imageReferenceData || imageReferenceUrl.trim();
+    if (imageReference) {
+      options.initImage = imageReference;
+      if (imageMaskEnabled && imageMaskData) options.inpaintMask = imageMaskData;
+      options.img2imgStrength = IMAGE_PRESERVATION_STRENGTH[imagePreservation];
+      options.preserveReferenceAspect = imageSizePreset === "auto";
+    }
     if (requestedLoras.length > 0) options.loras = requestedLoras;
     if (sfwMode) options.sfwMode = true;
 
@@ -916,9 +1072,16 @@ const TestPage: React.FC = () => {
     if (initImageValue) {
       request.initImage = initImageValue;
     }
+    const referenceImageValue = (videoReferenceData || videoReferenceUrl).trim();
+    if (supportsLtxReferenceSheet && referenceImageValue) {
+      request.referenceImage = referenceImageValue;
+    }
     const strengthValue = parseOptionalFloat(videoInitStrength);
     if (strengthValue !== undefined) {
       request.strength = strengthValue;
+    }
+    if (selectedVideoWorkflowId) {
+      request.workflowId = selectedVideoWorkflowId;
     }
     if (selectedModel) {
       request.model = selectedModel;
@@ -949,8 +1112,12 @@ const TestPage: React.FC = () => {
     });
     let initImage = recovery ? "" : (videoInitData || videoInitUrl).trim();
     const initialRequest = recovery?.request ?? buildVideoRequest(promptText, undefined);
-    const { initImage: _ignoredInitImage, extendChunks: _ignoredExtendChunks, ...requestTemplate } =
-      initialRequest;
+    const {
+      initImage: _ignoredInitImage,
+      extendChunks: _ignoredExtendChunks,
+      continuation: _ignoredContinuation,
+      ...requestTemplate
+    } = initialRequest;
 
     if (recovery && !currentJobId && currentIndex > 0 && jobIds.length > 0) {
       const previousResult = await fetchResult(jobIds[jobIds.length - 1]);
@@ -962,11 +1129,12 @@ const TestPage: React.FC = () => {
 
     while (currentIndex < total) {
       if (!currentJobId) {
-        const request: VideoJobRequest = {
-          ...requestTemplate,
-          prompt: promptText,
-          ...(initImage ? { initImage } : {}),
-        };
+        const request = buildVideoChainClipRequest(
+          requestTemplate as VideoJobRequest,
+          promptText,
+          initImage,
+          currentIndex
+        );
         currentJobId = await submitVideoJob(request);
         saveActiveVideoChain({
           prompt: promptText,
@@ -1109,6 +1277,19 @@ const TestPage: React.FC = () => {
     }
   };
 
+  const handleImageReferenceUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await readFileAsDataUrl(file);
+      setImageReferenceData(data);
+      setImageReferenceName(file.name);
+      setImageReferenceUrl("");
+    } catch (err: any) {
+      setStatusMessage(err?.message || "Failed to read reference image.");
+    }
+  };
+
   const handleFaceSourceUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1132,6 +1313,19 @@ const TestPage: React.FC = () => {
       setVideoInitUrl("");
     } catch (err: any) {
       setStatusMessage(err?.message || "Failed to read init image file.");
+    }
+  };
+
+  const handleVideoReferenceUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await readFileAsDataUrl(file);
+      setVideoReferenceData(data);
+      setVideoReferenceName(file.name);
+      setVideoReferenceUrl("");
+    } catch (err: any) {
+      setStatusMessage(err?.message || "Failed to read detail reference sheet.");
     }
   };
 
@@ -1166,12 +1360,21 @@ const TestPage: React.FC = () => {
       setStatusMessage("Select an available image model before generating.");
       return;
     }
+    if (mode === "image" && imageMaskEnabled && !imageMaskData) {
+      setStatusMessage("Paint the image area to edit before generating.");
+      return;
+    }
     if (mode === "video" && videoModels.length === 0) {
       setStatusMessage("No online video capacity right now. Try again when a video node is online.");
       return;
     }
     if (mode === "video" && !selectedVideoModelAvailable) {
       setStatusMessage("No online video capacity right now. Select an available video model and try again.");
+      return;
+    }
+    if (mode === "video" && videoWorkflowMissingInitImage) {
+      setAdvancedOpen(true);
+      setStatusMessage(`${selectedVideoWorkflow?.label || "This workflow"} requires an init image.`);
       return;
     }
     if (mode === "face_swap" && faceSwapModels.length === 0) {
@@ -1624,6 +1827,21 @@ const TestPage: React.FC = () => {
     setVideoInitName(undefined);
     setVideoInitUrl(coordinatorPath);
     setStatusMessage("Image loaded for animation.");
+  };
+
+  const handleRefineImage = () => {
+    if (!imageUrl) return;
+    const coordinatorPath = imageUrl.startsWith("/api/") ? imageUrl.slice(4) : imageUrl;
+    setMode("image");
+    setAdvancedOpen(true);
+    setImageReferenceData(undefined);
+    setImageReferenceName(undefined);
+    setImageReferenceUrl(coordinatorPath);
+    setImageMaskEnabled(false);
+    setImageMaskData(undefined);
+    setImagePreservation("maximum");
+    setImageSizePreset("auto");
+    setStatusMessage("Output loaded as the refinement reference.");
   };
 
   const openJobDetails = async (id: string, summary?: JobSummary) => {
@@ -2113,6 +2331,96 @@ const TestPage: React.FC = () => {
                           {imageDefaultsSummary ? `: ${imageDefaultsSummary}.` : "."}
                         </p>
                       )}
+                      <span className="adv-group-title">Reference image</span>
+                      <label className="generator-label" htmlFor="image-reference-url">
+                        Image URL
+                      </label>
+                      <input
+                        id="image-reference-url"
+                        type="text"
+                        className="generator-input"
+                        placeholder="https://... or data:image/..."
+                        value={imageReferenceUrl}
+                        onChange={(e) => {
+                          setImageReferenceUrl(e.target.value);
+                          if (e.target.value.trim()) {
+                            setImageReferenceData(undefined);
+                            setImageReferenceName(undefined);
+                          }
+                        }}
+                      />
+                      <label className="generator-label" htmlFor="image-reference-upload">
+                        Upload image
+                      </label>
+                      <input
+                        id="image-reference-upload"
+                        type="file"
+                        accept="image/*"
+                        className="generator-input"
+                        onChange={handleImageReferenceUpload}
+                      />
+                      {imageReferenceName && (
+                        <p className="generator-help">Using uploaded file: {imageReferenceName}</p>
+                      )}
+                      {imageReferencePreviewUrl && (
+                        <>
+                          {imageMaskEnabled ? (
+                            <ImageMaskEditor
+                              src={imageReferencePreviewUrl}
+                              onMaskChange={setImageMaskData}
+                            />
+                          ) : (
+                            <div className="generator-face-preview">
+                              <img
+                                src={imageReferencePreviewUrl}
+                                alt="Reference preview"
+                              />
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            className="generator-mini-button"
+                            onClick={() => {
+                              setImageReferenceUrl("");
+                              setImageReferenceData(undefined);
+                              setImageReferenceName(undefined);
+                            }}
+                          >
+                            Remove reference
+                          </button>
+                          <label className="image-mask-toggle">
+                            <input
+                              type="checkbox"
+                              checked={imageMaskEnabled}
+                              onChange={(event) => {
+                                setImageMaskEnabled(event.target.checked);
+                                if (event.target.checked) {
+                                  setImagePreservation("creative");
+                                } else {
+                                  setImageMaskData(undefined);
+                                }
+                              }}
+                            />
+                            <span>Edit selected area</span>
+                          </label>
+                        </>
+                      )}
+                      <label className="generator-label" htmlFor="image-preservation">
+                        Preservation
+                      </label>
+                      <select
+                        id="image-preservation"
+                        className="generator-select"
+                        value={imagePreservation}
+                        disabled={!imageReferenceData && !imageReferenceUrl.trim()}
+                        onChange={(e) =>
+                          setImagePreservation(e.target.value as ImagePreservationPreset)
+                        }
+                      >
+                        <option value="maximum">Maximum</option>
+                        <option value="balanced">Balanced</option>
+                        <option value="creative">Creative</option>
+                      </select>
                       <span className="adv-group-title">Generation settings</span>
                       <label className="generator-label" htmlFor="image-steps">
                         Steps
@@ -2158,7 +2466,9 @@ const TestPage: React.FC = () => {
                         })}
                       </select>
                       <p className="generator-help">
-                        Auto uses the selected model&apos;s recommended resolution. Presets use SDXL-safe aspect ratios.
+                        {imageReferenceData || imageReferenceUrl.trim()
+                          ? "Auto follows the reference image. Presets crop to the selected aspect ratio."
+                          : "Auto uses the selected model's recommended resolution. Presets use SDXL-safe aspect ratios."}
                       </p>
                       <label className="generator-label" htmlFor="image-seed">
                         Seed (optional)
@@ -2210,6 +2520,35 @@ const TestPage: React.FC = () => {
                         Using recommended defaults for this model (source: {videoDefaultsBadge}). Leave fields blank to apply them automatically.
                       </p>
                     )}
+                    {videoWorkflows.length > 0 && (
+                      <>
+                        <label className="generator-label" htmlFor="video-workflow">
+                          Workflow
+                        </label>
+                        <select
+                          id="video-workflow"
+                          value={selectedVideoWorkflowId}
+                          onChange={(e) => {
+                            const workflowId = e.target.value;
+                            setSelectedVideoWorkflowId(workflowId);
+                            const workflow = videoWorkflows.find((item) => item.id === workflowId);
+                            if (!workflow) return;
+                            applyVideoWorkflowSelection(workflow);
+                          }}
+                          className="generator-select"
+                        >
+                          <option value="">Custom</option>
+                          {videoWorkflows.map((workflow) => (
+                            <option key={workflow.id} value={workflow.id}>
+                              {workflow.label}
+                            </option>
+                          ))}
+                        </select>
+                        {selectedVideoWorkflow?.description && (
+                          <p className="generator-help">{selectedVideoWorkflow.description}</p>
+                        )}
+                      </>
+                    )}
                     <label className="generator-label" htmlFor="negative-prompt-video">
                       Negative prompt (optional)
                     </label>
@@ -2221,7 +2560,9 @@ const TestPage: React.FC = () => {
                       onChange={(e) => setNegativePrompt(e.target.value)}
                       rows={2}
                     />
-                    <span className="generator-label">Init image (optional)</span>
+                    <span className="generator-label">
+                      Init image{selectedVideoWorkflow?.requires_init_image ? "" : " (optional)"}
+                    </span>
                     <label className="generator-label" htmlFor="video-init-url">
                       Init image URL
                     </label>
@@ -2251,6 +2592,43 @@ const TestPage: React.FC = () => {
                     />
                     {videoInitName && (
                       <p className="generator-help">Using uploaded file: {videoInitName}</p>
+                    )}
+                    {supportsLtxReferenceSheet && (
+                      <>
+                        <span className="generator-label">Detail reference sheet (optional)</span>
+                        <label className="generator-label" htmlFor="video-reference-url">
+                          Reference sheet URL
+                        </label>
+                        <input
+                          id="video-reference-url"
+                          type="text"
+                          className="generator-input"
+                          placeholder="https://... or data:image/..."
+                          value={videoReferenceUrl}
+                          onChange={(e) => {
+                            setVideoReferenceUrl(e.target.value);
+                            if (e.target.value.trim()) {
+                              setVideoReferenceData(undefined);
+                              setVideoReferenceName(undefined);
+                            }
+                          }}
+                        />
+                        <label className="generator-label" htmlFor="video-reference-upload">
+                          Upload reference sheet
+                        </label>
+                        <input
+                          id="video-reference-upload"
+                          type="file"
+                          accept="image/*"
+                          className="generator-input"
+                          onChange={handleVideoReferenceUpload}
+                        />
+                        {videoReferenceName && (
+                          <p className="generator-help">
+                            Using uploaded file: {videoReferenceName}
+                          </p>
+                        )}
+                      </>
                     )}
                     <label className="generator-label" htmlFor="video-init-strength">
                       Init image strength
@@ -2490,6 +2868,7 @@ const TestPage: React.FC = () => {
                   onRetry={handleCheckStatus}
                   onUseLastFrame={handleUseLastFrame}
                   onAnimateImage={handleAnimateImage}
+                  onRefineImage={handleRefineImage}
                 />
               </div>
             </div>

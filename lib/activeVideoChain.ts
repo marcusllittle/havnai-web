@@ -17,6 +17,18 @@ export type ActiveVideoChain = {
 export const shouldPrepareNextVideoClip = (currentIndex: number, total: number): boolean =>
   currentIndex + 1 < total;
 
+export const buildVideoChainClipRequest = (
+  request: VideoJobRequest,
+  prompt: string,
+  initImage: string,
+  currentIndex: number
+): VideoJobRequest => ({
+  ...request,
+  prompt,
+  ...(initImage ? { initImage } : {}),
+  ...(currentIndex > 0 ? { continuation: true } : {}),
+});
+
 const isJobId = (value: unknown): value is string =>
   typeof value === "string" && /^job-[A-Za-z0-9_-]+$/.test(value);
 

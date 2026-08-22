@@ -26,4 +26,16 @@ describe("OutputCard", () => {
     expect(html).toContain('src="/api/static/outputs/job-complete.png"');
     expect(html).toContain('alt="job-complete"');
   });
+
+  it("offers direct refinement for a completed image", () => {
+    const html = renderToStaticMarkup(
+      <OutputCard
+        imageUrl="/api/static/outputs/job-refine.png"
+        jobId="job-refine"
+        onRefineImage={() => undefined}
+      />
+    );
+
+    expect(html).toContain("Refine image");
+  });
 });
