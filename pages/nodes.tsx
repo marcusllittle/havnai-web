@@ -191,6 +191,9 @@ const NodesPage: NextPage = () => {
               <Link href="/receipt-anchors" className="jh-btn jh-btn-secondary">
                 Receipt Anchors
               </Link>
+              <Link href="/node-rewards" className="jh-btn jh-btn-secondary">
+                Node Rewards
+              </Link>
             </>
           }
         />
