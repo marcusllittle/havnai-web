@@ -7440,3 +7440,65 @@ details[open] .faq-icon {
   border-color: rgba(0,217,255,0.4) !important;
 }
 
+
+/* Expand prompt area */
+.generator-right {
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 16px !important;
+}
+
+/* Move mode tabs to top */
+.generator-mode-tabs {
+  order: -2;
+  margin: -16px -16px 0 -16px !important;
+  padding: 0 16px !important;
+  border-bottom: 1px solid rgba(0,217,255,0.1) !important;
+}
+
+/* Prompt label + input as primary section */
+#prompt,
+[id="prompt"] {
+  min-height: 140px !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  padding: 12px !important;
+  resize: vertical !important;
+  font-family: inherit !important;
+}
+
+.generator-right > label:has(+ [id="prompt"]) {
+  font-weight: 600 !important;
+  color: #e4e9f1 !important;
+  margin-top: 12px !important;
+  margin-bottom: 8px !important;
+}
+
+/* Reorganize sidebar to prioritize prompt */
+.generator-right {
+  padding: 0 !important;
+}
+
+.generator-mode-tabs {
+  order: 1;
+}
+
+/* Create a prompt-focused section */
+.generator-right > *:nth-child(n+3) {
+  padding: 0 16px;
+}
+
+.generator-right > label[for="prompt"],
+.generator-right > [id="prompt"] {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+
+.generator-right > label[for="prompt"] {
+  margin-top: 16px !important;
+}
+
+.generator-right > [id="prompt"] {
+  margin-bottom: 16px !important;
+}
+
