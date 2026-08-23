@@ -8,6 +8,9 @@ function detectType(message: string): StatusType {
     lower.includes("waiting") ||
     lower.includes("queued") ||
     lower.includes("rendering") ||
+    lower.includes("generating") ||
+    lower.includes("loading") ||
+    lower.includes("uploading") ||
     lower.includes("stitching") ||
     lower.includes("submitted") ||
     lower.includes("finalizing") ||
@@ -44,6 +47,14 @@ function parseSteps(message: string): { current: number; total: number } | null 
   return { current: parseInt(match[1], 10), total: parseInt(match[2], 10) };
 }
 
+function parsePercentage(message: string): number | null {
+  const match = message.match(/(\d+(?:\.\d+)?)\s*%/);
+  if (!match) return null;
+  const value = Number.parseFloat(match[1]);
+  if (!Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
 interface StatusBoxProps {
   message?: string;
 }
@@ -52,6 +63,7 @@ export const StatusBox: React.FC<StatusBoxProps> = ({ message }) => {
   if (!message) return null;
   const type = detectType(message);
   const steps = parseSteps(message);
+  const percentage = parsePercentage(message);
 
   return (
     <div className={`status-box status-${type}`}>
@@ -79,6 +91,20 @@ export const StatusBox: React.FC<StatusBoxProps> = ({ message }) => {
           <span className="status-steps-label">
             Step {steps.current} of {steps.total}
           </span>
+        </div>
+      )}
+      {percentage !== null && (
+        <div
+          className="status-progress"
+          role="progressbar"
+          aria-label="Render progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percentage}
+        >
+          <div className="status-progress-track">
+            <span style={{ width: `${percentage}%` }} />
+          </div>
         </div>
       )}
     </div>

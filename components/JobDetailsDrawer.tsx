@@ -309,6 +309,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     height: jobData.height ?? jobData.overrides?.height,
     fps: jobData.fps,
     frames: jobData.frames,
+    prompt_enhancer: jobData.prompt_enhancer,
     sampler: jobData.sampler ?? jobData.overrides?.sampler,
   };
 
@@ -325,6 +326,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
       node_id: job?.node_id || jobData.node_id || jobData.worker_id,
       worker_id: jobData.worker_id || job?.node_id,
       params,
+      input_assets: job?.input_assets,
       prompt: promptText,
       negative_prompt: negativePrompt,
       output_urls: {
@@ -835,6 +837,43 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   <div>
                     <span className="job-label">engine</span>
                     <span>{job.task_type}</span>
+                  </div>
+                )}
+                {job?.input_assets?.init_image && (
+                  <div>
+                    <span className="job-label">reference image</span>
+                    <span>yes</span>
+                  </div>
+                )}
+                {(job?.input_assets?.base_image ||
+                  job?.input_assets?.source_image) && (
+                    <div>
+                      <span className="job-label">source image</span>
+                      <span>yes</span>
+                    </div>
+                  )}
+                {job?.input_assets?.inpaint_mask && (
+                  <div>
+                    <span className="job-label">selected-area mask</span>
+                    <span>yes</span>
+                  </div>
+                )}
+                {job?.input_assets?.reference_face && (
+                  <div>
+                    <span className="job-label">face reference</span>
+                    <span>yes</span>
+                  </div>
+                )}
+                {job?.input_assets?.pose_image && (
+                  <div>
+                    <span className="job-label">pose reference</span>
+                    <span>yes</span>
+                  </div>
+                )}
+                {job?.input_assets?.audio && (
+                  <div>
+                    <span className="job-label">audio input</span>
+                    <span>yes</span>
                   </div>
                 )}
               </div>
