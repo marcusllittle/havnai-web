@@ -48,11 +48,7 @@ export default function ownerProxy(req: NextApiRequest, res: NextApiResponse): P
     return;
   }
 
-  const base = (
-    process.env.HAVNAI_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    "https://api.joinhavn.io"
-  ).replace(/\/$/, "");
+  const base = (process.env.HAVNAI_API_BASE_URL || "https://api.joinhavn.io").replace(/\/$/, "");
   const target = new URL(`${base}/${segments.map((part) => encodeURIComponent(String(part))).join("/")}`);
   for (const [key, value] of Object.entries(req.query)) {
     if (key === "path" || value == null) continue;
