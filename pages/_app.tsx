@@ -2,7 +2,9 @@ import type { AppProps } from "next/app";
 import React from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { WalletProvider } from "../components/WalletProvider";
+import { MusicPlayerProvider } from "../components/MusicPlayer";
 import "../style.css";
+import "../styles/music.css";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -76,8 +78,10 @@ export default function HavnAIApp({ Component, pageProps }: AppProps) {
   return (
     <ErrorBoundary>
       <WalletProvider>
-        <Component {...pageProps} />
-        <Analytics />
+        <MusicPlayerProvider>
+          <Component {...pageProps} />
+          <Analytics />
+        </MusicPlayerProvider>
       </WalletProvider>
     </ErrorBoundary>
   );
