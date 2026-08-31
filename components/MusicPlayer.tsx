@@ -1,8 +1,9 @@
 import Image from "next/image";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Pause, Play, Volume1, Volume2, VolumeX, X } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward, Volume1, Volume2, VolumeX, X } from "lucide-react";
 import { formatMusicDuration } from "../lib/musicJobPresentation";
 import { getApiBase } from "../lib/apiBase";
+import { adjacentQueueIndex, playableQueue, resolveQueueSelection } from "../lib/musicPlayerQueue";
 
 export interface PlayerTrack {
   id: string;
@@ -17,12 +18,20 @@ export interface PlayerTrack {
 interface PlayerContextValue {
   currentTrack: PlayerTrack | null;
   isPlaying: boolean;
-  playTrack: (track: PlayerTrack) => void;
+  queue: PlayerTrack[];
+  queueIndex: number;
+  playTrack: (track: PlayerTrack, queue?: PlayerTrack[], index?: number) => void;
+  playQueue: (queue: PlayerTrack[], index?: number) => void;
+  next: () => void;
+  previous: () => void;
+  hasNext: boolean;
+  hasPrevious: boolean;
   toggle: () => void;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 const STORAGE_KEY = "havnai_music_player_track";
+const QUEUE_STORAGE_KEY = "havnai_music_player_queue";
 const VOLUME_KEY = "havnai_music_player_volume";
 const SESSION_KEY = "havnai_music_listener_session";
 
@@ -63,6 +72,8 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const shouldPlayRef = useRef(false);
   const [currentTrack, setCurrentTrack] = useState<PlayerTrack | null>(null);
+  const [queue, setQueue] = useState<PlayerTrack[]>([]);
+  const [queueIndex, setQueueIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -73,9 +84,19 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
+      const savedQueue = window.localStorage.getItem(QUEUE_STORAGE_KEY);
       const savedVolumeRaw = window.localStorage.getItem(VOLUME_KEY);
       const savedVolume = savedVolumeRaw === null ? Number.NaN : Number(savedVolumeRaw);
-      if (saved) setCurrentTrack(JSON.parse(saved));
+      const parsedTrack = saved ? JSON.parse(saved) as PlayerTrack : null;
+      const parsedQueue = savedQueue ? JSON.parse(savedQueue) : null;
+      if (Array.isArray(parsedQueue) && parsedQueue.every((item) => item?.id && item?.audioUrl)) {
+        setQueue(parsedQueue);
+        const index = parsedTrack ? parsedQueue.findIndex((item) => item.id === parsedTrack.id) : -1;
+        setQueueIndex(index >= 0 ? index : 0);
+      } else if (parsedTrack) {
+        setQueue([parsedTrack]);
+      }
+      if (parsedTrack) setCurrentTrack(parsedTrack);
       if (Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1) setVolume(savedVolume);
     } catch {
       // Browser storage is optional; playback still works without it.
@@ -103,16 +124,54 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     }
   }, [currentTrack?.id, currentTrack?.audioUrl]);
 
-  const playTrack = useCallback((track: PlayerTrack) => {
+  useEffect(() => {
+    if (!currentTrack) return;
+    try { window.localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(queue)); } catch { /* ignore */ }
+  }, [currentTrack, queue]);
+
+  const playTrack = useCallback((track: PlayerTrack, nextQueue?: PlayerTrack[], index?: number) => {
     const audio = audioRef.current;
+    const resolved = resolveQueueSelection(track, nextQueue, index);
+    if (!resolved.track) return;
+    setQueue(resolved.queue);
+    setQueueIndex(resolved.index);
     if (currentTrack?.id === track.id && audio) {
       setPlayerError("");
       void audio.play().catch(() => setPlayerError("This audio could not be played."));
       return;
     }
     shouldPlayRef.current = true;
-    setCurrentTrack(track);
+    setCurrentTrack(resolved.track);
   }, [currentTrack?.id]);
+
+  const playQueue = useCallback((nextQueue: PlayerTrack[], index = 0) => {
+    const playable = playableQueue(nextQueue);
+    if (playable.length === 0) return;
+    const safeIndex = Math.max(0, Math.min(index, playable.length - 1));
+    shouldPlayRef.current = true;
+    setQueue(playable);
+    setQueueIndex(safeIndex);
+    setCurrentTrack(playable[safeIndex]);
+  }, []);
+
+  const hasPrevious = queueIndex > 0;
+  const hasNext = queueIndex >= 0 && queueIndex < queue.length - 1;
+
+  const previous = useCallback(() => {
+    const nextIndex = adjacentQueueIndex(queue.length, queueIndex, -1);
+    if (nextIndex == null) return;
+    shouldPlayRef.current = true;
+    setQueueIndex(nextIndex);
+    setCurrentTrack(queue[nextIndex]);
+  }, [queue, queueIndex]);
+
+  const next = useCallback(() => {
+    const nextIndex = adjacentQueueIndex(queue.length, queueIndex, 1);
+    if (nextIndex == null) return;
+    shouldPlayRef.current = true;
+    setQueueIndex(nextIndex);
+    setCurrentTrack(queue[nextIndex]);
+  }, [queue, queueIndex]);
 
   const toggle = useCallback(() => {
     const audio = audioRef.current;
@@ -122,7 +181,10 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     else audio.pause();
   }, [currentTrack]);
 
-  const contextValue = useMemo(() => ({ currentTrack, isPlaying, playTrack, toggle }), [currentTrack, isPlaying, playTrack, toggle]);
+  const contextValue = useMemo(
+    () => ({ currentTrack, isPlaying, queue, queueIndex, playTrack, playQueue, next, previous, hasNext, hasPrevious, toggle }),
+    [currentTrack, hasNext, hasPrevious, isPlaying, next, playQueue, playTrack, previous, queue, queueIndex, toggle]
+  );
   const displayedDuration = duration || currentTrack?.duration || 0;
 
   return (
@@ -148,13 +210,25 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
         }}
         onLoadedMetadata={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
         onEnded={() => {
-          setIsPlaying(false);
           if (currentTrack?.publicationId && countedPlayRef.current !== currentTrack.publicationId) {
             countedPlayRef.current = currentTrack.publicationId;
             recordPublicationPlay(currentTrack.publicationId, audioRef.current?.currentTime || duration, true);
           }
+          if (hasNext) {
+            next();
+          } else {
+            setIsPlaying(false);
+          }
         }}
-        onError={() => { setIsPlaying(false); setPlayerError("This audio file is unavailable or could not be played."); }}
+        onError={() => {
+          if (hasNext) {
+            setPlayerError("This audio file is unavailable. Playing the next track.");
+            next();
+          } else {
+            setIsPlaying(false);
+            setPlayerError("This audio file is unavailable or could not be played.");
+          }
+        }}
       />
       {currentTrack && (
         <aside className="music-player" aria-label="Now playing">
@@ -163,8 +237,14 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
             <div><strong>{currentTrack.title}</strong><span>{currentTrack.style || "HavnAI Music"}</span></div>
           </div>
           <div className="music-player-transport">
+            <button type="button" onClick={previous} disabled={!hasPrevious} aria-label="Previous track" title="Previous">
+              <SkipBack size={18} fill="currentColor" />
+            </button>
             <button type="button" onClick={toggle} aria-label={isPlaying ? "Pause" : "Play"} title={isPlaying ? "Pause" : "Play"}>
               {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
+            </button>
+            <button type="button" onClick={next} disabled={!hasNext} aria-label="Next track" title="Next">
+              <SkipForward size={18} fill="currentColor" />
             </button>
             <span>{formatMusicDuration(currentTime)}</span>
             <input
@@ -195,8 +275,11 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
             onClick={() => {
               audioRef.current?.pause();
               setCurrentTrack(null);
+              setQueue([]);
+              setQueueIndex(0);
               setPlayerError("");
               try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+              try { window.localStorage.removeItem(QUEUE_STORAGE_KEY); } catch { /* ignore */ }
             }}
           ><X size={18} /></button>
         </aside>

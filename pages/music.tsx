@@ -95,6 +95,11 @@ export default function MusicStudioPage() {
   const { currentTrack, isPlaying, playTrack, toggle } = useMusicPlayer();
   const wallet = useWallet();
   const activeWallet = wallet.activeWallet;
+  const connectedWallet = wallet.connectedWallet;
+  const creatorReadWallet =
+    activeWallet && connectedWallet && connectedWallet.toLowerCase() === activeWallet.toLowerCase()
+      ? connectedWallet
+      : undefined;
 
   useEffect(() => {
     setForm(restoreMusicForm(window.localStorage.getItem(FORM_STORAGE_KEY)));
@@ -133,7 +138,9 @@ export default function MusicStudioPage() {
       void Promise.all([
         fetchMusicJobs(accessKey),
         fetchMusicCapabilities(accessKey),
-        activeWallet ? fetchMusicDiscover({ creator_wallet: activeWallet, wallet: activeWallet, limit: 100 }) : Promise.resolve(null),
+        activeWallet
+          ? fetchMusicDiscover({ creator_wallet: activeWallet, wallet: creatorReadWallet, limit: 100 })
+          : Promise.resolve(null),
       ])
         .then(([recent, nextCapabilities, creatorPublications]) => {
           setJobs((current) => mergeJobs(current, recent));
@@ -143,17 +150,17 @@ export default function MusicStudioPage() {
         .catch(() => undefined);
     }, 6000);
     return () => window.clearInterval(timer);
-  }, [accessKey, activeWallet, unlocked]);
+  }, [accessKey, activeWallet, creatorReadWallet, unlocked]);
 
   useEffect(() => {
     if (!unlocked || !activeWallet) {
       setPublications([]);
       return;
     }
-    void fetchMusicDiscover({ creator_wallet: activeWallet, wallet: activeWallet, limit: 100 })
+    void fetchMusicDiscover({ creator_wallet: activeWallet, wallet: creatorReadWallet, limit: 100 })
       .then((response) => setPublications(response.publications))
       .catch(() => undefined);
-  }, [activeWallet, unlocked]);
+  }, [activeWallet, creatorReadWallet, unlocked]);
 
   const musicModels = capabilities?.models.filter((model) =>
     model.available && model.capabilities?.includes("text_to_music")
@@ -161,7 +168,11 @@ export default function MusicStudioPage() {
   const selectedModel = musicModels[0]?.id || "";
   const musicAvailable = musicModels.length > 0;
   const publicationByJobId = useMemo(() => {
-    return new Map(publications.map((publication) => [publication.job_id, publication]));
+    return new Map(
+      publications
+        .filter((publication) => publication.job_id)
+        .map((publication) => [publication.job_id!, publication])
+    );
   }, [publications]);
 
   async function connect(key: string) {

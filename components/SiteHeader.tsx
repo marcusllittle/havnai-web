@@ -15,6 +15,7 @@ const PRIMARY_NAV: NavItem[] = [
   { href: "/create", label: "Create" },
   { href: "/music", label: "Music" },
   { href: "/discover", label: "Discover" },
+  { href: "/music/library", label: "Library" },
   { href: "/video-studio", label: "Video" },
   { href: "/library", label: "Collection" },
   { href: "/marketplace", label: "Marketplace" },
@@ -28,6 +29,7 @@ const UTILITY_NAV: NavItem[] = [
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
+  if (href === "/music") return pathname === "/music";
   if (/^https?:/i.test(href)) return false;
   return pathname.startsWith(href);
 }
