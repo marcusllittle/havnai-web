@@ -27,12 +27,18 @@ describe("music studio API", () => {
       bpm: 122,
       key: "C Minor",
       seed: 9,
+      wallet: "0x1111111111111111111111111111111111111111",
     }, "studio-secret");
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/owner/v1/jobs");
     expect((init.headers as Headers).get("X-HavnAI-Studio-Key")).toBe("studio-secret");
-    expect(JSON.parse(init.body)).toMatchObject({ type: "text_to_music", instrumental: true, bpm: 122 });
+    expect(JSON.parse(init.body)).toMatchObject({
+      type: "text_to_music",
+      instrumental: true,
+      bpm: 122,
+      wallet: "0x1111111111111111111111111111111111111111",
+    });
   });
 
   it("routes coordinator artifact paths through the local API proxy", () => {

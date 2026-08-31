@@ -14,6 +14,7 @@ const PRIMARY_NAV: NavItem[] = [
   { href: "/astra", label: "Astra", accent: true },
   { href: "/create", label: "Create" },
   { href: "/music", label: "Music" },
+  { href: "/discover", label: "Discover" },
   { href: "/video-studio", label: "Video" },
   { href: "/library", label: "Collection" },
   { href: "/marketplace", label: "Marketplace" },

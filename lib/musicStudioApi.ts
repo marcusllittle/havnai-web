@@ -14,6 +14,7 @@ export interface MusicJob {
   stage: string;
   progress: number;
   model: string;
+  wallet?: string;
   created_at?: number | null;
   updated_at?: number | null;
   completed_at?: number | null;
@@ -62,6 +63,7 @@ export interface CreateMusicInput {
   bpm?: number;
   key?: string;
   seed?: number;
+  wallet?: string;
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {

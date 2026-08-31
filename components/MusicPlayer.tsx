@@ -2,6 +2,7 @@ import Image from "next/image";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, Volume1, Volume2, VolumeX, X } from "lucide-react";
 import { formatMusicDuration } from "../lib/musicJobPresentation";
+import { getApiBase } from "../lib/apiBase";
 
 export interface PlayerTrack {
   id: string;
@@ -10,6 +11,7 @@ export interface PlayerTrack {
   audioUrl: string;
   artworkUrl?: string;
   duration?: number;
+  publicationId?: string;
 }
 
 interface PlayerContextValue {
@@ -22,6 +24,34 @@ interface PlayerContextValue {
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 const STORAGE_KEY = "havnai_music_player_track";
 const VOLUME_KEY = "havnai_music_player_volume";
+const SESSION_KEY = "havnai_music_listener_session";
+
+function listenerSessionId(): string {
+  try {
+    const existing = window.localStorage.getItem(SESSION_KEY);
+    if (existing) return existing;
+    const next =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `listener-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    window.localStorage.setItem(SESSION_KEY, next);
+    return next;
+  } catch {
+    return "listener-anonymous";
+  }
+}
+
+function recordPublicationPlay(publicationId: string, secondsListened: number, completed = false): void {
+  void fetch(`${getApiBase()}/music/publications/${encodeURIComponent(publicationId)}/play`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      seconds_listened: Math.max(0, secondsListened),
+      completed,
+      session_id: listenerSessionId(),
+    }),
+  }).catch(() => undefined);
+}
 
 export function useMusicPlayer(): PlayerContextValue {
   const value = useContext(PlayerContext);
@@ -38,6 +68,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.8);
   const [playerError, setPlayerError] = useState("");
+  const countedPlayRef = useRef<string | null>(null);
 
   useEffect(() => {
     try {
@@ -64,6 +95,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     setPlayerError("");
     setCurrentTime(0);
     setDuration(currentTrack.duration || 0);
+    countedPlayRef.current = null;
     try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(currentTrack)); } catch { /* ignore */ }
     if (shouldPlayRef.current) {
       shouldPlayRef.current = false;
@@ -102,9 +134,26 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
         preload="metadata"
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
-        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+        onTimeUpdate={(event) => {
+          const nextTime = event.currentTarget.currentTime;
+          setCurrentTime(nextTime);
+          if (
+            currentTrack?.publicationId &&
+            countedPlayRef.current !== currentTrack.publicationId &&
+            nextTime >= 5
+          ) {
+            countedPlayRef.current = currentTrack.publicationId;
+            recordPublicationPlay(currentTrack.publicationId, nextTime);
+          }
+        }}
         onLoadedMetadata={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
-        onEnded={() => setIsPlaying(false)}
+        onEnded={() => {
+          setIsPlaying(false);
+          if (currentTrack?.publicationId && countedPlayRef.current !== currentTrack.publicationId) {
+            countedPlayRef.current = currentTrack.publicationId;
+            recordPublicationPlay(currentTrack.publicationId, audioRef.current?.currentTime || duration, true);
+          }
+        }}
         onError={() => { setIsPlaying(false); setPlayerError("This audio file is unavailable or could not be played."); }}
       />
       {currentTrack && (
