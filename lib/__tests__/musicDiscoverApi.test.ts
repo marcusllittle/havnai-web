@@ -1,5 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchMusicCreator, fetchMusicDiscover, fetchMusicLibrary, fetchMusicPlaylist, recordMusicPublicationPlay } from "../havnai";
+import {
+  addMusicPlaylistItem,
+  createMusicPlaylist,
+  deleteMusicPlaylist,
+  fetchMusicCreator,
+  fetchMusicDiscover,
+  fetchMusicLibrary,
+  fetchMusicPlaylist,
+  fetchMyMusicPlaylists,
+  recordMusicPublicationPlay,
+  removeMusicPlaylistItem,
+  reorderMusicPlaylistItems,
+  setMusicPublicationSaved,
+  updateMusicPlaylist,
+} from "../havnai";
 
 const TEST_WALLET = vi.hoisted(() => "0x1111111111111111111111111111111111111111");
 
@@ -46,6 +60,32 @@ describe("music discover API", () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
+
+  function nonceResponse(message = "Sign music action") {
+    return new Response(JSON.stringify({
+      nonce: "nonce-1",
+      message,
+      issued_at: "2026-08-31T00:00:00Z",
+      expires_at: "2026-08-31T00:05:00Z",
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+
+  function playlistResponse(overrides: Record<string, unknown> = {}) {
+    return new Response(JSON.stringify({
+      id: "playlist-1",
+      owner_wallet: TEST_WALLET,
+      owner: "0x1111...1111",
+      title: "Night Set",
+      description: "",
+      is_public: false,
+      is_owner: true,
+      artwork_url: "/api/music/playlists/playlist-1/cover.svg",
+      artwork_tiles: [],
+      track_count: 0,
+      publications: [],
+      ...overrides,
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
 
   it("loads public music publications and resolves media URLs through the API proxy", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
@@ -209,6 +249,133 @@ describe("music discover API", () => {
     expect(response.publications[0].saved_by_me).toBe(true);
     expect(response.publications[0].job_id).toBeUndefined();
     expect(response.playlists[0].title).toBe("Mix");
+  });
+
+  it("loads owned playlists with signed wallet access", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(nonceResponse("Sign playlists access"))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        playlists: [{
+          id: "playlist-1",
+          owner_wallet: TEST_WALLET,
+          title: "Library Mix",
+          is_public: false,
+          track_count: 3,
+        }],
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const playlists = await fetchMyMusicPlaylists(TEST_WALLET);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/wallet/nonce", expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining('"purpose":"playlist_read"'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/music/playlists/mine", expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining('"signature":"0xsigned"'),
+    }));
+    expect(playlists[0]).toMatchObject({ id: "playlist-1", title: "Library Mix", track_count: 3 });
+  });
+
+  it("saves and unsaves publications with signed wallet writes", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(nonceResponse("Sign save"))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, saved: true }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(nonceResponse("Sign unsave"))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, saved: false }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(setMusicPublicationSaved("music-1", true, TEST_WALLET)).resolves.toMatchObject({ saved: true });
+    await expect(setMusicPublicationSaved("music-1", false, TEST_WALLET)).resolves.toMatchObject({ saved: false });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/wallet/nonce", expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining('"purpose":"music_save"'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/music/publications/music-1/save", expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining('"signature":"0xsigned"'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/wallet/nonce", expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining('"purpose":"music_unsave"'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/music/publications/music-1/save", expect.objectContaining({
+      method: "DELETE",
+      body: expect.stringContaining('"signature":"0xsigned"'),
+    }));
+  });
+
+  it("creates, updates, and deletes playlists with owner-scoped signatures", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(nonceResponse("Sign create"))
+      .mockResolvedValueOnce(playlistResponse({ title: "Night Set", description: "Late drive", is_public: true }))
+      .mockResolvedValueOnce(nonceResponse("Sign update"))
+      .mockResolvedValueOnce(playlistResponse({ title: "Afterhours", description: "Updated", is_public: false }))
+      .mockResolvedValueOnce(nonceResponse("Sign delete"))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createMusicPlaylist({ wallet: TEST_WALLET, title: "Night Set", description: "Late drive", is_public: true }))
+      .resolves.toMatchObject({ title: "Night Set", is_public: true });
+    await expect(updateMusicPlaylist("playlist-1", { wallet: TEST_WALLET, title: "Afterhours", description: "Updated", is_public: false }))
+      .resolves.toMatchObject({ title: "Afterhours", is_public: false });
+    await expect(deleteMusicPlaylist("playlist-1", TEST_WALLET)).resolves.toMatchObject({ ok: true });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/wallet/nonce", expect.objectContaining({
+      body: expect.stringContaining('"purpose":"playlist_create"'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/music/playlists", expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining('"is_public":true'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/wallet/nonce", expect.objectContaining({
+      body: expect.stringContaining('"purpose":"playlist_update"'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/music/playlists/playlist-1", expect.objectContaining({
+      method: "PATCH",
+      body: expect.stringContaining('"title":"Afterhours"'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(5, "/api/wallet/nonce", expect.objectContaining({
+      body: expect.stringContaining('"purpose":"playlist_delete"'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(6, "/api/music/playlists/playlist-1", expect.objectContaining({ method: "DELETE" }));
+  });
+
+  it("adds, removes, and reorders playlist tracks with signed playlist item writes", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(nonceResponse("Sign add"))
+      .mockResolvedValueOnce(playlistResponse({ track_count: 1, publications: [{ id: "music-1", title: "First" }] }))
+      .mockResolvedValueOnce(nonceResponse("Sign remove"))
+      .mockResolvedValueOnce(playlistResponse({ track_count: 0, publications: [] }))
+      .mockResolvedValueOnce(nonceResponse("Sign reorder"))
+      .mockResolvedValueOnce(playlistResponse({ publications: [{ id: "music-2", title: "Second" }, { id: "music-1", title: "First" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(addMusicPlaylistItem("playlist-1", "music-1", TEST_WALLET)).resolves.toMatchObject({ track_count: 1 });
+    await expect(removeMusicPlaylistItem("playlist-1", "music-1", TEST_WALLET)).resolves.toMatchObject({ track_count: 0 });
+    await expect(reorderMusicPlaylistItems("playlist-1", ["music-2", "music-1"], TEST_WALLET))
+      .resolves.toMatchObject({ publications: [{ id: "music-2" }, { id: "music-1" }] });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/wallet/nonce", expect.objectContaining({
+      body: expect.stringContaining('"purpose":"playlist_add"'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/music/playlists/playlist-1/items", expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining('"publication_id":"music-1"'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/wallet/nonce", expect.objectContaining({
+      body: expect.stringContaining('"purpose":"playlist_remove"'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/music/playlists/playlist-1/items/music-1", expect.objectContaining({ method: "DELETE" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(5, "/api/wallet/nonce", expect.objectContaining({
+      body: expect.stringContaining('"purpose":"playlist_reorder"'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(6, "/api/music/playlists/playlist-1/reorder", expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining('"publication_ids":["music-2","music-1"]'),
+    }));
   });
 
   it("loads public playlist details with ordered tracks", async () => {

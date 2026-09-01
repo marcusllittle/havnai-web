@@ -26,3 +26,17 @@ export function adjacentQueueIndex(queueLength: number, index: number, direction
   if (nextIndex < 0 || nextIndex >= queueLength) return null;
   return nextIndex;
 }
+
+export function restoreQueueSelection<T extends QueueTrack>(
+  track: T | null,
+  queue: unknown
+): { queue: T[]; index: number; track: T | null } {
+  const storedQueue = Array.isArray(queue) ? playableQueue(queue.filter((item): item is T => Boolean(item?.id))) : [];
+  if (track?.id && track.audioUrl) {
+    return resolveQueueSelection(track, storedQueue.length > 0 ? storedQueue : [track]);
+  }
+  if (storedQueue.length > 0) {
+    return { queue: storedQueue, index: 0, track: storedQueue[0] };
+  }
+  return { queue: [], index: 0, track: null };
+}

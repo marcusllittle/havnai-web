@@ -3,7 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { Pause, Play, SkipBack, SkipForward, Volume1, Volume2, VolumeX, X } from "lucide-react";
 import { formatMusicDuration } from "../lib/musicJobPresentation";
 import { getApiBase } from "../lib/apiBase";
-import { adjacentQueueIndex, playableQueue, resolveQueueSelection } from "../lib/musicPlayerQueue";
+import { adjacentQueueIndex, playableQueue, resolveQueueSelection, restoreQueueSelection } from "../lib/musicPlayerQueue";
 
 export interface PlayerTrack {
   id: string;
@@ -89,14 +89,10 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
       const savedVolume = savedVolumeRaw === null ? Number.NaN : Number(savedVolumeRaw);
       const parsedTrack = saved ? JSON.parse(saved) as PlayerTrack : null;
       const parsedQueue = savedQueue ? JSON.parse(savedQueue) : null;
-      if (Array.isArray(parsedQueue) && parsedQueue.every((item) => item?.id && item?.audioUrl)) {
-        setQueue(parsedQueue);
-        const index = parsedTrack ? parsedQueue.findIndex((item) => item.id === parsedTrack.id) : -1;
-        setQueueIndex(index >= 0 ? index : 0);
-      } else if (parsedTrack) {
-        setQueue([parsedTrack]);
-      }
-      if (parsedTrack) setCurrentTrack(parsedTrack);
+      const restored = restoreQueueSelection<PlayerTrack>(parsedTrack, parsedQueue);
+      setQueue(restored.queue);
+      setQueueIndex(restored.index);
+      setCurrentTrack(restored.track);
       if (Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1) setVolume(savedVolume);
     } catch {
       // Browser storage is optional; playback still works without it.

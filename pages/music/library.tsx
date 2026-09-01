@@ -106,16 +106,40 @@ export default function MusicLibraryPage() {
     playTrack(track, queueIndex >= 0 ? playableSaved : [track], queueIndex >= 0 ? queueIndex : 0);
   }
 
+  function updateLikedPublication(publication: MusicPublication, liked: boolean, likeCount: number) {
+    setSavedSongs((current) =>
+      current.map((item) => item.id === publication.id ? { ...item, liked_by_me: liked, like_count: likeCount } : item)
+    );
+    setRecentLiked((current) => {
+      if (!liked) return current.filter((item) => item.id !== publication.id);
+      const nextPublication = { ...publication, liked_by_me: true, like_count: likeCount };
+      return current.some((item) => item.id === publication.id)
+        ? current.map((item) => item.id === publication.id ? { ...item, liked_by_me: true, like_count: likeCount } : item)
+        : [nextPublication, ...current];
+    });
+  }
+
+  function updateSavedPublication(publication: MusicPublication, saved: boolean) {
+    setSavedSongs((current) => {
+      if (!saved) return current.filter((item) => item.id !== publication.id);
+      const nextPublication = { ...publication, saved_by_me: true };
+      return current.some((item) => item.id === publication.id)
+        ? current.map((item) => item.id === publication.id ? { ...item, saved_by_me: true } : item)
+        : [nextPublication, ...current];
+    });
+    setRecentLiked((current) => current.map((item) => item.id === publication.id ? { ...item, saved_by_me: saved } : item));
+  }
+
   async function savePublication(publication: MusicPublication) {
     const signer = await ensureWallet();
     if (!signer) return;
     const nextSaved = !publication.saved_by_me;
-    setSavedSongs((current) => current.map((item) => item.id === publication.id ? { ...item, saved_by_me: nextSaved } : item));
+    updateSavedPublication(publication, nextSaved);
     try {
       const result = await setMusicPublicationSaved(publication.id, nextSaved, signer);
-      if (!result.saved) setSavedSongs((current) => current.filter((item) => item.id !== publication.id));
+      updateSavedPublication(publication, result.saved);
     } catch {
-      setSavedSongs((current) => current.map((item) => item.id === publication.id ? { ...item, saved_by_me: publication.saved_by_me } : item));
+      updateSavedPublication(publication, publication.saved_by_me);
     }
   }
 
@@ -123,14 +147,12 @@ export default function MusicLibraryPage() {
     const signer = await ensureWallet();
     if (!signer) return;
     const nextLiked = !publication.liked_by_me;
-    setSavedSongs((current) =>
-      current.map((item) => item.id === publication.id ? { ...item, liked_by_me: nextLiked, like_count: Math.max(0, item.like_count + (nextLiked ? 1 : -1)) } : item)
-    );
+    updateLikedPublication(publication, nextLiked, Math.max(0, publication.like_count + (nextLiked ? 1 : -1)));
     try {
       const result = await setMusicPublicationLike(publication.id, nextLiked, signer);
-      setSavedSongs((current) => current.map((item) => item.id === publication.id ? { ...item, liked_by_me: result.liked, like_count: result.like_count } : item));
+      updateLikedPublication(publication, result.liked, result.like_count);
     } catch {
-      setSavedSongs((current) => current.map((item) => item.id === publication.id ? publication : item));
+      updateLikedPublication(publication, publication.liked_by_me, publication.like_count);
     }
   }
 

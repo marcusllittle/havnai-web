@@ -349,13 +349,13 @@ export default function MusicStudioPage() {
         <header className="music-studio-heading">
           <div><span><Music2 size={18} /> Music Studio</span><h1>What do you want to hear?</h1><p>Describe the feeling, scene, rhythm, or sound. HavnAI will shape it into a song.</p></div>
           <div className="music-runtime-row">
-            <span className={musicAvailable ? "is-online" : ""}>{musicAvailable ? "Music ready" : "No music node available"}</span>
+            <span className={musicAvailable ? "is-online" : ""}>{musicAvailable ? "Music ready" : "Music unavailable"}</span>
             <button type="button" title="Leave studio" aria-label="Leave studio" onClick={() => { window.sessionStorage.removeItem(STUDIO_KEY); setUnlocked(false); setCapabilities(null); }}><LogOut size={18} /></button>
           </div>
         </header>
 
         {!musicAvailable && (
-          <div className="music-offline" role="status"><WifiOff size={20} /><div><strong>Music generation is offline</strong><span>Your settings are saved. Try again when a music node is available.</span></div></div>
+          <div className="music-offline" role="status"><WifiOff size={20} /><div><strong>Music creation is offline</strong><span>Your settings are saved. Try again when music creation is back online.</span></div></div>
         )}
         {error && <div className="music-alert" role="alert"><span>{error}</span><button type="button" onClick={() => setError("")} aria-label="Dismiss error"><X size={17} /></button></div>}
 

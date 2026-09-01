@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adjacentQueueIndex, playableQueue, resolveQueueSelection } from "../musicPlayerQueue";
+import { adjacentQueueIndex, playableQueue, resolveQueueSelection, restoreQueueSelection } from "../musicPlayerQueue";
 
 const tracks = [
   { id: "one", audioUrl: "/one.mp3" },
@@ -45,5 +45,21 @@ describe("music player queue helpers", () => {
     expect(adjacentQueueIndex(2, 0, -1)).toBeNull();
     expect(adjacentQueueIndex(2, 0, 1)).toBe(1);
     expect(adjacentQueueIndex(2, 1, 1)).toBeNull();
+  });
+
+  it("restores a stale stored track to the first playable queue entry", () => {
+    const resolved = restoreQueueSelection({ id: "stale", audioUrl: "/gone.mp3" }, tracks);
+
+    expect(resolved.index).toBe(0);
+    expect(resolved.track?.id).toBe("one");
+    expect(resolved.queue.map((track) => track.id)).toEqual(["one", "two"]);
+  });
+
+  it("ignores corrupt stored queue entries while restoring playback", () => {
+    const resolved = restoreQueueSelection(null, [{ nope: true }, tracks[1], tracks[2]]);
+
+    expect(resolved.index).toBe(0);
+    expect(resolved.track?.id).toBe("two");
+    expect(resolved.queue).toEqual([tracks[2]]);
   });
 });
