@@ -16,6 +16,7 @@ import {
   type MusicCreatorProfile,
   type MusicPublication,
 } from "../../lib/havnai";
+import { formatWalletShort } from "../../lib/wallet";
 
 function compactCount(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -141,7 +142,7 @@ export default function CreatorPage() {
               <div>
                 <span>Creator</span>
                 <h1>{profile.display_name}</h1>
-                <p>{profile.wallet}</p>
+                <p title={profile.wallet}>{formatWalletShort(profile.wallet)}</p>
                 <dl>
                   <div><dt>Tracks</dt><dd>{compactCount(profile.track_count)}</dd></div>
                   <div><dt>Plays</dt><dd>{compactCount(profile.play_count)}</dd></div>

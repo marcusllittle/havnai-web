@@ -379,7 +379,7 @@ describe("music discover API", () => {
   });
 
   it("loads public playlist details with ordered tracks", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       id: "playlist-1",
       owner_wallet: "0x1111111111111111111111111111111111111111",
       owner: "0x1111...1111",
@@ -395,9 +395,10 @@ describe("music discover API", () => {
       track_count: 2,
       duration: 120,
       publications: [{ id: "music-1", title: "First", creator: "0x1111...1111" }],
-    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
 
-    const playlist = await fetchMusicPlaylist("playlist-1");
+    const playlist = await fetchMusicPlaylist("playlist-1", TEST_WALLET);
 
     expect(playlist.title).toBe("Night Set");
     expect(playlist.publications[0].title).toBe("First");
@@ -406,10 +407,15 @@ describe("music discover API", () => {
       "/api/music/publications/music-1/cover.svg",
       "/api/music/publications/music-2/cover.svg",
     ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/music/playlists/playlist-1", expect.objectContaining({
+      headers: expect.any(Object),
+    }));
   });
 
   it("uses signed access when a playlist is private to the connected wallet", async () => {
     const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "playlist_not_found" }), { status: 404, headers: { "Content-Type": "application/json" } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         nonce: "nonce-1",
         message: "Sign playlist access",
@@ -432,11 +438,14 @@ describe("music discover API", () => {
 
     const playlist = await fetchMusicPlaylist("playlist-private", TEST_WALLET);
 
-    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/wallet/nonce", expect.objectContaining({
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/music/playlists/playlist-private", expect.objectContaining({
+      headers: expect.any(Object),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/wallet/nonce", expect.objectContaining({
       method: "POST",
       body: expect.stringContaining('"purpose":"playlist_read"'),
     }));
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/music/playlists/playlist-private/access", expect.objectContaining({
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/music/playlists/playlist-private/access", expect.objectContaining({
       method: "POST",
       body: expect.stringContaining('"signature":"0xsigned"'),
     }));

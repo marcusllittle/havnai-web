@@ -2808,6 +2808,10 @@ export async function deleteMusicPlaylist(playlistId: string, wallet: string = W
 }
 
 export async function fetchMusicPlaylist(playlistId: string, wallet?: string | null): Promise<MusicPlaylist> {
+  const publicRes = await fetchWithTimeout(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}`), {
+    headers: buildHeaders(false),
+  }, MUSIC_READ_TIMEOUT_MS);
+  if (publicRes.ok) return normalizeMusicPlaylist(await publicRes.json());
   if (wallet) {
     const signed = await signWalletNonce({
       wallet,
@@ -2825,11 +2829,8 @@ export async function fetchMusicPlaylist(playlistId: string, wallet?: string | n
       }),
     }, MUSIC_READ_TIMEOUT_MS);
     if (privateRes.ok) return normalizeMusicPlaylist(await privateRes.json());
+    throw await parseErrorResponse(privateRes);
   }
-  const publicRes = await fetchWithTimeout(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}`), {
-    headers: buildHeaders(false),
-  }, MUSIC_READ_TIMEOUT_MS);
-  if (publicRes.ok) return normalizeMusicPlaylist(await publicRes.json());
   throw await parseErrorResponse(publicRes);
 }
 
