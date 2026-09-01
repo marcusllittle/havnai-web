@@ -1,6 +1,6 @@
 import Head from "next/head";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ListMusic, Music2, Plus, Search, Trash2 } from "lucide-react";
 import { AddToPlaylistDialog } from "../../components/AddToPlaylistDialog";
 import { MusicPlaylistArtwork } from "../../components/MusicPlaylistArtwork";
@@ -44,6 +44,7 @@ export default function MusicLibraryPage() {
   const [target, setTarget] = useState<MusicPublication | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const createPlaylistInFlightRef = useRef(false);
   const connectedWallet = wallet.connectedWallet;
 
   useEffect(() => {
@@ -147,11 +148,19 @@ export default function MusicLibraryPage() {
   }
 
   async function createPlaylist() {
-    const signer = await ensureWallet();
-    if (!signer || !newPlaylistTitle.trim()) return;
-    const playlist = await createMusicPlaylist({ wallet: signer, title: newPlaylistTitle.trim() });
-    setPlaylists((current) => [playlist, ...current]);
-    setNewPlaylistTitle("");
+    if (createPlaylistInFlightRef.current) return;
+    const title = newPlaylistTitle.trim();
+    if (!title) return;
+    createPlaylistInFlightRef.current = true;
+    try {
+      const signer = await ensureWallet();
+      if (!signer) return;
+      const playlist = await createMusicPlaylist({ wallet: signer, title });
+      setPlaylists((current) => [playlist, ...current]);
+      setNewPlaylistTitle("");
+    } finally {
+      createPlaylistInFlightRef.current = false;
+    }
   }
 
   async function togglePlaylistVisibility(playlist: MusicPlaylist) {

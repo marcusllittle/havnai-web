@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ListMusic, Plus, X } from "lucide-react";
 import {
   addMusicPlaylistItem,
@@ -25,6 +25,7 @@ export function AddToPlaylistDialog({
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const actionInFlightRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -55,28 +56,35 @@ export function AddToPlaylistDialog({
   }
 
   async function addToPlaylist(playlistId: string) {
-    const signer = await resolveWallet();
-    if (!signer) return;
+    if (actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
     setBusy(true);
     setError("");
     try {
+      const signer = await resolveWallet();
+      if (!signer) return;
       const playlist = await addMusicPlaylistItem(playlistId, publication.id, signer);
       onAdded?.(playlist);
       onClose();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Song could not be added.");
     } finally {
+      actionInFlightRef.current = false;
       setBusy(false);
     }
   }
 
   async function createAndAdd() {
-    const signer = await resolveWallet();
-    if (!signer || !title.trim()) return;
+    if (actionInFlightRef.current) return;
+    const nextTitle = title.trim();
+    if (!nextTitle) return;
+    actionInFlightRef.current = true;
     setBusy(true);
     setError("");
     try {
-      const playlist = await createMusicPlaylist({ wallet: signer, title: title.trim() });
+      const signer = await resolveWallet();
+      if (!signer) return;
+      const playlist = await createMusicPlaylist({ wallet: signer, title: nextTitle });
       const updated = await addMusicPlaylistItem(playlist.id, publication.id, signer);
       onAdded?.(updated);
       setTitle("");
@@ -84,6 +92,7 @@ export function AddToPlaylistDialog({
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Playlist could not be created.");
     } finally {
+      actionInFlightRef.current = false;
       setBusy(false);
     }
   }
