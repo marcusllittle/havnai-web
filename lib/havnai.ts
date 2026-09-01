@@ -2811,7 +2811,33 @@ export async function fetchMusicPlaylist(playlistId: string, wallet?: string | n
   const publicRes = await fetchWithTimeout(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}`), {
     headers: buildHeaders(false),
   }, MUSIC_READ_TIMEOUT_MS);
-  if (publicRes.ok) return normalizeMusicPlaylist(await publicRes.json());
+  if (publicRes.ok) {
+    const publicPlaylist = normalizeMusicPlaylist(await publicRes.json());
+    if (!wallet || publicPlaylist.owner_wallet.toLowerCase() !== wallet.toLowerCase()) {
+      return publicPlaylist;
+    }
+    try {
+      const signed = await signWalletNonce({
+        wallet,
+        amount: 1,
+        purpose: "playlist_read",
+        playlist_id: playlistId,
+      });
+      const privateRes = await fetchWithTimeout(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}/access`), {
+        method: "POST",
+        headers: buildHeaders(true),
+        body: JSON.stringify({
+          wallet: signed.wallet,
+          nonce: signed.nonce,
+          signature: signed.signature,
+        }),
+      }, MUSIC_READ_TIMEOUT_MS);
+      if (privateRes.ok) return normalizeMusicPlaylist(await privateRes.json());
+    } catch {
+      return publicPlaylist;
+    }
+    return publicPlaylist;
+  }
   if (wallet) {
     const signed = await signWalletNonce({
       wallet,

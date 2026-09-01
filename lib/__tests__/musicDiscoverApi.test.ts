@@ -16,6 +16,7 @@ import {
 } from "../havnai";
 
 const TEST_WALLET = vi.hoisted(() => "0x1111111111111111111111111111111111111111");
+const OTHER_WALLET = "0x2222222222222222222222222222222222222222";
 
 vi.mock("ethers", () => ({
   BrowserProvider: class {
@@ -378,7 +379,7 @@ describe("music discover API", () => {
     }));
   });
 
-  it("loads public playlist details with ordered tracks", async () => {
+  it("loads public playlist details with ordered tracks without signing for non-owners", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       id: "playlist-1",
       owner_wallet: "0x1111111111111111111111111111111111111111",
@@ -398,7 +399,7 @@ describe("music discover API", () => {
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const playlist = await fetchMusicPlaylist("playlist-1", TEST_WALLET);
+    const playlist = await fetchMusicPlaylist("playlist-1", OTHER_WALLET);
 
     expect(playlist.title).toBe("Night Set");
     expect(playlist.publications[0].title).toBe("First");
@@ -411,6 +412,47 @@ describe("music discover API", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/music/playlists/playlist-1", expect.objectContaining({
       headers: expect.any(Object),
     }));
+  });
+
+  it("uses signed access for public playlists owned by the connected wallet", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: "playlist-1",
+        owner_wallet: TEST_WALLET,
+        owner: "0x1111...1111",
+        title: "Night Set",
+        description: "Two tracks",
+        is_public: true,
+        is_owner: false,
+        artwork_url: "/api/music/playlists/playlist-1/cover.svg",
+        artwork_tiles: [],
+        track_count: 2,
+        publications: [{ id: "music-1", title: "First", creator: "0x1111...1111" }],
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(nonceResponse("Sign playlist access"))
+      .mockResolvedValueOnce(playlistResponse({
+        is_public: true,
+        is_owner: true,
+        track_count: 2,
+        publications: [{ id: "music-1", title: "First", creator: "0x1111...1111" }],
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const playlist = await fetchMusicPlaylist("playlist-1", TEST_WALLET);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/music/playlists/playlist-1", expect.objectContaining({
+      headers: expect.any(Object),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/wallet/nonce", expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining('"purpose":"playlist_read"'),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/music/playlists/playlist-1/access", expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining('"signature":"0xsigned"'),
+    }));
+    expect(playlist.is_owner).toBe(true);
+    expect(playlist.publications[0].title).toBe("First");
   });
 
   it("uses signed access when a playlist is private to the connected wallet", async () => {
