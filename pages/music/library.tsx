@@ -18,6 +18,7 @@ import {
   type MusicPlaylist,
   type MusicPublication,
 } from "../../lib/havnai";
+import { matchesMusicLibrarySearch } from "../../lib/musicLibraryFilters";
 
 function toTrack(publication: MusicPublication): PlayerTrack | null {
   if (!publication.audio_url) return null;
@@ -75,18 +76,7 @@ export default function MusicLibraryPage() {
   }, [connectedWallet]);
 
   const filteredSavedSongs = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return savedSongs;
-    return savedSongs.filter((publication) => {
-      const haystack = [
-        publication.title,
-        publication.creator,
-        publication.creator_wallet,
-        publication.style,
-        ...(publication.tags || []),
-      ].join(" ").toLowerCase();
-      return haystack.includes(query);
-    });
+    return savedSongs.filter((publication) => matchesMusicLibrarySearch(publication, search));
   }, [savedSongs, search]);
   const playableSaved = useMemo(() => filteredSavedSongs.map(toTrack).filter(Boolean) as PlayerTrack[], [filteredSavedSongs]);
 
