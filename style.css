@@ -2,7 +2,9 @@
   --bg: #05080d;
   --bg-alt: #0b1018;
   --bg-elevated: #0f1722;
-  --accent: #00eaff;
+  --brand-accent: #00eaff;
+  --brand-accent-hover: #57d3ff;
+  --accent: var(--brand-accent);
   --accent-soft: rgba(0, 234, 255, 0.16);
   --accent-strong: #57d3ff;
   --text: #f3fbff;

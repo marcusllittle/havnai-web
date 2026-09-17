@@ -754,3 +754,14 @@ from this environment.
   16px. Navigation and code blocks retain their intentional internal scrolling.
 - These checks have not reproduced the reported page panning; the specific page
   and phone/browser are still needed to confirm its cause on the user's device.
+
+## September 17, 2026 - Restore the blue brand palette
+
+- User confirmed the mobile issue cleared after refresh and requested the former
+  blue theme. Restored the original cyan #00eaff and sky-blue #57d3ff as shared
+  brand tokens. Updated the redesign's accents, buttons, focus rings, borders,
+  muted text, and green-tinted surfaces to blue/navy across product pages.
+- Music and Discover use the same cyan primary accent. Artwork, layout, responsive
+  behavior, and navigation remain intact, including the user's Astra cover.
+- Reviewed homepage desktop/mobile and Create phone screenshots. Create fits a
+  390px viewport with no document overflow; browser reported no errors.
