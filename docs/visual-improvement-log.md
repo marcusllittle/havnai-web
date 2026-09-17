@@ -784,3 +784,15 @@ from this environment.
   offline-node exclusion, genuine server failures, cache expiry/invalidation,
   rejected signatures, and returning reads without another nonce request.
   Full web suite: 41 files / 226 tests passed.
+
+## September 17, 2026 - Coordinator branch compatibility
+
+- Discover/Library failures after switching coordinators were caused by the
+  marketplace-only backend branch omitting the existing music feature commits.
+  Combined both into core branch fix/marketplace-and-music and detached its test
+  worktree so the user's node checkout can switch to that branch normally.
+- Wallet nonce API errors now propagate directly instead of retrying providers
+  and adding an unrelated wallet-extension hint. Unsupported music purposes
+  explain that the coordinator needs its music update and no credits were charged.
+- Backend combined branch: 42 tests plus 3 subtests passed. Frontend regression
+  verifies unsupported music purpose fails once with the correct explanation.

@@ -1463,6 +1463,16 @@ async function signWalletNonce(
         signature,
       };
     } catch (error) {
+      // API validation/deployment failures are not wallet-provider conflicts.
+      if (error instanceof HavnaiApiError && error.status !== undefined) {
+        if (error.code === "unsupported_purpose" && payload.purpose.startsWith("music_")) {
+          throw new HavnaiApiError(
+            "This coordinator needs the music update before your library can load. No credits were charged.",
+            error.code, error.data, error.status
+          );
+        }
+        throw error;
+      }
       lastError = error;
       // If MetaMask itself timed out, don't try other providers — they share
       // the same stuck state and will just cascade more timeouts.

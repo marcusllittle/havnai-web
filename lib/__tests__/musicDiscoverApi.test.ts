@@ -208,6 +208,17 @@ describe("music discover API", () => {
     expect(JSON.parse(init.body)).toMatchObject({ seconds_listened: 7, session_id: "listener-1" });
   });
 
+  it("identifies a coordinator missing music support without blaming wallet extensions", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: "unsupported_purpose", message: "purpose must be one of: gallery_purchase",
+    }), { status: 400, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchMusicLibrary({ wallet: TEST_WALLET })).rejects.toThrow(
+      "This coordinator needs the music update before your library can load. No credits were charged."
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("loads saved music library payloads", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({
