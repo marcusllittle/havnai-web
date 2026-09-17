@@ -866,9 +866,10 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   return json.job_id;
 }
 
-export async function fetchJob(jobId: string): Promise<JobDetailResponse> {
+export async function fetchJob(jobId: string, options?: { signal?: AbortSignal }): Promise<JobDetailResponse> {
   const res = await fetch(apiUrl(`/jobs/${encodeURIComponent(jobId)}`), {
     headers: buildHeaders(true),
+    signal: options?.signal,
   });
   if (!res.ok) {
     const text = await res.text();
@@ -1097,8 +1098,8 @@ export async function fetchMyJobs(
   return Array.isArray(data?.jobs) ? data.jobs : [];
 }
 
-export async function fetchResult(jobId: string): Promise<ResultResponse> {
-  const res = await fetch(apiUrl(`/result/${encodeURIComponent(jobId)}`));
+export async function fetchResult(jobId: string, options?: { signal?: AbortSignal }): Promise<ResultResponse> {
+  const res = await fetch(apiUrl(`/result/${encodeURIComponent(jobId)}`), { signal: options?.signal });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`fetch result failed: ${res.status} ${text}`);
@@ -1832,22 +1833,22 @@ export interface AnalyticsRewardsResponse {
   total: number;
 }
 
-export async function fetchAnalyticsOverview(): Promise<AnalyticsOverview> {
-  const res = await fetch(apiUrl("/analytics/overview"), { headers: buildHeaders(true) });
+export async function fetchAnalyticsOverview(signal?: AbortSignal): Promise<AnalyticsOverview> {
+  const res = await fetch(apiUrl("/analytics/overview"), { signal, headers: buildHeaders(true) });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as AnalyticsOverview;
 }
 
-export async function fetchAnalyticsJobs(days = 30): Promise<AnalyticsJobsResponse> {
-  const res = await fetch(apiUrl(`/analytics/jobs?days=${days}`), { headers: buildHeaders(true) });
+export async function fetchAnalyticsJobs(days = 30, signal?: AbortSignal): Promise<AnalyticsJobsResponse> {
+  const res = await fetch(apiUrl(`/analytics/jobs?days=${days}`), { signal, headers: buildHeaders(true) });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as AnalyticsJobsResponse;
 }
 
-export async function fetchAnalyticsCosts(days = 30): Promise<AnalyticsCostsResponse> {
+export async function fetchAnalyticsCosts(days = 30, signal?: AbortSignal): Promise<AnalyticsCostsResponse> {
   const res = await fetch(
     apiUrl(`/analytics/costs?days=${days}&wallet=${encodeURIComponent(WALLET)}`),
-    { headers: buildHeaders(true) }
+    { signal, headers: buildHeaders(true) }
   );
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as AnalyticsCostsResponse;
@@ -1859,8 +1860,8 @@ export async function fetchAnalyticsNodes(): Promise<AnalyticsNodesResponse> {
   return (await res.json()) as AnalyticsNodesResponse;
 }
 
-export async function fetchAnalyticsRewards(): Promise<AnalyticsRewardsResponse> {
-  const res = await fetch(apiUrl("/analytics/rewards"), { headers: buildHeaders(true) });
+export async function fetchAnalyticsRewards(signal?: AbortSignal): Promise<AnalyticsRewardsResponse> {
+  const res = await fetch(apiUrl("/analytics/rewards"), { signal, headers: buildHeaders(true) });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as AnalyticsRewardsResponse;
 }
@@ -2158,8 +2159,8 @@ function normalizeNodeInfo(raw: any): NodeInfo {
   };
 }
 
-export async function fetchNodes(): Promise<NodeInfo[]> {
-  const res = await fetch(apiUrl("/nodes"), { headers: buildHeaders(false) });
+export async function fetchNodes(signal?: AbortSignal): Promise<NodeInfo[]> {
+  const res = await fetch(apiUrl("/nodes"), { signal, headers: buildHeaders(false) });
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();
   const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
@@ -2182,14 +2183,14 @@ export async function fetchNodeDetail(nodeId: string): Promise<NodeDetail> {
   };
 }
 
-export async function fetchOperatorWorkers(limit = 200, status?: string): Promise<OperatorWorkersResponse> {
+export async function fetchOperatorWorkers(limit = 200, status?: string, signal?: AbortSignal): Promise<OperatorWorkersResponse> {
   const qs = new URLSearchParams();
   qs.set("limit", String(Math.max(1, Math.min(1000, Number(limit) || 200))));
   if (status && status.trim().length > 0) {
     qs.set("status", status.trim().toLowerCase());
   }
   const res = await fetch(apiUrl(`/operators/workers?${qs.toString()}`), {
-    headers: buildHeaders(false),
+    signal, headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();
@@ -2200,24 +2201,24 @@ export async function fetchOperatorWorkers(limit = 200, status?: string): Promis
   } as OperatorWorkersResponse;
 }
 
-export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
-  const res = await fetch(apiUrl("/network/leaderboard"), { headers: buildHeaders(false) });
+export async function fetchLeaderboard(signal?: AbortSignal): Promise<LeaderboardEntry[]> {
+  const res = await fetch(apiUrl("/network/leaderboard"), { signal, headers: buildHeaders(false) });
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();
   return (data.leaderboard || []) as LeaderboardEntry[];
 }
 
-export async function fetchNetworkSummary(): Promise<NetworkSummary> {
+export async function fetchNetworkSummary(signal?: AbortSignal): Promise<NetworkSummary> {
   const res = await fetch(apiUrl("/v1/network/summary"), {
-    headers: buildHeaders(false),
+    signal, headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as NetworkSummary;
 }
 
-export async function fetchNetworkControlPlane(): Promise<NetworkControlPlane> {
+export async function fetchNetworkControlPlane(signal?: AbortSignal): Promise<NetworkControlPlane> {
   const res = await fetch(apiUrl("/v1/network/control-plane"), {
-    headers: buildHeaders(false),
+    signal, headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as NetworkControlPlane;
@@ -3256,7 +3257,7 @@ export async function relistGalleryAsset(
 }
 
 export async function fetchMarketplace(
-  opts: { search?: string; category?: string; offset?: number; limit?: number } = {}
+  opts: { search?: string; category?: string; offset?: number; limit?: number; signal?: AbortSignal } = {}
 ): Promise<WorkflowListResponse> {
   const params = new URLSearchParams();
   if (opts.search) params.set("search", opts.search);
@@ -3264,16 +3265,18 @@ export async function fetchMarketplace(
   if (opts.offset) params.set("offset", String(opts.offset));
   if (opts.limit) params.set("limit", String(opts.limit));
   const qs = params.toString();
-  const res = await fetch(apiUrl(`/marketplace/browse${qs ? `?${qs}` : ""}`), {
+  const res = await fetchWithTimeout(apiUrl(`/marketplace/browse${qs ? `?${qs}` : ""}`), {
     headers: buildHeaders(false),
+    signal: opts.signal,
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as WorkflowListResponse;
 }
 
-export async function fetchWorkflow(id: string): Promise<Workflow> {
-  const res = await fetch(apiUrl(`/workflows/${encodeURIComponent(id)}`), {
+export async function fetchWorkflow(id: string, opts: { signal?: AbortSignal } = {}): Promise<Workflow> {
+  const res = await fetchWithTimeout(apiUrl(`/workflows/${encodeURIComponent(id)}`), {
     headers: buildHeaders(false),
+    signal: opts.signal,
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as Workflow;

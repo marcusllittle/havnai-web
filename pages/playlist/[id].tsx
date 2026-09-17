@@ -1,7 +1,7 @@
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ListMusic, Lock, Play, Trash2 } from "lucide-react";
 import { AddToPlaylistDialog } from "../../components/AddToPlaylistDialog";
 import { MusicPlaylistArtwork } from "../../components/MusicPlaylistArtwork";
@@ -45,6 +45,10 @@ export default function PlaylistPage() {
   const [target, setTarget] = useState<MusicPublication | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [actionError, setActionError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const actionRef = useRef(false);
   const connectedWallet = wallet.connectedWallet;
   const playlistId = typeof router.query.id === "string" ? router.query.id : "";
 
@@ -69,7 +73,7 @@ export default function PlaylistPage() {
     return () => {
       active = false;
     };
-  }, [connectedWallet, playlistId]);
+  }, [connectedWallet, playlistId, refreshKey]);
 
   const queue = useMemo(() => (playlist?.publications || []).map(toTrack).filter(Boolean) as PlayerTrack[], [playlist]);
 
@@ -122,6 +126,14 @@ export default function PlaylistPage() {
     }
   }
 
+  async function runAction(action: () => Promise<void>) {
+    if (actionRef.current) return;
+    actionRef.current = true; setBusy(true); setActionError("");
+    try { await action(); }
+    catch (reason) { setActionError(reason instanceof Error ? reason.message : "Your playlist could not be updated."); }
+    finally { actionRef.current = false; setBusy(false); }
+  }
+
   async function saveDetails() {
     if (!playlist) return;
     const signer = await ensureWallet();
@@ -172,14 +184,16 @@ export default function PlaylistPage() {
         <title>{playlist ? `${playlist.title} | HavnAI` : "Playlist | HavnAI"}</title>
       </Head>
       <SiteHeader />
-      <main className="music-discover-page music-playlist-page">
+      <main className="listening-page music-shelf-page music-playlist-page">
+        <nav className="shelf-breadcrumbs" aria-label="Music navigation"><Link href="/discover">Discover</Link><span>/</span><Link href="/music/library">Your library</Link></nav>
         {loading ? (
-          <div className="discover-skeleton" />
+          <div className="discover-skeleton" role="status" aria-label="Loading music" />
         ) : error || !playlist ? (
           <section className="music-empty">
             <Lock size={28} />
-            <strong>Playlist unavailable</strong>
+            <h1>Playlist unavailable</h1>
             <span>{error || "This playlist is private or no longer exists."}</span>
+            <button className="listening-create" onClick={() => setRefreshKey(value => value + 1)}>Try again</button>
           </section>
         ) : (
           <>
@@ -191,7 +205,7 @@ export default function PlaylistPage() {
                 <Link href={playlist.owner_url || `/creator/${playlist.owner_wallet}`}>{playlist.owner}</Link>
                 {playlist.description && <p>{playlist.description}</p>}
                 <div>
-                  <span>{playlist.track_count} tracks</span>
+                  <span>{playlist.track_count} {playlist.track_count === 1 ? "track" : "tracks"}</span>
                   <span>{formatMusicDuration(playlist.duration || 0)}</span>
                 </div>
                 <button type="button" disabled={queue.length === 0} onClick={() => playQueue(queue)}>
@@ -201,24 +215,24 @@ export default function PlaylistPage() {
             </section>
 
             {playlist.is_owner && (
-              <section className="music-playlist-editor">
+              <details className="shelf-editor"><summary>Edit playlist</summary><section className="music-playlist-editor">
                 <input value={title} onChange={(event) => setTitle(event.target.value)} aria-label="Playlist title" />
                 <input value={description} onChange={(event) => setDescription(event.target.value)} aria-label="Playlist description" placeholder="Description" />
-                <button type="button" onClick={saveDetails}>Save</button>
-                <button type="button" onClick={togglePublic}>{playlist.is_public ? "Make Private" : "Make Public"}</button>
-                <button type="button" onClick={deletePlaylist} aria-label="Delete playlist"><Trash2 size={16} /></button>
-              </section>
+                <button type="button" disabled={busy || !title.trim()} onClick={() => void runAction(saveDetails)}>Save</button>
+                <button type="button" disabled={busy} onClick={() => void runAction(togglePublic)}>{playlist.is_public ? "Make Private" : "Make Public"}</button>
+                <button type="button" disabled={busy} onClick={() => void runAction(deletePlaylist)} aria-label="Delete playlist"><Trash2 size={16} /></button>
+              </section></details>
             )}
-
-            <section className="music-track-list">
+            {actionError && <p className="music-alert" role="alert">{actionError}</p>}
+            <section className="music-track-list" aria-label="Playlist tracks">
               {playlist.publications.length === 0 ? (
                 <section className="music-empty"><strong>No tracks</strong><span>Add songs from Discover or your Library.</span></section>
               ) : playlist.publications.map((publication, index) => (
-                <div key={publication.id} className="music-track-list-row">
+                <div key={publication.id} className={`music-track-list-row ${playlist.is_owner ? "is-owned" : ""}`}>
                   {playlist.is_owner && (
                     <div className="music-reorder-controls">
-                      <button type="button" disabled={index === 0} onClick={() => moveTrack(publication, -1)} aria-label={`Move ${publication.title} up`}><ArrowUp size={15} /></button>
-                      <button type="button" disabled={index === playlist.publications.length - 1} onClick={() => moveTrack(publication, 1)} aria-label={`Move ${publication.title} down`}><ArrowDown size={15} /></button>
+                      <button type="button" disabled={busy || index === 0} onClick={() => void runAction(() => moveTrack(publication, -1))} aria-label={`Move ${publication.title} up`}><ArrowUp size={15} /></button>
+                      <button type="button" disabled={busy || index === playlist.publications.length - 1} onClick={() => void runAction(() => moveTrack(publication, 1))} aria-label={`Move ${publication.title} down`}><ArrowDown size={15} /></button>
                     </div>
                   )}
                   <MusicPublicationCard
@@ -229,7 +243,7 @@ export default function PlaylistPage() {
                     onSave={savePublication}
                     onAddToPlaylist={setTarget}
                   />
-                  {playlist.is_owner && <button className="music-row-remove" type="button" onClick={() => removeTrack(publication)} aria-label={`Remove ${publication.title}`}><Trash2 size={16} /></button>}
+                  {playlist.is_owner && <button className="music-row-remove" type="button" disabled={busy} onClick={() => void runAction(() => removeTrack(publication))} aria-label={`Remove ${publication.title}`}><Trash2 size={16} /></button>}
                 </div>
               ))}
             </section>

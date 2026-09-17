@@ -44,11 +44,18 @@ export default function MusicLibraryPage() {
   const [target, setTarget] = useState<MusicPublication | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [actionError, setActionError] = useState("");
+  const [busy, setBusy] = useState(false);
   const createPlaylistInFlightRef = useRef(false);
   const connectedWallet = wallet.connectedWallet;
 
   useEffect(() => {
     let active = true;
+    setError("");
+    setSavedSongs([]);
+    setRecentLiked([]);
+    setPlaylists([]);
     if (!connectedWallet) {
       setSavedSongs([]);
       setRecentLiked([]);
@@ -74,7 +81,7 @@ export default function MusicLibraryPage() {
     return () => {
       active = false;
     };
-  }, [connectedWallet]);
+  }, [connectedWallet, refreshKey]);
 
   const filteredSavedSongs = useMemo(() => {
     return savedSongs.filter((publication) => matchesMusicLibrarySearch(publication, search));
@@ -152,13 +159,18 @@ export default function MusicLibraryPage() {
     const title = newPlaylistTitle.trim();
     if (!title) return;
     createPlaylistInFlightRef.current = true;
+    setBusy(true);
+    setActionError("");
     try {
       const signer = await ensureWallet();
       if (!signer) return;
       const playlist = await createMusicPlaylist({ wallet: signer, title });
       setPlaylists((current) => [playlist, ...current]);
       setNewPlaylistTitle("");
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : "Playlist could not be created.");
     } finally {
+      setBusy(false);
       createPlaylistInFlightRef.current = false;
     }
   }
@@ -177,6 +189,15 @@ export default function MusicLibraryPage() {
     setPlaylists((current) => current.filter((item) => item.id !== playlist.id));
   }
 
+  async function managePlaylist(action: () => Promise<void>) {
+    if (createPlaylistInFlightRef.current) return;
+    createPlaylistInFlightRef.current = true;
+    setBusy(true); setActionError("");
+    try { await action(); }
+    catch (reason) { setActionError(reason instanceof Error ? reason.message : "The playlist change could not be saved."); }
+    finally { setBusy(false); createPlaylistInFlightRef.current = false; }
+  }
+
   return (
     <>
       <Head>
@@ -184,41 +205,44 @@ export default function MusicLibraryPage() {
         <meta name="description" content="Saved HavnAI songs and playlists." />
       </Head>
       <SiteHeader />
-      <main className="music-discover-page music-library-page">
-        <section className="music-page-heading">
+      <main className="listening-page music-shelf-page music-library-page">
+        <section className="listening-heading">
           <div>
-            <span><Music2 size={18} /> Music Library</span>
-            <h1>Saved songs and playlists</h1>
+            <span className="listening-eyebrow"><Music2 size={15} aria-hidden="true" /> Your listening space</span>
+            <h1>Keep the songs that stay.</h1><p>Your saved tracks, favorite finds, and playlists.</p>
           </div>
-          <form className="discover-search" onSubmit={(event) => event.preventDefault()}>
-            <Search size={18} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your saved songs" />
-          </form>
+          <Link className="listening-create" href="/discover">Discover music</Link>
         </section>
 
         {!connectedWallet && (
-          <section className="music-empty">
-            <Music2 size={28} />
-            <strong>Connect a wallet</strong>
-            <span>Your saved songs and playlists are tied to your wallet.</span>
+          <section className="listening-empty">
+            <span className="listening-state-icon"><Music2 size={30} aria-hidden="true" /></span>
+            <h2>Your music, in one place.</h2>
+            <p>Connect your wallet to find your saved songs and build your own playlists.</p>
+            <button className="listening-create" disabled={wallet.connecting} onClick={() => { setActionError(""); void wallet.connect().catch(reason => setActionError(reason instanceof Error ? reason.message : "Wallet connection failed. Please try again.")); }}>{wallet.connecting ? "Connecting..." : "Connect wallet"}</button>
           </section>
         )}
-        {error && <div className="music-alert" role="alert">{error}</div>}
+        {error && <div className="listening-empty" role="alert"><h2>Your library is out of reach.</h2><p>{error}</p><button className="listening-create" onClick={() => setRefreshKey(value => value + 1)}>Try again</button></div>}
+        {actionError && <p className="music-alert" role="alert">{actionError}</p>}
 
-        {connectedWallet && (
+        {connectedWallet && !error && (
           <>
+          <form className="listening-search shelf-search" onSubmit={(event) => event.preventDefault()}>
+            <Search size={18} aria-hidden="true" />
+            <input type="search" aria-label="Search saved songs" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your saved songs" />
+          </form>
             <section className="music-library-toolbar">
               <button type="button" disabled={playableSaved.length === 0} onClick={() => playQueue(playableSaved)}>
                 <ListMusic size={17} /> Play All
               </button>
               <form onSubmit={(event) => { event.preventDefault(); void createPlaylist(); }}>
-                <input value={newPlaylistTitle} onChange={(event) => setNewPlaylistTitle(event.target.value)} placeholder="New playlist" />
-                <button type="submit" disabled={!newPlaylistTitle.trim()} aria-label="Create playlist"><Plus size={18} /></button>
+                <input value={newPlaylistTitle} onChange={(event) => setNewPlaylistTitle(event.target.value)} aria-label="New playlist name" placeholder="Name a new playlist" />
+                <button type="submit" disabled={busy || !newPlaylistTitle.trim()} aria-label="Create playlist"><Plus size={18} aria-hidden="true" /><span>Create playlist</span></button>
               </form>
             </section>
 
             <section className="discover-rail">
-              <div className="discover-section-heading"><span><Music2 size={17} /> Saved Songs</span></div>
+              <div className="listening-section-heading"><h2>Saved songs</h2><span>{loading ? "Loading..." : `${filteredSavedSongs.length} ${filteredSavedSongs.length === 1 ? "track" : "tracks"}`}</span></div>
               {loading ? (
                 <div className="discover-grid">{Array.from({ length: 8 }).map((_, index) => <div key={index} className="discover-skeleton" />)}</div>
               ) : filteredSavedSongs.length === 0 ? (
@@ -244,7 +268,8 @@ export default function MusicLibraryPage() {
             </section>
 
             <section className="discover-rail">
-              <div className="discover-section-heading"><span><ListMusic size={17} /> Playlists</span></div>
+              <div className="listening-section-heading"><h2>Your playlists</h2></div>
+              {!loading && playlists.length === 0 && <p className="shelf-note">Give your next playlist a name above, then add songs as you explore.</p>}
               <div className="music-playlist-grid">
                 {playlists.map((playlist) => (
                   <article key={playlist.id} className="music-playlist-card">
@@ -252,12 +277,12 @@ export default function MusicLibraryPage() {
                       <MusicPlaylistArtwork title={playlist.title} artworkUrl={playlist.artwork_url} artworkTiles={playlist.artwork_tiles} />
                       <span>
                         <strong>{playlist.title}</strong>
-                        <small>{playlist.track_count} tracks · {playlist.is_public ? "Public" : "Private"}</small>
+                        <small>{playlist.track_count} {playlist.track_count === 1 ? "track" : "tracks"} · {playlist.is_public ? "Public" : "Private"}</small>
                       </span>
                     </Link>
                     <div>
-                      <button type="button" onClick={() => togglePlaylistVisibility(playlist)}>{playlist.is_public ? "Private" : "Public"}</button>
-                      <button type="button" onClick={() => removePlaylist(playlist)} aria-label={`Delete ${playlist.title}`}><Trash2 size={15} /></button>
+                      <button type="button" disabled={busy} onClick={() => void managePlaylist(() => togglePlaylistVisibility(playlist))}>{playlist.is_public ? "Make private" : "Make public"}</button>
+                      <button type="button" disabled={busy} onClick={() => void managePlaylist(() => removePlaylist(playlist))} aria-label={`Delete ${playlist.title}`}><Trash2 size={15} /></button>
                     </div>
                   </article>
                 ))}
@@ -266,8 +291,8 @@ export default function MusicLibraryPage() {
 
             {recentLiked.length > 0 && (
               <section className="discover-rail">
-                <div className="discover-section-heading"><span>Recently Liked</span></div>
-                <div className="discover-scroll">
+                <div className="listening-section-heading"><h2>Recently liked</h2></div>
+                <div className="discover-grid">
                   {recentLiked.map((publication) => (
                     <MusicPublicationCard
                       key={publication.id}

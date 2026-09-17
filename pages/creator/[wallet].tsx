@@ -46,6 +46,7 @@ export default function CreatorPage() {
   const [target, setTarget] = useState<MusicPublication | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
   const creatorWallet = typeof router.query.wallet === "string" ? router.query.wallet : "";
   const connectedWallet = wallet.connectedWallet;
 
@@ -67,7 +68,7 @@ export default function CreatorPage() {
     return () => {
       active = false;
     };
-  }, [connectedWallet, creatorWallet, sort]);
+  }, [connectedWallet, creatorWallet, sort, refreshKey]);
 
   const queue = useMemo(() => (profile?.publications || []).map(toTrack).filter(Boolean) as PlayerTrack[], [profile]);
 
@@ -126,14 +127,16 @@ export default function CreatorPage() {
         <title>{profile ? `${profile.display_name} | HavnAI` : "Creator | HavnAI"}</title>
       </Head>
       <SiteHeader />
-      <main className="music-discover-page music-creator-page">
+      <main className="listening-page music-shelf-page music-creator-page">
+        <nav className="shelf-breadcrumbs" aria-label="Music navigation"><Link href="/discover">Discover</Link><span>/</span><Link href="/music/library">Your library</Link></nav>
         {loading ? (
-          <div className="discover-skeleton" />
+          <div className="discover-skeleton" role="status" aria-label="Loading music" />
         ) : error || !profile ? (
           <section className="music-empty">
             <UserRound size={28} />
-            <strong>Creator unavailable</strong>
+            <h1>Creator unavailable</h1>
             <span>{error || "No public HavnAI music is published for this wallet."}</span>
+            <button className="listening-create" onClick={() => setRefreshKey(value => value + 1)}>Try again</button>
           </section>
         ) : (
           <>
@@ -159,14 +162,15 @@ export default function CreatorPage() {
                 ["newest", "Newest"],
                 ["popular", "Popular"],
               ].map(([value, label]) => (
-                <button key={value} type="button" className={sort === value ? "is-active" : ""} onClick={() => setSort(value)}>
+                <button key={value} type="button" className={sort === value ? "is-active" : ""} aria-pressed={sort === value} onClick={() => setSort(value)}>
                   {label}
                 </button>
               ))}
             </nav>
 
             <section className="discover-rail">
-              <div className="discover-section-heading"><span><Music2 size={17} /> Public Music</span></div>
+              <div className="listening-section-heading"><h2>Public music</h2></div>
+              {profile.publications.length === 0 && <section className="music-empty"><strong>No public tracks yet.</strong><span>New releases from this creator will appear here.</span></section>}
               <div className="discover-grid">
                 {profile.publications.map((publication) => (
                   <MusicPublicationCard
@@ -184,7 +188,7 @@ export default function CreatorPage() {
 
             {profile.playlists.length > 0 && (
               <section className="discover-rail">
-                <div className="discover-section-heading"><span><ListMusic size={17} /> Public Playlists</span></div>
+                <div className="listening-section-heading"><h2>Public playlists</h2></div>
                 <div className="music-playlist-grid">
                   {profile.playlists.map((playlist) => (
                     <article key={playlist.id} className="music-playlist-card">
@@ -192,7 +196,7 @@ export default function CreatorPage() {
                         <MusicPlaylistArtwork title={playlist.title} artworkUrl={playlist.artwork_url} artworkTiles={playlist.artwork_tiles} />
                         <span>
                           <strong>{playlist.title}</strong>
-                          <small>{playlist.track_count} tracks</small>
+                          <small>{playlist.track_count} {playlist.track_count === 1 ? "track" : "tracks"}</small>
                         </span>
                       </Link>
                     </article>

@@ -5,6 +5,22 @@ import { WalletProvider } from "../components/WalletProvider";
 import { MusicPlayerProvider } from "../components/MusicPlayer";
 import "../style.css";
 import "../styles/music.css";
+import "../styles/create.css";
+import "../styles/collection.css";
+import "../styles/discover.css";
+import "../styles/navigation.css";
+import "../styles/studios.css";
+import "../styles/home.css";
+import "../styles/astra.css";
+import "../styles/marketplace.css";
+import "../styles/music-shelf.css";
+import "../styles/account.css";
+import "../styles/network.css";
+import "../styles/operators.css";
+import "../styles/product.css";
+import "../styles/guides.css";
+import "../styles/templates.css";
+import "../styles/results.css";
 
 interface ErrorBoundaryState {
   hasError: boolean;

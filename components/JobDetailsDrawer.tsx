@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   JobDetailResponse,
   ExecutionTimeline,
@@ -22,7 +22,7 @@ import {
   isUsableWallet,
 } from "../lib/havnai";
 import { downloadAsset } from "../lib/download";
-import { getTimelineSteps, normalizeJobStatus, shortJobId } from "../lib/jobStatus";
+import { getTimelineSteps, normalizeJobStatus } from "../lib/jobStatus";
 import { addToLibrary, isInLibrary, removeFromLibrary, LibraryItemType } from "../lib/libraryStore";
 
 export interface JobSummary {
@@ -199,6 +199,40 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
   const [localReceiptVerification, setLocalReceiptVerification] = useState<LocalReceiptVerification | null>(null);
   const [inclusionProof, setInclusionProof] = useState<ReceiptInclusionProof | null>(null);
   const [localInclusionValid, setLocalInclusionValid] = useState<boolean | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const actionVersion = useRef(0);
+  const [actionNotice, setActionNotice] = useState("");
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const [previewRevision, setPreviewRevision] = useState(0);
+
+  useEffect(() => {
+    actionVersion.current += 1;
+    setActionNotice(""); setDownloadBusy(false);
+    return () => { actionVersion.current += 1; };
+  }, [open, resolvedId]);
+  useEffect(() => { setPreviewFailed(false); setPreviewRevision(0); }, [previewImage, previewVideo]);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const panel = panelRef.current;
+    panel?.querySelector<HTMLButtonElement>(".job-drawer-close")?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); closeRef.current(); return; }
+      if (event.key !== "Tab" || !panel) return;
+      const controls = Array.from(panel.querySelectorAll<HTMLElement>('a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, video[controls]')).filter(item => item.getClientRects().length > 0);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (!first) { event.preventDefault(); panel.focus(); }
+      else if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => { document.body.style.overflow = overflow; document.removeEventListener("keydown", handleKey); if (previous?.isConnected) previous.focus(); };
+  }, [open]);
 
   useEffect(() => {
     if (!resolvedId || !open) {
@@ -233,6 +267,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
       setExecutionTimeline(null);
       return () => { active = false; };
     }
+    setExecutionTimeline(null);
     void fetchJobTimeline(resolvedId)
       .then((timeline) => {
         if (active) setExecutionTimeline(timeline);
@@ -253,6 +288,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
       setLocalInclusionValid(null);
       return () => { active = false; };
     }
+    setProofReceipt(null); setReceiptVerification(null); setLocalReceiptVerification(null); setInclusionProof(null); setLocalInclusionValid(null);
     void Promise.all([fetchProofReceipt(resolvedId), verifyProofReceipt(resolvedId)])
       .then(async ([receipt, verification]) => {
         if (!active) return;
@@ -264,7 +300,8 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
         const proof = await fetchReceiptInclusionProof(resolvedId).catch(() => null);
         if (!active) return;
         setInclusionProof(proof);
-        setLocalInclusionValid(proof ? await verifyReceiptInclusionProofLocally(proof) : null);
+        const inclusionValid = proof ? await verifyReceiptInclusionProofLocally(proof) : null;
+        if (active) setLocalInclusionValid(inclusionValid);
       })
       .catch(() => {
         if (!active) return;
@@ -360,17 +397,23 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
 
   const handleCopy = async (text: string) => {
     if (!text || typeof navigator === "undefined") return;
+    const version = actionVersion.current;
     try {
       await navigator.clipboard.writeText(text);
+      if (version === actionVersion.current) setActionNotice("Copied to clipboard.");
     } catch {
-      // noop
+      if (version === actionVersion.current) setActionNotice("Couldn’t copy automatically. Select the text to copy it.");
     }
   };
 
   const handleDownload = async () => {
     const url = previewVideo || previewImage;
-    if (!url) return;
-    await downloadAsset(url);
+    if (!url || downloadBusy) return;
+    const version = actionVersion.current;
+    setDownloadBusy(true); setActionNotice("");
+    try { await downloadAsset(url); }
+    catch { if (version === actionVersion.current) setActionNotice("The download couldn’t finish. Please try again."); }
+    finally { if (version === actionVersion.current) setDownloadBusy(false); }
   };
 
   const handleSave = () => {
@@ -416,7 +459,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
   const listingBlockedReason = !canListInMarketplace
     ? undefined
     : !jobOwnerWallet
-    ? "Loading the job owner identity before marketplace publishing is available."
+    ? loading ? "Checking publishing availability…" : "This job’s owner details are unavailable, so publishing is currently unavailable."
     : !marketplaceWalletMatchesJob
     ? `This job belongs to ${jobOwnerWallet}. Connect that wallet to publish it in the marketplace.`
     : marketplace?.canSign !== true
@@ -476,32 +519,23 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
   if (!open) return null;
 
   return (
-    <div className="job-drawer">
+    <div className="job-drawer result-drawer">
       <button
         type="button"
         className="job-drawer-backdrop"
         aria-label="Close job details"
         onClick={onClose}
       />
-      <aside className="job-drawer-panel" role="dialog" aria-modal="true">
+      <div className="job-drawer-panel" ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="result-detail-title">
         <div className="job-drawer-header">
           <div>
-            <p className="job-drawer-kicker">Job Details</p>
-            <h3>
-              {shortJobId(resolvedId)}
-              {resolvedId && (
-                <button
-                  type="button"
-                  className="job-inline-button"
-                  onClick={() => handleCopy(resolvedId)}
-                >
-                  Copy full ID
-                </button>
-              )}
-            </h3>
+            <p className="job-drawer-kicker">Your creation</p>
+            <h2 id="result-detail-title">
+              {previewVideo ? "Video result" : previewImage ? "Image result" : "Generation details"}
+            </h2>
             <div className="job-meta-row">
               <span className={`status-pill status-${normalized.pill.toLowerCase()}`}>
-                {normalized.pill}
+                {statusValue === "unknown" ? loading ? "Checking status" : "Status unavailable" : normalized.pill}
               </span>
               {createdAt && <span>Created {createdAt}</span>}
             </div>
@@ -513,204 +547,33 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
 
         <div className="job-drawer-body">
           <section className="job-section">
-            <h4>Progress</h4>
-            <div className="status-timeline">
-              {timelineSteps.map((step, index) => {
-                const isActive = index === normalized.activeIndex;
-                const isComplete = index < normalized.activeIndex;
-                const isFailed = normalized.isFailed && step.key === "failed";
-                return (
-                  <div
-                    key={step.key}
-                    className={`timeline-step${isActive ? " is-active" : ""}${
-                      isComplete ? " is-complete" : ""
-                    }${isFailed ? " is-failed" : ""}`}
-                  >
-                    <span className="timeline-dot" />
-                    <span>{step.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-            {job && (() => {
-              const warning = getJobStuckWarning(job);
-              if (!warning) return null;
-              return (
-                <div className="job-stuck-warning" style={{
-                  marginTop: "0.75rem",
-                  padding: "0.75rem 1rem",
-                  borderRadius: "8px",
-                  background: "rgba(255, 180, 50, 0.12)",
-                  border: "1px solid rgba(255, 180, 50, 0.3)",
-                  fontSize: "0.85rem",
-                  color: "#ffb432",
-                }}>
-                  <p style={{ margin: "0 0 0.5rem 0" }}>{warning}</p>
-                  <button
-                    type="button"
-                    style={{
-                      background: "rgba(255, 80, 80, 0.15)",
-                      border: "1px solid rgba(255, 80, 80, 0.4)",
-                      color: "#ff6b6b",
-                      padding: "0.35rem 0.75rem",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "0.8rem",
-                    }}
-                    onClick={async () => {
-                      if (!resolvedId) return;
-                      try {
-                        await cancelJob(resolvedId);
-                        onClose();
-                      } catch {
-                        // ignore — job may already be completed
-                      }
-                    }}
-                  >
-                    Cancel job
-                  </button>
-                </div>
-              );
-            })()}
-          </section>
-
-          {executionTimeline && executionTimeline.events.length > 0 && (
-            <section className="job-section">
-              <h4>Network execution</h4>
-              <p className="job-hint">
-                {executionTimeline.event_count} recorded events · {formatDurationMs(executionTimeline.total_elapsed_ms)} total
-              </p>
-              <div className="job-details-stack">
-                {executionTimeline.events.map((event) => (
-                  <div key={event.id} className="node-detail-row">
-                    <span>
-                      {event.sequence}. {event.stage.replaceAll("_", " ")}
-                      {event.node_id ? ` · ${event.node_id}` : ""}
-                    </span>
-                    <span title={event.message || event.status}>
-                      +{formatDurationMs(event.stage_latency_ms)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {proofReceipt && receiptVerification && (
-            <section className="job-section">
-              <h4>Proof of Creation</h4>
-              <div className="job-details-grid">
-                <div>
-                  <span className="job-label">Integrity</span>
-                  <span style={{ color: receiptVerification.integrity_valid ? "#8ff0b6" : "#ff8f8f" }}>
-                    {receiptVerification.integrity_valid ? "Verified" : "Invalid"}
-                  </span>
-                </div>
-                <div>
-                  <span className="job-label">Authenticity</span>
-                  <span>{receiptVerification.authenticity}</span>
-                </div>
-                <div>
-                  <span className="job-label">Browser verification</span>
-                  <span style={{ color: localReceiptVerification?.valid ? "#8ff0b6" : undefined }}>
-                    {localReceiptVerification?.valid
-                      ? "Locally verified"
-                      : localReceiptVerification?.supported === false
-                      ? "Not supported"
-                      : "Not verified"}
-                  </span>
-                </div>
-                <div>
-                  <span className="job-label">Artifact</span>
-                  <span>{receiptVerification.artifact_valid ? "SHA-256 verified" : "Mismatch"}</span>
-                </div>
-                <div>
-                  <span className="job-label">Schema</span>
-                  <span>{proofReceipt.schema_version}</span>
-                </div>
-                <div>
-                  <span className="job-label">Signing key</span>
-                  <span>{proofReceipt.key_id || proofReceipt.signature_algorithm}</span>
-                </div>
-                <div>
-                  <span className="job-label">Merkle inclusion</span>
-                  <span style={{ color: localInclusionValid ? "#8ff0b6" : undefined }}>
-                    {inclusionProof
-                      ? localInclusionValid
-                        ? `Verified · batch ${inclusionProof.batch_id}`
-                        : "Invalid proof"
-                      : "Awaiting batch"}
-                  </span>
-                </div>
-                {inclusionProof && (
-                  <div>
-                    <span className="job-label">Anchor status</span>
-                    <span>{inclusionProof.status}</span>
-                  </div>
-                )}
-              </div>
-              <div className="job-details-stack" style={{ marginTop: "0.75rem" }}>
-                <div>
-                  <span className="job-label">receipt_hash</span>
-                  <code style={{ overflowWrap: "anywhere" }}>{proofReceipt.receipt_hash}</code>
-                </div>
-                <div>
-                  <span className="job-label">artifact_sha256</span>
-                  <code style={{ overflowWrap: "anywhere" }}>{proofReceipt.artifact_sha256 || "--"}</code>
-                </div>
-                {inclusionProof && (
-                  <div>
-                    <span className="job-label">merkle_root</span>
-                    <code style={{ overflowWrap: "anywhere" }}>{inclusionProof.merkle_root}</code>
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                className="job-inline-button"
-                onClick={() => handleCopy(JSON.stringify(proofReceipt, null, 2))}
-              >
-                Copy receipt
-              </button>
-            </section>
-          )}
-
-          <section className="job-section">
-            <h4>Result</h4>
+            <h3>Result</h3>
             <div className="job-preview">
-              {previewVideo ? (
-                <video src={previewVideo} controls playsInline />
+              {previewFailed ? <div className="job-preview-empty" role="alert"><p>The preview couldn’t load.</p><button className="job-inline-button" type="button" onClick={() => { setPreviewFailed(false); setPreviewRevision(value => value + 1); }}>Retry preview</button></div> : previewVideo ? (
+                <video key={previewRevision} src={previewVideo} controls playsInline onError={() => setPreviewFailed(true)} />
               ) : previewImage ? (
                 <img
                   src={previewImage}
-                  alt={resolvedId || "Job preview"}
-                  onError={(event) => {
-                    (event.currentTarget as HTMLImageElement).src = "/HavnAI-logo.png";
-                  }}
+                  key={previewRevision}
+                  alt={promptText || "Generated result"}
+                  onError={() => setPreviewFailed(true)}
                 />
               ) : (
-                <div className="job-preview-empty">Preview unavailable</div>
+                <div className="job-preview-empty">{loading ? "Loading result…" : "Preview unavailable"}</div>
               )}
             </div>
           </section>
 
           <section className="job-section">
-            <h4>Quick actions</h4>
+            <h3 className="result-actions-label">Keep or share</h3>
             <div className="job-actions">
               <button
                 type="button"
                 className="job-action-button"
                 onClick={handleDownload}
-                disabled={!previewImage && !previewVideo}
+                disabled={downloadBusy || (!previewImage && !previewVideo)}
               >
-                Download output
-              </button>
-              <button
-                type="button"
-                className="job-action-button secondary"
-                onClick={() => handleCopy(JSON.stringify(debugPayload, null, 2))}
-              >
-                Copy debug info
+                {downloadBusy ? "Downloading…" : "Download output"}
               </button>
               {!isSaved ? (
                 <button
@@ -719,7 +582,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   onClick={handleSave}
                   disabled={!resolvedId}
                 >
-                  Save to Library
+                  Save to Collection
                 </button>
               ) : (
                 <div className="job-saved">
@@ -739,6 +602,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                 </button>
               )}
             </div>
+            {actionNotice && <p className="result-action-notice" role="status">{actionNotice}</p>}
             {loading && <p className="job-hint">Loading job details...</p>}
             {error && <p className="job-hint error">{error}</p>}
             {listingSuccess && (
@@ -748,7 +612,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
               </p>
             )}
             {canListInMarketplace && !showListingAction && listingBlockedReason && (
-              <p className="job-hint">{listingBlockedReason}</p>
+              <details className="result-publishing"><summary>Marketplace publishing</summary><p className="job-hint">{listingBlockedReason}</p></details>
             )}
             {showListingAction && listingOpen && (
               <div className="marketplace-listing-form">
@@ -816,7 +680,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
           </section>
 
           <section className="job-section">
-            <details open>
+            <details>
               <summary>Settings used</summary>
               <div className="job-details-grid">
                 {Object.entries(params).map(([key, value]) =>
@@ -896,6 +760,174 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
             </details>
           </section>
 
+          <details className="result-technical">
+            <summary>Generation & verification details</summary>
+            {resolvedId && <div className="result-job-id"><span>Job ID</span><code>{resolvedId}</code><button type="button" className="job-inline-button" onClick={() => handleCopy(resolvedId)}>Copy full ID</button></div>}
+          <section className="job-section">
+            <h3>Progress</h3>
+            <div className="status-timeline" hidden={statusValue === "unknown"}>
+              {(statusValue === "unknown" ? [] : timelineSteps).map((step, index) => {
+                const isActive = index === normalized.activeIndex;
+                const isComplete = index < normalized.activeIndex;
+                const isFailed = normalized.isFailed && step.key === "failed";
+                return (
+                  <div
+                    key={step.key}
+                    className={`timeline-step${isActive ? " is-active" : ""}${
+                      isComplete ? " is-complete" : ""
+                    }${isFailed ? " is-failed" : ""}`}
+                  >
+                    <span className="timeline-dot" />
+                    <span>{step.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+            {job && (() => {
+              const warning = getJobStuckWarning(job);
+              if (!warning) return null;
+              return (
+                <div className="job-stuck-warning" style={{
+                  marginTop: "0.75rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "8px",
+                  background: "rgba(255, 180, 50, 0.12)",
+                  border: "1px solid rgba(255, 180, 50, 0.3)",
+                  fontSize: "0.85rem",
+                  color: "#ffb432",
+                }}>
+                  <p style={{ margin: "0 0 0.5rem 0" }}>{warning}</p>
+                  <button
+                    type="button"
+                    style={{
+                      background: "rgba(255, 80, 80, 0.15)",
+                      border: "1px solid rgba(255, 80, 80, 0.4)",
+                      color: "#ff6b6b",
+                      padding: "0.35rem 0.75rem",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "0.8rem",
+                    }}
+                    onClick={async () => {
+                      if (!resolvedId) return;
+                      try {
+                        await cancelJob(resolvedId);
+                        onClose();
+                      } catch {
+                        // ignore — job may already be completed
+                      }
+                    }}
+                  >
+                    Cancel job
+                  </button>
+                </div>
+              );
+            })()}
+          </section>
+
+          {executionTimeline && executionTimeline.events.length > 0 && (
+            <section className="job-section">
+              <h3>Network execution</h3>
+              <p className="job-hint">
+                {executionTimeline.event_count} recorded events · {formatDurationMs(executionTimeline.total_elapsed_ms)} total
+              </p>
+              <div className="job-details-stack">
+                {executionTimeline.events.map((event) => (
+                  <div key={event.id} className="node-detail-row">
+                    <span>
+                      {event.sequence}. {event.stage.replaceAll("_", " ")}
+                      {event.node_id ? ` · ${event.node_id}` : ""}
+                    </span>
+                    <span title={event.message || event.status}>
+                      +{formatDurationMs(event.stage_latency_ms)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {proofReceipt && receiptVerification && (
+            <section className="job-section">
+              <h3>Proof of Creation</h3>
+              <div className="job-details-grid">
+                <div>
+                  <span className="job-label">Integrity</span>
+                  <span style={{ color: receiptVerification.integrity_valid ? "#8ff0b6" : "#ff8f8f" }}>
+                    {receiptVerification.integrity_valid ? "Verified" : "Invalid"}
+                  </span>
+                </div>
+                <div>
+                  <span className="job-label">Authenticity</span>
+                  <span>{receiptVerification.authenticity}</span>
+                </div>
+                <div>
+                  <span className="job-label">Browser verification</span>
+                  <span style={{ color: localReceiptVerification?.valid ? "#8ff0b6" : undefined }}>
+                    {localReceiptVerification?.valid
+                      ? "Locally verified"
+                      : localReceiptVerification?.supported === false
+                      ? "Not supported"
+                      : "Not verified"}
+                  </span>
+                </div>
+                <div>
+                  <span className="job-label">Artifact</span>
+                  <span>{receiptVerification.artifact_valid ? "SHA-256 verified" : "Mismatch"}</span>
+                </div>
+                <div>
+                  <span className="job-label">Schema</span>
+                  <span>{proofReceipt.schema_version}</span>
+                </div>
+                <div>
+                  <span className="job-label">Signing key</span>
+                  <span>{proofReceipt.key_id || proofReceipt.signature_algorithm}</span>
+                </div>
+                <div>
+                  <span className="job-label">Merkle inclusion</span>
+                  <span style={{ color: localInclusionValid ? "#8ff0b6" : undefined }}>
+                    {inclusionProof
+                      ? localInclusionValid
+                        ? `Verified · batch ${inclusionProof.batch_id}`
+                        : "Invalid proof"
+                      : "Awaiting batch"}
+                  </span>
+                </div>
+                {inclusionProof && (
+                  <div>
+                    <span className="job-label">Anchor status</span>
+                    <span>{inclusionProof.status}</span>
+                  </div>
+                )}
+              </div>
+              <div className="job-details-stack" style={{ marginTop: "0.75rem" }}>
+                <div>
+                  <span className="job-label">receipt_hash</span>
+                  <code style={{ overflowWrap: "anywhere" }}>{proofReceipt.receipt_hash}</code>
+                </div>
+                <div>
+                  <span className="job-label">artifact_sha256</span>
+                  <code style={{ overflowWrap: "anywhere" }}>{proofReceipt.artifact_sha256 || "--"}</code>
+                </div>
+                {inclusionProof && (
+                  <div>
+                    <span className="job-label">merkle_root</span>
+                    <code style={{ overflowWrap: "anywhere" }}>{inclusionProof.merkle_root}</code>
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                className="job-inline-button"
+                onClick={() => handleCopy(JSON.stringify(proofReceipt, null, 2))}
+              >
+                Copy receipt
+              </button>
+            </section>
+          )}
+
+          </details>
+
           <section className="job-section">
             <details>
               <summary>Routing info</summary>
@@ -959,6 +991,14 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
           <section className="job-section">
             <details>
               <summary>Debug JSON</summary>
+              <button
+                type="button"
+                className="job-action-button secondary"
+                onClick={() => handleCopy(JSON.stringify(debugPayload, null, 2))}
+              >
+                Copy debug info
+              </button>
+
               <div className="job-raw-wrapper">
                 <button
                   type="button"
@@ -979,7 +1019,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
             const isOOM = /out of memory/i.test(errText);
             return (
               <section className="job-section job-failure">
-                <h4>Something went wrong</h4>
+                <h3>Something went wrong</h3>
                 <p>{errText}</p>
                 {isOOM ? (
                   <ul>
@@ -999,7 +1039,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
             );
           })()}
         </div>
-      </aside>
+      </div>
     </div>
   );
 };

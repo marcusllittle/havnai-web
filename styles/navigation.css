@@ -1,0 +1,47 @@
+.site-header { background: #0a1115f5; border-color: #ffffff13; box-shadow: none; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.site-header .header-inner { max-width: 1320px; min-height: 76px; padding: 12px 20px; gap: 24px; }
+.site-header .brand { gap: 10px; }
+.site-header .brand-logo { width: 40px; height: 40px; border-radius: 11px; box-shadow: none; }
+.brand-wordmark { color: #e5efe8; font-size: 20px; font-weight: 600; letter-spacing: -.055em; }
+.brand-wordmark > span { color: #b8f4d7; font-weight: 450; }
+.site-header .nav-links { position: static; display: flex; flex-direction: row; align-items: center; gap: 6px; margin: 0; padding: 0; max-height: none; overflow: visible; border: 0; border-radius: 0; background: none; box-shadow: none; font-size: 13px; }
+.nav-main-links { display: flex; gap: 4px; }
+.site-header .nav-links a, .nav-more-toggle { display: flex; align-items: center; justify-content: center; width: auto; min-height: 44px; padding: 10px 13px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: #aebfbb; font: inherit; font-size: 13px; line-height: 1.3; text-decoration: none; white-space: nowrap; cursor: pointer; }
+.site-header .nav-links a:hover, .nav-more-toggle:hover { color: #e2f1e7; background: #ffffff06; transform: none; box-shadow: none; }
+.site-header .nav-links .nav-active { color: #cff7df; background: #21372e; border-color: #3a5547; box-shadow: none; }
+.nav-more { position: relative; }
+.nav-more-toggle { gap: 6px; }
+.nav-more-links { position: absolute; top: calc(100% + 9px); right: 0; display: none; min-width: 190px; max-height: calc(100dvh - 105px); overflow-y: auto; padding: 7px; border: 1px solid #344a40; border-radius: 12px; background: #12201b; box-shadow: 0 15px 40px #0006; }
+.nav-more.is-open .nav-more-links { display: grid; }
+.site-header .nav-more-links a { justify-content: flex-start; }
+.nav-wallet { margin-left: 14px; padding-left: 18px; border-left: 1px solid #ffffff15; }
+.site-header .wallet-connect-btn { min-height: 44px; padding: 10px 15px; border: 1px solid #466153; border-radius: 10px; background: #192c24; color: #d2f1de; box-shadow: none; font: inherit; font-size: 12px; font-weight: 550; }
+.site-header .wallet-connect-btn:hover { background: #264235; transform: none; box-shadow: none; }
+.site-header .nav-toggle { display: none; width: 44px; height: 44px; border-radius: 11px; background: #14211f; border-color: #ffffff1a; }
+.site-header :is(a, button):focus-visible { outline: 2px solid #b8f4d7; outline-offset: 3px; }
+.site-header .wallet-dropdown { min-width: 260px; padding: 12px; border: 1px solid #44604d; border-radius: 12px; background: #13221c; box-shadow: 0 15px 40px #0006; }
+.site-header .wallet-dropdown-item { min-height: 44px; width: 100%; padding: 11px 10px; border: 0; border-radius: 7px; background: transparent; color: #cde5d6; font: inherit; font-size: 12px; text-align: left; justify-content: flex-start; }
+.site-header .wallet-dropdown-item:hover { background: #243d2e; color: #e3f6e9; }
+.site-header .wallet-dropdown-disconnect { color: #f4b6b6; }
+.wallet-menu-label { display: block; font-size: 10px; color: #a8c4b3; padding: 8px 10px 0; }
+.wallet-menu-address { color: #d5e5da; font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; white-space: normal; margin: 9px 10px 15px; user-select: all; }
+.wallet-menu-feedback, .wallet-connect-feedback { color: #f3c1b5; font-size: 12px; line-height: 1.7; white-space: normal; overflow-wrap: anywhere; }
+.wallet-menu-feedback { margin: 9px 10px; }
+.wallet-connect-feedback { position: absolute; top: 100%; right: 0; width: 280px; max-width: calc(100vw - 32px); margin: 10px 0 0; background: #192821; border: 1px solid #58705b; border-radius: 10px; padding: 16px; }
+@media (max-width: 1000px) {
+  .site-header .header-inner { min-height: 72px; padding: 12px 16px; }
+  .site-header .nav-toggle { display: inline-flex; }
+  .site-header .nav-links { display: none; position: absolute; top: 100%; left: 0; right: 0; padding: 16px; max-height: calc(100dvh - 88px); overflow-y: auto; flex-direction: column; align-items: stretch; gap: 16px; border: 1px solid #ffffff16; border-top: 0; border-radius: 0 0 18px 18px; background: #0d1917; box-shadow: 0 20px 40px #0007; }
+  .site-header .nav-links.nav-open { display: flex; }
+  .nav-main-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .site-header .nav-links a { justify-content: flex-start; min-height: 46px; padding: 12px; }
+  .nav-more { padding-top: 13px; border-top: 1px solid #ffffff16; }
+  .nav-more-toggle { display: none; }
+  .nav-more-links, .nav-more.is-open .nav-more-links { position: static; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-width: 0; max-height: none; overflow: visible; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+  .site-header .nav-more-links a { color: #a7b8b1; font-size: 12px; }
+  .nav-wallet { margin: 0; padding: 16px 0 0; border-left: 0; border-top: 1px solid #ffffff16; }
+  .site-header .wallet-connect-btn { width: 100%; }
+  .site-header .wallet-dropdown { position: relative; top: auto; margin-top: 8px; width: 100%; }
+  .wallet-connect-feedback { position: static; width: auto; max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) { .site-header * { transition: none !important; } }

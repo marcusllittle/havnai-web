@@ -61,7 +61,12 @@ describe("detectPlatform", () => {
     expect(detectPlatform("Mozilla/5.0 (Linux; Android 14; Pixel 8)")).toBeNull();
   });
 
-  it("returns null for anything unrecognised, so the first option is used", () => {
+  it("keeps all platforms available when the device is unrecognised", () => {
     expect(detectPlatform("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)")).toBeNull();
+  });
+
+  it("does not mistake iOS's Mac OS compatibility text for a desktop", () => {
+    expect(detectPlatform("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)")).toBeNull();
+    expect(detectPlatform("Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X)")).toBeNull();
   });
 });

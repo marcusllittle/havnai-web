@@ -26,12 +26,34 @@ export function AddToPlaylistDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const actionInFlightRef = useRef(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    if (!publication) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.querySelector<HTMLButtonElement>('button[aria-label="Close"]')?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeRef.current();
+      if (event.key !== "Tab") return;
+      const items = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), a[href]') || []);
+      const first = items[0]; const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => { document.body.style.overflow = overflow; document.removeEventListener("keydown", handleKey); if (previous?.isConnected) previous.focus(); };
+  }, [publication?.id]);
 
   useEffect(() => {
     let active = true;
     setError("");
     setPlaylists([]);
-    if (!publication || !walletAddress) return;
+    if (!publication || !walletAddress) { setBusy(false); return; }
     setBusy(true);
     fetchMyMusicPlaylists(walletAddress)
       .then((items) => {
@@ -46,7 +68,7 @@ export function AddToPlaylistDialog({
     return () => {
       active = false;
     };
-  }, [publication, walletAddress]);
+  }, [publication, walletAddress, refreshKey]);
 
   if (!publication) return null;
 
@@ -99,26 +121,28 @@ export function AddToPlaylistDialog({
 
   return (
     <div className="music-dialog-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="music-dialog" role="dialog" aria-modal="true" aria-label="Add to playlist" onMouseDown={(event) => event.stopPropagation()}>
-        <header>
+      <section ref={dialogRef} className="music-dialog" role="dialog" aria-modal="true" aria-label="Add to playlist" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="music-dialog-heading">
           <span><ListMusic size={17} /> Add to playlist</span>
           <button type="button" onClick={onClose} aria-label="Close" title="Close"><X size={18} /></button>
-        </header>
+        </div>
         <div className="music-dialog-track">
           <strong>{publication.title}</strong>
           <span>{publication.creator}</span>
         </div>
         {error && <p className="music-dialog-error" role="alert">{error}</p>}
+        {error && walletAddress && <button type="button" disabled={busy} onClick={() => setRefreshKey(value => value + 1)}>Reload playlists</button>}
+        {!walletAddress && <button type="button" onClick={() => void connectWallet().catch(() => setError("Wallet connection failed. Please try again."))}>Connect wallet</button>}
         <div className="music-playlist-picker">
           {busy && playlists.length === 0 ? (
             <span>Loading playlists</span>
           ) : playlists.length === 0 ? (
-            <span>No playlists yet</span>
+            <span>{error ? "Your playlists are unavailable." : !walletAddress ? "Connect your wallet to see your playlists." : "No playlists yet. Start one below."}</span>
           ) : (
             playlists.map((playlist) => (
               <button key={playlist.id} type="button" disabled={busy} onClick={() => addToPlaylist(playlist.id)}>
                 <strong>{playlist.title}</strong>
-                <span>{playlist.track_count} tracks</span>
+                <span>{playlist.track_count} {playlist.track_count === 1 ? "track" : "tracks"}</span>
               </button>
             ))
           )}
@@ -130,7 +154,7 @@ export function AddToPlaylistDialog({
             void createAndAdd();
           }}
         >
-          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="New playlist name" />
+          <input aria-label="New playlist name" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="New playlist name" />
           <button type="submit" disabled={busy || !title.trim()} aria-label="Create playlist">
             <Plus size={18} />
           </button>

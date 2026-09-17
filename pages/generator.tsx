@@ -1,8 +1,8 @@
 import type { GetServerSideProps } from "next";
 
-export const getServerSideProps: GetServerSideProps = async () => ({
+export const getServerSideProps: GetServerSideProps = async ({ query }) => ({
   redirect: {
-    destination: "/create",
+    destination: typeof query.workflow === "string" ? `/create?workflow=${encodeURIComponent(query.workflow)}` : "/create",
     permanent: true,
   },
 });

@@ -4,7 +4,7 @@ import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Download,
-  KeyRound,
+  ArrowUpRight,
   LogOut,
   MoreHorizontal,
   Music2,
@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { SiteHeader } from "../components/SiteHeader";
+import { StudioAccessGate } from "../components/StudioAccessGate";
 import { useMusicPlayer } from "../components/MusicPlayer";
 import { useWallet } from "../components/WalletProvider";
 import {
@@ -327,16 +328,7 @@ export default function MusicStudioPage() {
       <>
         <Head><title>Music Studio | HavnAI</title></Head>
         <SiteHeader />
-        <main className="music-gate">
-          <form onSubmit={(event) => { event.preventDefault(); void connect(accessKey); }}>
-            <span className="music-gate-icon"><KeyRound size={22} /></span>
-            <p>HavnAI Music Studio</p>
-            <h1>Enter the studio</h1>
-            <label>Studio access key<input type="password" autoComplete="current-password" value={accessKey} onChange={(event) => setAccessKey(event.target.value)} autoFocus /></label>
-            {error && <div className="music-alert" role="alert">{error}</div>}
-            <button type="submit" disabled={checkingAccess || !accessKey.trim()}>{checkingAccess ? "Opening..." : "Open Music Studio"}</button>
-          </form>
-        </main>
+        <StudioAccessGate kind="music" accessKey={accessKey} onChange={setAccessKey} onSubmit={event => { event.preventDefault(); void connect(accessKey); }} checking={checkingAccess} error={error} />
       </>
     );
   }
@@ -345,12 +337,12 @@ export default function MusicStudioPage() {
     <>
       <Head><title>Music Studio | HavnAI</title><meta name="description" content="Create original music on the HavnAI network." /></Head>
       <SiteHeader />
-      <main className="music-studio-page">
+      <main className="music-studio-page studio-workspace-music">
         <header className="music-studio-heading">
-          <div><span><Music2 size={18} /> Music Studio</span><h1>What do you want to hear?</h1><p>Describe the feeling, scene, rhythm, or sound. HavnAI will shape it into a song.</p></div>
+          <div><span><Music2 size={14} aria-hidden="true" /> Music Studio</span><h1>Make a little noise.</h1><p>A feeling, a scene, a sound. Start with what moves you.</p></div>
           <div className="music-runtime-row">
             <span className={musicAvailable ? "is-online" : ""}>{musicAvailable ? "Music ready" : "Music unavailable"}</span>
-            <button type="button" title="Leave studio" aria-label="Leave studio" onClick={() => { window.sessionStorage.removeItem(STUDIO_KEY); setUnlocked(false); setCapabilities(null); }}><LogOut size={18} /></button>
+            <button type="button" title="Leave studio" aria-label="Leave studio" onClick={() => { window.sessionStorage.removeItem(STUDIO_KEY); setAccessKey(""); setUnlocked(false); setCapabilities(null); setError(""); }}><LogOut size={18} /></button>
           </div>
         </header>
 
@@ -359,11 +351,20 @@ export default function MusicStudioPage() {
         )}
         {error && <div className="music-alert" role="alert"><span>{error}</span><button type="button" onClick={() => setError("")} aria-label="Dismiss error"><X size={17} /></button></div>}
 
+        <div className="studio-music-layout">
         <form className="music-composer" onSubmit={submit}>
           <label className="music-prompt-field">
             <span>Song description</span>
             <textarea value={form.prompt} onChange={(event) => update("prompt", event.target.value)} maxLength={4000} required placeholder="A hazy late-night R&B track with brushed drums, warm bass, and a hopeful chorus..." />
           </label>
+          <div className="studio-music-starters" role="group" aria-label="Song ideas">
+            <span>Try a direction</span>
+            {[
+              { title: "Midnight R&B", style: "R&B, soulful, late night", prompt: "A warm late-night R&B track with brushed drums, deep bass, intimate vocals, and a hopeful chorus." },
+              { title: "Indie lift", style: "Indie pop, bright, uplifting", prompt: "An uplifting indie pop song with jangly guitars, a driving beat, and a chorus that feels like the first day of summer." },
+              { title: "Ambient focus", style: "Ambient, minimal, atmospheric", prompt: "A gentle instrumental soundscape with soft piano, slow evolving synths, and plenty of space to think." },
+            ].map(idea => <button type="button" key={idea.title} onClick={() => setForm(current => ({ ...current, prompt: idea.prompt, style: idea.style }))}>{idea.title}</button>)}
+          </div>
           <div className="music-composer-grid">
             <label><span>Style</span><input value={form.style} maxLength={500} onChange={(event) => update("style", event.target.value)} placeholder="Dream pop, soulful, cinematic" /></label>
             <label><span>Length</span><select value={form.duration} onChange={(event) => update("duration", Number(event.target.value))}><option value={30}>0:30</option><option value={60}>1:00</option><option value={90}>1:30</option><option value={120}>2:00</option><option value={180}>3:00</option></select></label>
@@ -387,9 +388,9 @@ export default function MusicStudioPage() {
         </form>
 
         <section className="music-results" aria-live="polite">
-          <div className="music-results-heading"><div><span>Your studio</span><h2>Recent songs</h2></div><span>{jobs.length}</span></div>
+          <div className="music-results-heading"><div><span>Your studio</span><h2>Recent songs <span className="studio-song-count">{jobs.length}</span></h2></div><Link href="/music/library">Music library <ArrowUpRight size={14} aria-hidden="true" /></Link></div>
           {jobs.length === 0 ? (
-            <div className="music-empty"><Music2 size={28} /><strong>Your songs will appear here</strong><span>Start with a mood, a scene, or a sound you cannot stop thinking about.</span></div>
+            <div className="music-empty studio-music-empty"><div className="studio-record" aria-hidden="true"><Image src="/music-default-cover.png" alt="" fill sizes="200px" /></div><strong>There’s a song in that idea.</strong><span>Your creations will appear here, ready to play, download, or publish.</span><Link href="/discover">Find inspiration in Discover <ArrowUpRight size={14} aria-hidden="true" /></Link></div>
           ) : (
             <div className="music-song-list">
               {jobs.map((job) => {
@@ -444,6 +445,7 @@ export default function MusicStudioPage() {
             </div>
           )}
         </section>
+        </div>
         {publishJob && (
           <div className="music-publish-backdrop" role="presentation" onMouseDown={() => !publishing && setPublishJob(null)}>
             <form className="music-publish-modal" onSubmit={submitPublish} onMouseDown={(event) => event.stopPropagation()}>

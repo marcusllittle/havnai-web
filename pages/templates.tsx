@@ -1,315 +1,116 @@
-import type { NextPage } from "next";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ArrowRight, ArrowUpRight, Layers3, Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
-import { useWallet } from "../lib/WalletContext";
-import {
-  fetchMarketplace,
-  createWorkflow,
-  publishWorkflow,
-  Workflow,
-} from "../lib/havnai";
+import { useWallet } from "../components/WalletProvider";
+import { createWorkflow, fetchMarketplace, type Workflow } from "../lib/havnai";
+import { isUsableWallet } from "../lib/wallet";
 
-type ViewMode = "browse" | "create";
+const categories = ["Image Generation", "Video Generation", "Face Swap", "Upscaling", "Style Transfer", "Other"];
+const emptyDraft = { name: "", description: "", category: "Image Generation", model: "", prompt: "", negative: "", steps: "28", guidance: "6" };
+const workflowHref = (id: string) => `/create?workflow=${encodeURIComponent(id)}`;
 
-const CATEGORIES = ["All", "Image Generation", "Video Generation", "Face Swap", "Upscaling", "Style Transfer", "Other"];
+function TemplateDetails({ workflow, onClose }: { workflow: Workflow; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialog.current?.showModal();
+    return () => { document.body.style.overflow = overflow; if (previous?.isConnected) previous.focus(); };
+  }, []);
+  const config = workflow.config || {};
+  return <dialog ref={dialog} className="template-dialog" aria-labelledby="template-title" onCancel={onClose} onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="template-detail">
+      <header><div><span className="product-eyebrow">Workflow template</span><h2 id="template-title">{workflow.name}</h2></div><button type="button" aria-label="Close template" onClick={onClose}><X size={21} aria-hidden="true" /></button></header>
+      <p>{workflow.description || "A reusable starting point for your next creation."}</p>
+      <dl>{[["Category", workflow.category || "Other"], ["Model", config.model || "Auto"], ["Steps", config.steps ?? "Model default"], ["Guidance", config.guidance ?? "Model default"]].map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{String(value)}</dd></div>)}</dl>
+      {config.prompt_template && <section><h3>Prompt template</h3><p className="template-prompt">{String(config.prompt_template)}</p></section>}
+      {config.negative_prompt && <details><summary>Negative prompt</summary><p className="template-prompt">{String(config.negative_prompt)}</p></details>}
+      <section><h3>Creator</h3><p className="template-wallet">{workflow.creator_wallet}</p></section>
+      <p className="template-hint">Review this template in Create, then apply it when you’re ready. Edit any placeholders before generating.</p>
+      <Link href={workflowHref(workflow.id)} className="product-primary">Use this template <ArrowUpRight size={16} aria-hidden="true" /></Link>
+    </div>
+  </dialog>;
+}
 
-const MarketplacePage: NextPage = () => {
-  const { address } = useWallet();
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+export default function TemplatesPage() {
+  const wallet = useWallet();
+  const [view, setView] = useState<"browse" | "create">("browse");
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("");
+  const [page, setPage] = useState(0);
+  const [revision, setRevision] = useState(0);
+  const [items, setItems] = useState<Workflow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<ViewMode>("browse");
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All");
-  const [page, setPage] = useState(0);
-  const limit = 20;
-
-  // Create form
-  const [formName, setFormName] = useState("");
-  const [formDesc, setFormDesc] = useState("");
-  const [formCategory, setFormCategory] = useState("Image Generation");
-  const [formModel, setFormModel] = useState("");
-  const [formPrompt, setFormPrompt] = useState("");
-  const [formNeg, setFormNeg] = useState("");
-  const [formSteps, setFormSteps] = useState(28);
-  const [formGuidance, setFormGuidance] = useState(6);
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState("");
-  const [createSuccess, setCreateSuccess] = useState("");
-
-  // Selected workflow for detail view
+  const [error, setError] = useState("");
   const [selected, setSelected] = useState<Workflow | null>(null);
+  const [draft, setDraft] = useState(emptyDraft);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saved, setSaved] = useState<Workflow | null>(null);
+  const identity = useRef(wallet.activeWallet);
+  identity.current = wallet.activeWallet;
+  const saveInFlight = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { setSaved(null); setSaveError(""); }, [wallet.activeWallet]);
+  useEffect(() => { const timer = setTimeout(() => { setQuery(search.trim()); setPage(0); }, 300); return () => clearTimeout(timer); }, [search]);
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    setLoading(true); setError("");
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    fetchMarketplace({ search: query || undefined, category: category || undefined, offset: page * 12, limit: 12, signal: controller.signal })
+      .then(result => {
+        if (!Array.isArray(result.workflows) || !Number.isFinite(result.total)) throw new Error("Invalid catalog");
+        if (active) { setItems(result.workflows); setTotal(result.total); }
+      })
+      .catch(() => { if (active) { setItems([]); setError("Templates couldn’t load. Try again in a moment."); } })
+      .finally(() => { clearTimeout(timeout); if (active) setLoading(false); });
+    return () => { active = false; clearTimeout(timeout); controller.abort(); };
+  }, [query, category, page, revision]);
 
-  const loadWorkflows = useCallback(async () => {
-    setLoading(true);
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    const address = wallet.activeWallet;
+    if (saveInFlight.current || !address || !isUsableWallet(address)) return;
+    if (!draft.name.trim()) { setSaveError("Give your template a name."); return; }
+    const steps = Number(draft.steps), guidance = Number(draft.guidance);
+    if (!Number.isInteger(steps) || steps < 1 || steps > 100 || !Number.isFinite(guidance) || guidance < 1 || guidance > 30) { setSaveError("Use 1–100 steps and guidance between 1 and 30."); return; }
+    saveInFlight.current = true; setSaving(true); setSaveError(""); setSaved(null);
     try {
-      const cat = category === "All" ? undefined : category;
-      const res = await fetchMarketplace({ search: search || undefined, category: cat, offset: page * limit, limit });
-      setWorkflows(res.workflows);
-      setTotal(res.total);
+      const result = await createWorkflow({ wallet: address, name: draft.name.trim(), description: draft.description.trim(), category: draft.category, config: { model: draft.model.trim() || "auto", prompt_template: draft.prompt.trim(), negative_prompt: draft.negative.trim(), steps, guidance } });
+      if (mounted.current && identity.current === address) { setSaved(result); }
     } catch {
-      setWorkflows([]);
-    }
-    setLoading(false);
-  }, [search, category, page]);
-
-  useEffect(() => { loadWorkflows(); }, [loadWorkflows]);
-
-  const totalPages = Math.ceil(total / limit);
-
-  const handleCreate = async () => {
-    if (!formName.trim()) { setCreateError("Name is required."); return; }
-    setCreating(true);
-    setCreateError("");
-    setCreateSuccess("");
-    try {
-      const workflow = await createWorkflow({
-        name: formName.trim(),
-        description: formDesc.trim(),
-        category: formCategory,
-        config: {
-          model: formModel.trim() || "auto",
-          prompt_template: formPrompt.trim(),
-          negative_prompt: formNeg.trim(),
-          steps: formSteps,
-          guidance: formGuidance,
-        },
-      });
-      setCreateSuccess(`Workflow "${workflow.name}" created! You can publish it to make it visible.`);
-      setFormName("");
-      setFormDesc("");
-      setFormPrompt("");
-      setFormNeg("");
-    } catch (err: any) {
-      setCreateError(err?.message || "Failed to create workflow.");
-    }
-    setCreating(false);
+      if (mounted.current && identity.current === address) setSaveError("Your template couldn’t be saved. Your draft is still here; try again.");
+    } finally { saveInFlight.current = false; if (mounted.current) setSaving(false); }
   };
-
-  return (
-    <>
-      <SeoHead
-        title="Workflow templates"
-        description="Browse and publish reusable generation presets and workflows inside JoinHavn."
-        path="/templates"
-        noindex
-      />
-      <SiteHeader />
-
-      <main className="library-page">
-        <section className="page-hero">
-          <div className="page-hero-inner">
-            <p className="hero-kicker">Templates</p>
-            <h1 className="hero-title">Workflow Templates</h1>
-            <p className="hero-subtitle">Browse and publish reusable generation presets.</p>
-          </div>
-        </section>
-
-        <section className="page-container">
-          {/* View switcher */}
-          <div className="library-toolbar-inner" style={{ marginBottom: "1.5rem" }}>
-            <div className="library-filters">
-              <div className="library-filter-group">
-                <span className="library-filter-label">View</span>
-                <button type="button" className={`library-chip ${view === "browse" ? "is-active" : ""}`} onClick={() => setView("browse")}>Browse</button>
-                <button type="button" className={`library-chip ${view === "create" ? "is-active" : ""}`} onClick={() => setView("create")}>Create Workflow</button>
-              </div>
-            </div>
-          </div>
-
-          {/* Browse view */}
-          {view === "browse" && (
-            <>
-              <div className="library-toolbar-inner" style={{ marginBottom: "1.5rem" }}>
-                <div className="library-search-wrapper">
-                  <input
-                    type="text"
-                    className="library-search"
-                    placeholder="Search workflows..."
-                    value={search}
-                    onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-                  />
-                </div>
-                <div className="library-filters">
-                  <div className="library-filter-group" style={{ flexWrap: "wrap" }}>
-                    <span className="library-filter-label">Category</span>
-                    {CATEGORIES.map((cat) => (
-                      <button
-                        key={cat}
-                        type="button"
-                        className={`library-chip ${category === cat ? "is-active" : ""}`}
-                        onClick={() => { setCategory(cat); setPage(0); }}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {loading && <p className="library-loading">Loading workflows...</p>}
-
-              {!loading && workflows.length === 0 && (
-                <div className="library-empty">
-                  <p>No workflows found. Be the first to publish one!</p>
-                </div>
-              )}
-
-              {!loading && workflows.length > 0 && (
-                <>
-                  <div className="marketplace-grid">
-                    {workflows.map((wf) => (
-                      <div key={wf.id} className="workflow-card" onClick={() => setSelected(wf)}>
-                        <div className="workflow-name">{wf.name}</div>
-                        <div className="workflow-desc">{wf.description || "No description"}</div>
-                        <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-                          {wf.category && <span className="workflow-tag">{wf.category}</span>}
-                          {wf.config?.model && <span className="workflow-tag">{wf.config.model}</span>}
-                        </div>
-                        <div className="workflow-meta">
-                          <span>{wf.usage_count} uses</span>
-                          <span>{new Date(wf.created_at).toLocaleDateString()}</span>
-                          <span style={{ fontFamily: "monospace", fontSize: "0.7rem" }}>
-                            {wf.creator_wallet.slice(0, 6)}...{wf.creator_wallet.slice(-4)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", marginTop: "1.5rem" }}>
-                      <button type="button" className="library-chip" disabled={page === 0} onClick={() => setPage(page - 1)}>Prev</button>
-                      <span style={{ padding: "4px 10px", fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                        {page + 1} / {totalPages}
-                      </span>
-                      <button type="button" className="library-chip" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>Next</button>
-                    </div>
-                  )}
-                </>
-              )}
-            </>
-          )}
-
-          {/* Create workflow view */}
-          {view === "create" && (
-            <div className="chart-section">
-              <div className="chart-header">
-                <h3 className="chart-title">Create a Workflow</h3>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
-                <label>
-                  <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Name</span>
-                  <input type="text" className="library-search" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="My Awesome Workflow" />
-                </label>
-                <label>
-                  <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Description</span>
-                  <textarea className="library-search" style={{ minHeight: "60px", resize: "vertical" }} value={formDesc} onChange={(e) => setFormDesc(e.target.value)} placeholder="What does this workflow do?" />
-                </label>
-                <label>
-                  <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Category</span>
-                  <select className="library-sort-select" value={formCategory} onChange={(e) => setFormCategory(e.target.value)}>
-                    {CATEGORIES.filter((c) => c !== "All").map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Model (leave empty for auto)</span>
-                  <input type="text" className="library-search" value={formModel} onChange={(e) => setFormModel(e.target.value)} placeholder="juggernautXL_ragnarokBy" />
-                </label>
-                <label>
-                  <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Prompt Template</span>
-                  <textarea className="library-search" style={{ minHeight: "80px", resize: "vertical" }} value={formPrompt} onChange={(e) => setFormPrompt(e.target.value)} placeholder="A beautiful portrait of {subject}, cinematic lighting..." />
-                </label>
-                <label>
-                  <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Negative Prompt</span>
-                  <textarea className="library-search" style={{ minHeight: "50px", resize: "vertical" }} value={formNeg} onChange={(e) => setFormNeg(e.target.value)} placeholder="blurry, bad quality..." />
-                </label>
-                <div style={{ display: "flex", gap: "1rem" }}>
-                  <label style={{ flex: 1 }}>
-                    <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Steps</span>
-                    <input type="number" className="library-search" value={formSteps} onChange={(e) => setFormSteps(Number(e.target.value))} min={1} max={100} />
-                  </label>
-                  <label style={{ flex: 1 }}>
-                    <span className="library-filter-label" style={{ display: "block", marginBottom: "0.3rem" }}>Guidance</span>
-                    <input type="number" className="library-search" value={formGuidance} onChange={(e) => setFormGuidance(Number(e.target.value))} min={1} max={30} step={0.5} />
-                  </label>
-                </div>
-                {createError && <p className="job-hint error">{createError}</p>}
-                {createSuccess && <p className="job-hint" style={{ color: "#8ff0b6" }}>{createSuccess}</p>}
-                <button type="button" className="job-action-button" disabled={creating} onClick={handleCreate} style={{ alignSelf: "flex-start", marginTop: "0.5rem" }}>
-                  {creating ? "Creating..." : "Create Workflow"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Workflow detail modal */}
-          {selected && (
-            <div className="job-drawer" onClick={() => setSelected(null)}>
-              <div className="job-drawer-backdrop" />
-              <aside className="job-drawer-panel" role="dialog" onClick={(e) => e.stopPropagation()}>
-                <div className="job-drawer-header">
-                  <div>
-                    <p className="job-drawer-kicker">Workflow</p>
-                    <h3>{selected.name}</h3>
-                    <div className="job-meta-row">
-                      {selected.category && <span className="workflow-tag">{selected.category}</span>}
-                      <span>{selected.usage_count} uses</span>
-                    </div>
-                  </div>
-                  <button type="button" className="job-drawer-close" onClick={() => setSelected(null)}>Close</button>
-                </div>
-                <div className="job-drawer-body">
-                  <section className="job-section">
-                    <h4>Description</h4>
-                    <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>{selected.description || "No description provided."}</p>
-                  </section>
-                  <section className="job-section">
-                    <h4>Configuration</h4>
-                    <div className="job-details-grid">
-                      {selected.config?.model && (
-                        <div><span className="job-label">Model</span><span>{selected.config.model}</span></div>
-                      )}
-                      {selected.config?.steps && (
-                        <div><span className="job-label">Steps</span><span>{selected.config.steps}</span></div>
-                      )}
-                      {selected.config?.guidance && (
-                        <div><span className="job-label">Guidance</span><span>{selected.config.guidance}</span></div>
-                      )}
-                    </div>
-                  </section>
-                  {selected.config?.prompt_template && (
-                    <section className="job-section">
-                      <h4>Prompt Template</h4>
-                      <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", lineHeight: 1.5 }}>{selected.config.prompt_template}</p>
-                    </section>
-                  )}
-                  <section className="job-section">
-                    <h4>Creator</h4>
-                    <p className="wallet-address">{selected.creator_wallet}</p>
-                    <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginTop: "0.3rem" }}>
-                      Created {new Date(selected.created_at).toLocaleDateString()}
-                    </p>
-                  </section>
-                  <section className="job-section">
-                    <div className="job-actions">
-                      <a href={`/generator?workflow=${selected.id}`} className="job-action-button" style={{ textDecoration: "none", textAlign: "center" }}>
-                        Use This Workflow
-                      </a>
-                    </div>
-                  </section>
-                </div>
-              </aside>
-            </div>
-          )}
-        </section>
-      </main>
-    </>
-  );
-};
-
-export default MarketplacePage;
+  const update = (field: keyof typeof emptyDraft, value: string) => { setDraft(current => ({ ...current, [field]: value })); setSaved(null); };
+  const hasWallet = !!wallet.activeWallet && isUsableWallet(wallet.activeWallet);
+  return <>
+    <SeoHead title="Workflow templates" description="Explore reusable creative setups and save a template for your next generation." path="/templates" noindex />
+    <SiteHeader />
+    <main className="product-page templates-page">
+      <header className="templates-heading"><div><span className="product-eyebrow"><Layers3 size={14} aria-hidden="true" /> Creative starting points</span><h1>{view === "browse" ? "Skip the blank canvas." : "Keep a good idea."}</h1><p>{view === "browse" ? "Find a setup you like. Make it your own." : "A reusable starting point for your next creation."}</p></div>{view === "browse" && <button className="product-primary" type="button" onClick={() => setView("create")}><Plus size={16} aria-hidden="true" /> New template</button>}</header>
+      <div className="templates-tabs" role="group" aria-label="Template views"><button type="button" aria-pressed={view === "browse"} onClick={() => setView("browse")}>Explore templates</button><button type="button" aria-pressed={view === "create"} onClick={() => setView("create")}>Your draft</button></div>
+      {view === "browse" ? <>
+        <div className="templates-toolbar"><label className="templates-search"><Search size={18} aria-hidden="true" /><input aria-label="Search templates" type="search" placeholder="Search for a style, scene, or idea" value={search} onChange={e => setSearch(e.target.value)} /></label><label className="templates-category"><span>Category</span><select value={category} onChange={e => { setCategory(e.target.value); setPage(0); }}><option value="">All categories</option>{categories.map(item => <option key={item}>{item}</option>)}</select></label></div>
+        <div className="templates-result-heading"><h2>{category || "Explore the possibilities"}</h2><span>{loading ? "Loading…" : error ? "Unavailable" : `${total} templates`}</span></div>
+        {loading ? <div className="templates-state" role="status"><Layers3 size={28} aria-hidden="true" /><h3>Finding your next starting point…</h3></div> : error ? <div className="templates-state" role="alert"><h3>We couldn’t reach the catalog.</h3><p>{error}</p><button className="product-secondary" type="button" onClick={() => setRevision(value => value + 1)}>Try again</button></div> : items.length === 0 ? <div className="templates-state"><Layers3 size={30} aria-hidden="true" /><h3>{query || category ? "No matching templates yet." : "A little room for inspiration."}</h3><p>{query || category ? "Try a different search or category." : "The shared catalog is empty. You can still save your own starting point."}</p>{query || category ? <button className="product-secondary" type="button" onClick={() => { setSearch(""); setQuery(""); setCategory(""); setPage(0); }}>Clear filters</button> : <button className="product-secondary" type="button" onClick={() => setView("create")}>Create a template</button>}</div> : <>
+          <div className="templates-grid">{items.map(item => <button type="button" className="template-card" key={item.id} onClick={() => setSelected(item)}><div className="template-card-top"><Layers3 size={24} aria-hidden="true" /><span>{item.category || "Other"}</span></div><h3>{item.name}</h3><p>{item.description || "A reusable setup, ready for your own direction."}</p><div className="template-card-model">{String(item.config?.model || "Auto model")}</div><div className="template-card-bottom"><span>{item.usage_count || 0} uses</span><strong>View template <ArrowRight size={15} aria-hidden="true" /></strong></div></button>)}</div>
+          {total > 12 && <nav className="templates-pagination" aria-label="Template pages"><button type="button" className="product-secondary" disabled={page === 0} onClick={() => setPage(value => value - 1)}>Previous</button><span>Page {page + 1} of {Math.ceil(total / 12)}</span><button type="button" className="product-secondary" disabled={(page + 1) * 12 >= total} onClick={() => setPage(value => value + 1)}>Next</button></nav>}
+        </>}
+      </> : <div className="template-compose"><aside><span className="product-eyebrow">Keep a good idea close</span><h2>A setup worth coming back to.</h2><p>Save the prompt and settings you want to reuse. You can review the template in Create before generating.</p><div><SlidersHorizontal size={22} aria-hidden="true" /><p>Shared publishing is limited in the Public Alpha. Saving a draft does not publish it to the catalog.</p></div></aside><form onSubmit={save}><h2>Your template</h2><fieldset disabled={saving}><label>Name<input required maxLength={160} value={draft.name} onChange={e => update("name", e.target.value)} placeholder="Golden-hour portraits" /></label><label>Description<textarea rows={2} maxLength={2000} value={draft.description} onChange={e => update("description", e.target.value)} placeholder="What makes this setup useful?" /></label><label>Category<select value={draft.category} onChange={e => update("category", e.target.value)}>{categories.map(item => <option key={item}>{item}</option>)}</select></label><label>Prompt template<textarea rows={5} maxLength={4000} value={draft.prompt} onChange={e => update("prompt", e.target.value)} placeholder="An editorial portrait of {subject}, warm afternoon light…" /></label><p className="template-hint">Use placeholders such as {"{subject}"} to remind yourself what to edit.</p><details className="template-settings"><summary>Model &amp; generation settings</summary><label>Model<input value={draft.model} maxLength={200} onChange={e => update("model", e.target.value)} placeholder="Auto: choose from available models" /></label><label>Negative prompt<textarea rows={2} maxLength={4000} value={draft.negative} onChange={e => update("negative", e.target.value)} placeholder="What should the result avoid?" /></label><div className="template-number-fields"><label>Steps<input type="number" required min={1} max={100} value={draft.steps} onChange={e => update("steps", e.target.value)} /></label><label>Guidance<input type="number" required min={1} max={30} step={0.5} value={draft.guidance} onChange={e => update("guidance", e.target.value)} /></label></div></details></fieldset>
+        {saveError && <p className="template-error" role="alert">{saveError}</p>}
+        {saved && <div className="template-saved" role="status"><strong>“{saved.name}” is saved.</strong><Link href={workflowHref(saved.id)}>Review in Create <ArrowUpRight size={15} aria-hidden="true" /></Link></div>}
+        {hasWallet ? <button className="product-primary" type="submit" disabled={saving || !!saved}>{saving ? "Saving…" : saved ? "Saved" : "Save template"}</button> : <><p className="template-hint">Connect a wallet to save this template to your account.</p><button className="product-primary" type="button" disabled={wallet.connecting} onClick={() => { void wallet.connect().catch(() => setSaveError("Wallet connection didn’t finish. Try again.")); }}>{wallet.connecting ? "Connecting…" : "Connect wallet"}</button></>}
+      </form></div>}
+      <footer className="templates-footer"><p>Templates are starting points. Results depend on the model and available capacity.</p><Link href="/create">Start from scratch <ArrowUpRight size={15} aria-hidden="true" /></Link></footer>
+      {selected && <TemplateDetails workflow={selected} onClose={() => setSelected(null)} />}
+    </main>
+  </>;
+}

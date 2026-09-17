@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import React, { useState } from "react";
 import { Bookmark, Heart, ListPlus, Pause, Play } from "lucide-react";
 import type { MusicPublication } from "../lib/havnai";
 import { formatMusicDuration } from "../lib/musicJobPresentation";
@@ -18,6 +19,7 @@ export function publicationCreatorHref(publication: MusicPublication): string {
 export function MusicPublicationCard({
   publication,
   featured = false,
+  highlighted = false,
   playing,
   onPlay,
   onLike,
@@ -26,21 +28,25 @@ export function MusicPublicationCard({
 }: {
   publication: MusicPublication;
   featured?: boolean;
+  highlighted?: boolean;
   playing: boolean;
   onPlay: (publication: MusicPublication) => void;
   onLike?: (publication: MusicPublication) => void;
   onSave?: (publication: MusicPublication) => void;
   onAddToPlaylist?: (publication: MusicPublication) => void;
 }) {
+  const [failedCover, setFailedCover] = useState<string>();
+  const cover = publication.cover_art_url && failedCover !== publication.cover_art_url ? publication.cover_art_url : "/music-default-cover.png";
   return (
-    <article className={`discover-track ${featured ? "is-featured" : ""}`}>
+    <article className={`discover-track ${featured ? "is-featured" : ""} ${highlighted ? "is-highlighted" : ""} ${playing ? "is-playing" : ""}`}>
       <button
         type="button"
         className="discover-artwork"
         onClick={() => onPlay(publication)}
+        disabled={!publication.audio_url}
         aria-label={playing ? `Pause ${publication.title}` : `Play ${publication.title}`}
       >
-        <Image src={publication.cover_art_url || "/music-default-cover.png"} alt="" fill sizes={featured ? "320px" : "180px"} unoptimized />
+        <Image src={cover} alt="" fill sizes={featured ? "320px" : "240px"} unoptimized onError={() => setFailedCover(publication.cover_art_url)} />
         <span>{playing ? <Pause size={featured ? 28 : 22} fill="currentColor" /> : <Play size={featured ? 28 : 22} fill="currentColor" />}</span>
       </button>
       <div className="discover-track-copy">
@@ -58,6 +64,7 @@ export function MusicPublicationCard({
             <button
               type="button"
               className={publication.saved_by_me ? "is-saved" : ""}
+              aria-pressed={publication.saved_by_me}
               onClick={() => onSave(publication)}
               aria-label={publication.saved_by_me ? `Remove ${publication.title} from library` : `Save ${publication.title}`}
               title={publication.saved_by_me ? "Saved" : "Save"}
@@ -79,6 +86,7 @@ export function MusicPublicationCard({
             <button
               type="button"
               className={publication.liked_by_me ? "is-liked" : ""}
+              aria-pressed={publication.liked_by_me}
               onClick={() => onLike(publication)}
               aria-label={publication.liked_by_me ? `Unlike ${publication.title}` : `Like ${publication.title}`}
               title={publication.liked_by_me ? "Unlike" : "Like"}
