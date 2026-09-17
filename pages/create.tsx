@@ -1886,6 +1886,12 @@ const TestPage: React.FC = () => {
     setStatusMessage(undefined);
   };
 
+  const returnToComposer = () => {
+    const input = document.getElementById("prompt");
+    input?.focus({ preventScroll: true });
+    input?.scrollIntoView?.({ block: "center", behavior: "auto" });
+  };
+
   const handleUseLastFrame = (dataUrl: string) => {
     setMode("video");
     setAdvancedOpen(true);
@@ -1893,6 +1899,7 @@ const TestPage: React.FC = () => {
     setVideoInitName("last-frame.png");
     setVideoInitUrl("");
     setStatusMessage("Loaded last frame as init image.");
+    returnToComposer();
   };
 
   const handleAnimateImage = () => {
@@ -1904,6 +1911,7 @@ const TestPage: React.FC = () => {
     setVideoInitName(undefined);
     setVideoInitUrl(coordinatorPath);
     setStatusMessage("Image loaded for animation.");
+    returnToComposer();
   };
 
   const handleRefineImage = () => {
@@ -1919,6 +1927,7 @@ const TestPage: React.FC = () => {
     setImagePreservation("maximum");
     setImageSizePreset("auto");
     setStatusMessage("Output loaded as the refinement reference.");
+    returnToComposer();
   };
 
   const openJobDetails = async (id: string, summary?: JobSummary) => {

@@ -191,6 +191,20 @@ describe("Create page model availability", () => {
     expect(container.querySelector<HTMLInputElement>("#video-init-url")!.value).toBe("https://example.com/start.png");
   });
 
+  it("returns to the composer when refining or animating a saved result without submitting", async () => {
+    localStorage.setItem("havnai_test_history_v1", JSON.stringify([{ jobId: "job-saved", prompt: "A coast at dawn", imageUrl: "/api/coast.webp", timestamp: Date.now() }]));
+    await act(async () => root.render(<CreatePage />));
+    await act(async () => container.querySelector<HTMLButtonElement>(".generator-history-thumb")!.click());
+    await act(async () => button("Refine image").click());
+    expect(document.activeElement).toBe(container.querySelector("#prompt"));
+    expect(container.querySelector<HTMLInputElement>("#image-reference-url")!.value).toBe("/coast.webp");
+    await act(async () => button("Animate image").click());
+    expect(document.activeElement).toBe(container.querySelector("#prompt"));
+    expect(button("Video").getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector<HTMLInputElement>("#video-init-url")!.value).toBe("/coast.webp");
+    expect(vi.mocked(fetch).mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
+  });
+
   it("ends a stalled model request and offers retry", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("fetch", vi.fn((url: string, options?: RequestInit) => {

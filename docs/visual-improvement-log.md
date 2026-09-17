@@ -686,3 +686,14 @@ from this environment.
   Browser fixtures include two local images and an intentionally unavailable video.
   Reviewed phone and desktop layouts; checked 320, 390, 760, 761, 1000, and 1440px.
   No horizontal overflow or unnamed history controls were found.
+
+## September 17, 2026 - Mobile result-to-composer handoff
+
+- Browser inspection found that Refine image populated the reference correctly but
+  left focus on the result button with the prompt 1,764px above the phone viewport.
+  Refine image, Animate image, and successful last-frame capture now return focus
+  to the existing prompt and scroll it into view. They still require explicit
+  generation and preserve the chosen reference.
+- Create regressions: 12 tests passed, including a new saved-result handoff test
+  that checks focus, image/video references, selected mode, and no submitted job.
+  TypeScript passed. Browser checks use isolated local history, not real generation.
