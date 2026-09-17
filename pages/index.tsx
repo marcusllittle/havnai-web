@@ -31,7 +31,7 @@ const HomePage: NextPage = () => {
 
   return (
     <>
-      <SeoHead title="Explore Astra. Create images, video, and music with AI" description="Explore Astra Valkyries and make something of your own with HavnAI's image, video, and music tools. Create, collect, and discover on a shared GPU network." path="/" image="/astra/scenes/nebula_runway_briefing.png" imageAlt="Astra Valkyries — a view across the Nebula Runway" schema={buildWebsiteSchema()} />
+      <SeoHead title="Explore Astra. Create images, video, and music with AI" description="Explore Astra Valkyries and make something of your own with HavnAI's image, video, and music tools. Create, collect, and discover on a shared GPU network." path="/" image="/astra/home-pilots.png" imageAlt="Three Astra Valkyries pilots in a space hangar" schema={buildWebsiteSchema()} />
       <SiteHeader />
       <main className="havn-home">
         <section className="havn-home-hero" aria-labelledby="home-title">
@@ -43,9 +43,8 @@ const HomePage: NextPage = () => {
             <div className="havn-hero-note"><span aria-hidden="true" /> Imagine it. Make it. Keep going.</div>
           </div>
           <div className="havn-hero-scene">
-            <Image src="/astra/scenes/nebula_runway_briefing.png" alt="A futuristic flight deck overlooking the stars in Astra Valkyries" fill sizes="(max-width: 760px) calc(100vw - 32px), (max-width: 1328px) 54vw, 690px" priority />
-            <span className="havn-scene-label">Astra Valkyries <span>Universe artwork</span></span>
-            <div className="havn-scene-caption"><div><span>Your next destination</span><strong>Nebula Runway</strong></div><a href="https://astra.joinhavn.io/" target="_blank" rel="noreferrer" aria-label="Launch Astra in a new tab"><ArrowUpRight size={24} aria-hidden="true" /></a></div>
+            <Image src="/astra/home-pilots.png" alt="Three Astra Valkyries pilots in green, red, and white flight suits inside a space hangar" fill sizes="(max-width: 760px) calc(100vw - 32px), (max-width: 1328px) 54vw, 690px" priority />
+            <div className="havn-scene-caption"><div><span>Meet your squadron</span><strong>Astra Valkyries</strong></div><a href="https://astra.joinhavn.io/" target="_blank" rel="noreferrer" aria-label="Launch Astra in a new tab"><ArrowUpRight size={24} aria-hidden="true" /></a></div>
           </div>
         </section>
 

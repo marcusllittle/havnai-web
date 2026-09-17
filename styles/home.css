@@ -15,9 +15,8 @@
 .havn-button-secondary:hover { background: #223b2e; }
 .havn-hero-note { display: flex; align-items: center; gap: 8px; margin-top: 26px; color: #91a69f; font-size: 11px; }
 .havn-hero-note > span { width: 5px; height: 5px; border-radius: 50%; background: #83b198; }
-.havn-hero-scene { position: relative; height: 540px; overflow: hidden; border-radius: 22px; border: 1px solid #b8f4d726; isolation: isolate; background: #132321; }
-.havn-hero-scene > img { object-fit: cover; object-position: 57% center; z-index: -2; }
-.havn-hero-scene::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, #06111488, transparent 30%, transparent 60%, #061114eb); z-index: -1; }
+.havn-hero-scene { position: relative; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 22px; border: 1px solid #b8f4d726; isolation: isolate; background: #0c101b; }
+.havn-hero-scene > img { object-fit: contain; object-position: center; z-index: -2; }
 .havn-scene-label { position: absolute; top: 22px; left: 24px; display: flex; align-items: center; gap: 12px; color: #e4f4ea; font-size: 12px; font-weight: 550; }
 .havn-scene-label > span { border-left: 1px solid #c4e2d366; padding-left: 12px; color: #b8cec4; font-size: 10px; font-weight: 400; }
 .havn-scene-caption { position: absolute; bottom: 24px; left: 24px; right: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -78,7 +77,6 @@
 .havn-home a:focus-visible, .havn-home-footer a:focus-visible { outline: 2px solid var(--home-accent); outline-offset: 4px; }
 @media (max-width: 1000px) {
   .havn-home-hero { gap: 25px; }
-  .havn-hero-scene { height: 470px; }
   .havn-hero-copy h1 { font-size: 47px; }
   .havn-hero-copy > p { font-size: 14px; }
   .havn-tool-copy { padding: 18px; }
@@ -99,7 +97,7 @@
   .havn-home-actions { gap: 10px; }
   .havn-button { min-height: 46px; padding: 11px 14px; font-size: 12px; gap: 8px; }
   .havn-hero-note { margin-top: 18px; font-size: 10px; }
-  .havn-hero-scene { height: 270px; border-radius: 16px; }
+  .havn-hero-scene { border-radius: 16px; }
   .havn-scene-label { top: 16px; left: 18px; font-size: 11px; }
   .havn-scene-label > span { font-size: 9px; }
   .havn-scene-caption { left: 18px; right: 18px; bottom: 18px; }
@@ -147,7 +145,6 @@
   .havn-hero-copy h1 { font-size: 36px; }
   .havn-home-actions { gap: 8px; }
   .havn-home-actions .havn-button { padding: 10px; font-size: 11px; }
-  .havn-hero-scene { height: 230px; }
   .havn-tool-card { grid-template-columns: 90px minmax(0, 1fr); }
   .havn-tool-copy { padding: 16px 12px; }
   .havn-tool-copy h3 { font-size: 20px; }

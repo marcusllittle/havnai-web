@@ -697,3 +697,12 @@ from this environment.
 - Create regressions: 12 tests passed, including a new saved-result handoff test
   that checks focus, image/video references, selected mode, and no submitted job.
   TypeScript passed. Browser checks use isolated local history, not real generation.
+
+## September 17, 2026 - User-selected homepage artwork
+
+- Replaced the homepage flight-deck scene with the user's exact Downloads/astra-cover.png
+  artwork, stored as public/astra/home-pilots.png. The hero and social-share metadata
+  use the new image. The dedicated Astra page retains its existing artwork.
+- Preserved the full 4:3 composition at every breakpoint so all three pilots remain
+  visible. Removed the extra gradient and top label; the caption uses the artwork's
+  existing bottom fade. Reviewed phone and desktop screenshots and responsive fit.
