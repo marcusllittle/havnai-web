@@ -796,3 +796,20 @@ from this environment.
   explain that the coordinator needs its music update and no credits were charged.
 - Backend combined branch: 42 tests plus 3 subtests passed. Frontend regression
   verifies unsupported music purpose fails once with the correct explanation.
+
+## September 17, 2026 - Stabilize MetaMask connection lifecycle
+
+- Public Discover browsing, search, and genre changes no longer request signed
+  personalization. Wallet signatures remain required for private Library reads
+  and intentional protected actions, with the existing Library read cache.
+- Pin the selected wallet provider for connection checks and signatures. A timed
+  out provider no longer causes the app to open prompts in another extension.
+- Reuse granted accounts and existing/in-flight connections. Background refresh
+  failures preserve the known account; stale refreshes cannot overwrite a newer
+  connection or explicit disconnect. Transport disconnect events trigger a silent
+  account check, while actual empty account permissions clear the connection.
+- Added mounted WalletProvider tests for silent restoration, transient failures,
+  stale reads, explicit disconnect, revoked accounts, and transport interruptions.
+  Discover tests confirm public loading even with an already-connected wallet.
+  Full suite: 42 files / 232 tests passed. MetaMask itself was not used to sign or
+  submit real transactions during verification.

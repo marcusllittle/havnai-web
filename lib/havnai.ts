@@ -4,7 +4,6 @@ import { getInviteCode } from "./invite";
 import { BrowserProvider, getAddress } from "ethers";
 import {
   ensureInjectedProvider,
-  getAllProviders,
   isUsableWallet,
   normalizeWalletError,
   readConnectedAccounts,
@@ -1400,10 +1399,7 @@ async function signWalletNonce(
   signature: string;
 }> {
   const preferred = await ensureInjectedProvider();
-  const candidates = getAllProviders();
-  if (preferred.provider && !candidates.includes(preferred.provider)) {
-    candidates.unshift(preferred.provider);
-  }
+  const candidates = preferred.provider ? [preferred.provider] : [];
   if (candidates.length === 0) {
     const ensured = await ensureInjectedProvider();
     if (ensured.provider) {
@@ -1483,11 +1479,7 @@ async function signWalletNonce(
   }
 
   if (lastError instanceof HavnaiApiError) {
-    const hint =
-      lastError.code === "wallet_request_timeout"
-        ? "Open MetaMask, complete/cancel pending requests, and disable extra wallet extensions."
-        : "If multiple wallet extensions are installed, disable extras and keep only MetaMask enabled.";
-    throw new HavnaiApiError(`${lastError.message} ${hint}`, lastError.code, lastError.data, lastError.status);
+    throw lastError;
   }
 
   throw new HavnaiApiError(

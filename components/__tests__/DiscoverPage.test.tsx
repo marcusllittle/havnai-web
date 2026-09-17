@@ -5,11 +5,12 @@ import DiscoverPage from "../../pages/discover";
 import { fetchMusicDiscover, type MusicPublication } from "../../lib/havnai";
 
 const player = vi.hoisted(() => ({ currentTrack: null, isPlaying: false, playTrack: vi.fn(), toggle: vi.fn() }));
+const wallet = vi.hoisted(() => ({ connectedWallet: "0x1111111111111111111111111111111111111111", connect: vi.fn() }));
 vi.mock("next/router", () => ({ useRouter: () => ({ query: {} }) }));
 vi.mock("../SiteHeader", () => ({ SiteHeader: () => null }));
 vi.mock("../AddToPlaylistDialog", () => ({ AddToPlaylistDialog: () => null }));
 vi.mock("../MusicPlayer", () => ({ useMusicPlayer: () => player }));
-vi.mock("../WalletProvider", () => ({ useWallet: () => ({ connectedWallet: null, connect: vi.fn() }) }));
+vi.mock("../WalletProvider", () => ({ useWallet: () => wallet }));
 vi.mock("../../lib/havnai", async importOriginal => ({
   ...await importOriginal<typeof import("../../lib/havnai")>(), fetchMusicDiscover: vi.fn(),
 }));
@@ -43,6 +44,8 @@ describe("Discover browsing", () => {
     response.publications[1].audio_url = undefined;
     vi.mocked(fetchMusicDiscover).mockResolvedValue(response);
     await act(async () => root.render(<DiscoverPage />));
+    expect(fetchMusicDiscover).toHaveBeenCalledWith(expect.not.objectContaining({ wallet: expect.anything() }));
+    expect(wallet.connect).not.toHaveBeenCalled();
     expect(container.querySelectorAll(".discover-track")).toHaveLength(48);
     expect(container.querySelectorAll(".is-featured")).toHaveLength(1);
     const unavailable = container.querySelector<HTMLButtonElement>('[aria-label="Play Song 1"]')!;

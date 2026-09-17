@@ -419,7 +419,16 @@ export function getInjectedProvider(): InjectedProviderSelection {
   };
 }
 
+let activeWalletProvider: InjectedProvider | null = null;
+
+export function setActiveWalletProvider(provider: InjectedProvider): void {
+  activeWalletProvider = provider;
+}
+
 export async function ensureInjectedProvider(): Promise<InjectedProviderSelection> {
+  if (activeWalletProvider) {
+    return { provider: activeWalletProvider, providerName: activeWalletProvider.isMetaMask ? "MetaMask" : "Browser wallet", hasProvider: true, hasConflict: false, error: null };
+  }
   const current = getInjectedProvider();
   if (current.provider) {
     return current;

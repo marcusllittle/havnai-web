@@ -41,7 +41,7 @@ export default function DiscoverPage() {
       search: submittedSearch || undefined,
       style: genre === "All" ? undefined : genre,
       sort,
-      wallet: connectedWallet,
+      // Browsing the public catalog never requires a wallet signature.
       limit: 48,
     })
       .then((response) => {
@@ -62,7 +62,7 @@ export default function DiscoverPage() {
     return () => {
       active = false;
     };
-  }, [connectedWallet, genre, submittedSearch, sort, revision]);
+  }, [genre, submittedSearch, sort, revision]);
 
   const queryTrack = typeof router.query.track === "string" ? router.query.track : "";
   const filtered = Boolean(submittedSearch || genre !== "All");

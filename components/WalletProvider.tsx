@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   ensureInjectedProvider,
-  getAllProviders,
+  setActiveWalletProvider,
   getConfiguredWallet,
   InjectedProvider,
   InjectedProviderSelection,
@@ -95,6 +95,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const promptTimerRef = useRef<number | null>(null);
   const attentionTimerRef = useRef<number | null>(null);
   const safetyTimerRef = useRef<number | null>(null);
+  const selectedRef = useRef<InjectedProviderSelection | null>(null);
+  const refreshVersion = useRef(0);
+  const explicitlyDisconnected = useRef(false);
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
   useEffect(() => {
@@ -122,26 +125,31 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [envWallet]);
 
   const refresh = useCallback(async () => {
+    if (explicitlyDisconnected.current || connectPromiseRef.current) return;
+    const version = ++refreshVersion.current;
     let selection: InjectedProviderSelection;
     try {
-      selection = await ensureInjectedProvider();
+      selection = selectedRef.current || await ensureInjectedProvider();
     } catch {
       patchSnapshot({
-        connectedWallet: null,
+        ...(snapshotRef.current.connectedWallet ? {} : { connectedWallet: null }),
         hasProvider: false,
         hasConflict: false,
         error: new WalletError("wallet_unknown", "Failed to detect wallet provider."),
         message: "Failed to detect wallet provider. Try disabling other wallet extensions.",
         connecting: false,
-        status: envWallet ? "fallback" : "error",
+        status: snapshotRef.current.connectedWallet ? "connected" : envWallet ? "fallback" : "error",
       });
       return;
     }
+    if (version !== refreshVersion.current || explicitlyDisconnected.current || connectPromiseRef.current) return;
+    selectedRef.current = selection.provider ? selection : null;
+    if (selection.provider) setActiveWalletProvider(selection.provider);
     setProvider(selection.provider);
 
     if (!connectPromiseRef.current) {
       patchSnapshot({
-        status: "checking",
+        status: snapshotRef.current.connectedWallet ? "connected" : "checking",
         hasProvider: selection.hasProvider,
         hasConflict: selection.hasConflict,
         providerName: selection.providerName,
@@ -150,7 +158,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (!selection.provider) {
       patchSnapshot({
-        connectedWallet: null,
+        ...(snapshotRef.current.connectedWallet ? {} : { connectedWallet: null }),
         hasProvider: selection.hasProvider,
         hasConflict: selection.hasConflict,
         providerName: selection.providerName,
@@ -169,9 +177,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     try {
       const [accounts, chain] = await Promise.all([
-        readConnectedAccounts(selection.provider),
+        withTimeout(readConnectedAccounts(selection.provider), 10_000, "Wallet connection check timed out."),
         readChainInfo(selection.provider),
       ]);
+      if (version !== refreshVersion.current || explicitlyDisconnected.current || connectPromiseRef.current) return;
       patchSnapshot({
         connectedWallet: accounts[0]?.toLowerCase() || null,
         hasProvider: true,
@@ -190,16 +199,17 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         status: accounts[0] ? "connected" : envWallet ? "fallback" : "idle",
       });
     } catch (error) {
+      if (version !== refreshVersion.current || explicitlyDisconnected.current || connectPromiseRef.current) return;
       const issue = normalizeWalletError(error);
       patchSnapshot({
-        connectedWallet: null,
+        ...(snapshotRef.current.connectedWallet ? {} : { connectedWallet: null }),
         hasProvider: true,
         hasConflict: selection.hasConflict,
         providerName: selection.providerName,
         error: issue,
         message: issue.message,
         connecting: Boolean(connectPromiseRef.current),
-        status: envWallet ? "fallback" : "error",
+        status: snapshotRef.current.connectedWallet ? "connected" : envWallet ? "fallback" : "error",
       });
     }
   }, [envWallet, patchSnapshot]);
@@ -214,6 +224,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [envWallet, patchSnapshot]);
 
   const disconnect = useCallback(() => {
+    explicitlyDisconnected.current = true;
+    refreshVersion.current += 1;
     clearConnectTimers();
     connectPromiseRef.current = null;
     patchSnapshot({
@@ -226,6 +238,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [clearConnectTimers, envWallet, patchSnapshot]);
 
   const connect = useCallback(async () => {
+    if (connectPromiseRef.current) return connectPromiseRef.current;
+    if (snapshotRef.current.connectedWallet) return snapshotRef.current.connectedWallet;
+    explicitlyDisconnected.current = false;
+    const connectVersion = ++refreshVersion.current;
     let selection: InjectedProviderSelection;
     try {
       selection = await ensureInjectedProvider();
@@ -241,6 +257,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
       throw issue;
     }
+    if (connectVersion !== refreshVersion.current || explicitlyDisconnected.current) return null;
+    selectedRef.current = selection.provider ? selection : null;
     setProvider(selection.provider);
 
     if (!selection.provider) {
@@ -311,15 +329,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
     }, 15000);
 
-    // Try multiple providers — if the preferred one fails (proxy intercept, timeout),
-    // automatically try the next one. Stop on user rejection.
-    const PER_PROVIDER_TIMEOUT_MS = 10_000;
-    const allProviders = getAllProviders();
-    // Ensure preferred provider is first, then others
+    // Keep one provider for the connection; never open a second wallet after a timeout.
     const providerOrder = [selection.provider];
-    for (const p of allProviders) {
-      if (p !== selection.provider) providerOrder.push(p);
-    }
+    const PER_PROVIDER_TIMEOUT_MS = CONNECT_TIMEOUT_MS;
 
     const tryProviders = async (): Promise<string | null> => {
       let lastError: WalletError | null = null;
@@ -331,17 +343,20 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         try {
           const accounts = await withTimeout(
-            requestAccounts(currentProvider),
+            readConnectedAccounts(currentProvider).then(accounts => accounts.length ? accounts : requestAccounts(currentProvider)),
             timeout,
-            "Wallet did not respond. Trying next provider..."
+            "Wallet did not respond. Open MetaMask to finish or cancel the pending request."
           );
           const wallet = accounts[0]?.toLowerCase() || null;
           if (!wallet) {
             throw new WalletError("wallet_unknown", "No wallet account returned.");
           }
           // Success — use this provider
+          if (explicitlyDisconnected.current) return null;
+          setActiveWalletProvider(currentProvider);
           setProvider(currentProvider);
           const chain = await readChainInfo(currentProvider);
+          if (connectVersion !== refreshVersion.current || explicitlyDisconnected.current) return null;
           const hasConflict = providerOrder.length > 1;
           const providerName = currentProvider.isMetaMask ? "MetaMask" : "Browser wallet";
           patchSnapshot({
@@ -359,6 +374,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           });
           return wallet;
         } catch (err) {
+          if (connectVersion !== refreshVersion.current || explicitlyDisconnected.current) return null;
           lastError = normalizeWalletError(err);
           // User explicitly rejected — don't try other providers
           if (lastError.code === "wallet_rejected") break;
@@ -387,6 +403,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const promise = tryProviders()
       .finally(() => {
+        if (connectPromiseRef.current !== promise) return;
         clearConnectTimers();
         connectPromiseRef.current = null;
       });
@@ -429,12 +446,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       void refresh();
     };
     const handleDisconnect = () => {
-      patchSnapshot({
-        connectedWallet: null,
-        error: null,
-        message: envWallet ? SITE_SESSION_MESSAGE : undefined,
-        status: envWallet ? "fallback" : "idle",
-      });
+      // Transport interruptions do not revoke account permission. Recheck silently.
       void refresh();
     };
 
