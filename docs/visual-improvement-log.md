@@ -741,3 +741,16 @@ from this environment.
   has no horizontal overflow. Browser reported no errors. Updated navigation
   regressions; all 39 test files / 220 tests passed. Production webpack build
   passed with the existing optional MetaMask native-storage warning.
+
+## September 17, 2026 - Mobile viewport investigation
+
+- User reported sideways movement in page content. Confirmed two viewport meta
+  tags were emitted: Next.js's default and a second tag from _document. Moved the
+  explicit width/device and initial-scale settings to next/head in _app so Next
+  emits one consistent viewport declaration. Pinch zoom remains available.
+- Browser checks at 390px found no document overflow on home, Create, Astra,
+  Music, Discover, Collection, Video Studio, Marketplace, Network, or Run a Node.
+  Home and expanded Create controls also fit 320px. Editable Create fields are
+  16px. Navigation and code blocks retain their intentional internal scrolling.
+- These checks have not reproduced the reported page panning; the specific page
+  and phone/browser are still needed to confirm its cause on the user's device.

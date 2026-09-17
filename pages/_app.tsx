@@ -1,4 +1,5 @@
 import type { AppProps } from "next/app";
+import Head from "next/head";
 import React from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { WalletProvider } from "../components/WalletProvider";
@@ -93,6 +94,9 @@ class ErrorBoundary extends React.Component<
 export default function HavnAIApp({ Component, pageProps }: AppProps) {
   return (
     <ErrorBoundary>
+      <Head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
       <WalletProvider>
         <MusicPlayerProvider>
           <Component {...pageProps} />
