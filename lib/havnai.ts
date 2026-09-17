@@ -1,3 +1,4 @@
+import { cachedMusicLibrary, clearMusicLibraryCache } from "./musicLibraryCache";
 import type { NextPage } from "next";
 import { getInviteCode } from "./invite";
 import { BrowserProvider, getAddress } from "ethers";
@@ -1979,6 +1980,7 @@ export interface OperatorWorkersResponse {
 }
 
 export interface NetworkSummary {
+  source?: "legacy";
   schema_version: "network-summary.v1";
   generated_at: string;
   coordinator: {
@@ -1999,14 +2001,14 @@ export interface NetworkSummary {
   queue: {
     queued: number;
     running: number;
-    completed: number;
-    failed: number;
+    completed: number | null;
+    failed: number | null;
   };
   recovery: {
     lease_seconds: number;
     max_retries: number;
-    jobs_retried: number;
-    expired_claims: number;
+    jobs_retried: number | null;
+    expired_claims: number | null;
   };
   scheduler: {
     strategy: string;
@@ -2202,7 +2204,7 @@ export async function fetchOperatorWorkers(limit = 200, status?: string, signal?
 }
 
 export async function fetchLeaderboard(signal?: AbortSignal): Promise<LeaderboardEntry[]> {
-  const res = await fetch(apiUrl("/network/leaderboard"), { signal, headers: buildHeaders(false) });
+  const res = await fetch(apiUrl("/network/leaderboard?format=json"), { signal, headers: buildHeaders(false) });
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();
   return (data.leaderboard || []) as LeaderboardEntry[];
@@ -2212,6 +2214,36 @@ export async function fetchNetworkSummary(signal?: AbortSignal): Promise<Network
   const res = await fetch(apiUrl("/v1/network/summary"), {
     signal, headers: buildHeaders(false),
   });
+  if (res.status === 404) {
+    // Older coordinators expose the same live node/queue data through public APIs.
+    const [nodes, jobsResponse] = await Promise.all([
+      fetchNodes(signal),
+      fetch(apiUrl("/jobs/recent?limit=1"), { signal, headers: buildHeaders(false) }),
+    ]);
+    if (!jobsResponse.ok) throw await parseErrorResponse(jobsResponse);
+    const { summary } = await jobsResponse.json();
+    if (!summary || !Number.isFinite(summary.queued_jobs) || !Number.isFinite(summary.active_jobs)) {
+      throw new Error("Coordinator returned an invalid queue summary.");
+    }
+    const online = nodes.filter(node => node.online);
+    const byJobType: Record<string, number> = {};
+    const aliases: Record<string, string> = { image: "IMAGE_GEN", video: "VIDEO_GEN", face_swap: "FACE_SWAP", animatediff: "ANIMATEDIFF", music: "MUSIC_GEN" };
+    for (const node of online) {
+      const types = node.supported_job_types?.length ? node.supported_job_types : (node.supports || []).map(type => aliases[type] || type);
+      for (const type of new Set(types)) byJobType[type] = (byJobType[type] || 0) + 1;
+    }
+    return {
+      schema_version: "network-summary.v1", source: "legacy", generated_at: new Date().toISOString(),
+      coordinator: { status: "online", version: "legacy" },
+      nodes: { total: nodes.length, online: online.length, offline: nodes.length - online.length,
+        operators_online: new Set(online.map(node => node.operator?.wallet || node.wallet).filter(Boolean)).size },
+      capacity: { by_job_type: byJobType, total_vram_mb: online.reduce((sum, node) => sum + (node.gpu.memory_total_mb || 0), 0),
+        average_gpu_utilization: online.length ? online.reduce((sum, node) => sum + node.utilization, 0) / online.length : 0 },
+      queue: { queued: summary.queued_jobs, running: summary.active_jobs, completed: null, failed: null },
+      recovery: { lease_seconds: 0, max_retries: 0, jobs_retried: null, expired_claims: null },
+      scheduler: { strategy: "unavailable", preference_grace_seconds: 0, signals: [] },
+    };
+  }
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as NetworkSummary;
 }
@@ -2667,33 +2699,35 @@ export async function fetchMusicDiscover(
 export async function fetchMusicLibrary(
   opts: { wallet: string; search?: string; offset?: number; limit?: number }
 ): Promise<MusicLibraryResponse> {
-  const signed = await signWalletNonce({
-    wallet: opts.wallet,
-    amount: 1,
-    purpose: "music_library_read",
+  return cachedMusicLibrary(JSON.stringify([opts.wallet.toLowerCase(), opts.search || "", opts.offset || 0, opts.limit || 0]), async () => {
+    const signed = await signWalletNonce({
+      wallet: opts.wallet,
+      amount: 1,
+      purpose: "music_library_read",
+    });
+    const res = await fetchWithTimeout(apiUrl("/music/library"), {
+      method: "POST",
+      headers: buildHeaders(true),
+      body: JSON.stringify({
+        wallet: signed.wallet,
+        nonce: signed.nonce,
+        signature: signed.signature,
+        search: opts.search,
+        offset: opts.offset,
+        limit: opts.limit,
+      }),
+    }, MUSIC_READ_TIMEOUT_MS);
+    if (!res.ok) throw await parseErrorResponse(res);
+    const data = await res.json();
+    return {
+      publications: Array.isArray(data?.publications) ? data.publications.map(normalizeMusicPublication) : [],
+      recent_liked: Array.isArray(data?.recent_liked) ? data.recent_liked.map(normalizeMusicPublication) : [],
+      playlists: Array.isArray(data?.playlists) ? data.playlists.map(normalizeMusicPlaylist) : [],
+      total: Number(data?.total || 0),
+      limit: Number(data?.limit || 0),
+      offset: Number(data?.offset || 0),
+    };
   });
-  const res = await fetchWithTimeout(apiUrl("/music/library"), {
-    method: "POST",
-    headers: buildHeaders(true),
-    body: JSON.stringify({
-      wallet: signed.wallet,
-      nonce: signed.nonce,
-      signature: signed.signature,
-      search: opts.search,
-      offset: opts.offset,
-      limit: opts.limit,
-    }),
-  }, MUSIC_READ_TIMEOUT_MS);
-  if (!res.ok) throw await parseErrorResponse(res);
-  const data = await res.json();
-  return {
-    publications: Array.isArray(data?.publications) ? data.publications.map(normalizeMusicPublication) : [],
-    recent_liked: Array.isArray(data?.recent_liked) ? data.recent_liked.map(normalizeMusicPublication) : [],
-    playlists: Array.isArray(data?.playlists) ? data.playlists.map(normalizeMusicPlaylist) : [],
-    total: Number(data?.total || 0),
-    limit: Number(data?.limit || 0),
-    offset: Number(data?.offset || 0),
-  };
 }
 
 export async function fetchMyMusicPlaylists(wallet: string = WALLET): Promise<MusicPlaylist[]> {
@@ -2722,6 +2756,7 @@ export async function setMusicPublicationSaved(
   saved: boolean,
   wallet: string = WALLET
 ): Promise<{ ok: boolean; saved: boolean }> {
+  clearMusicLibraryCache();
   const signed = await signWalletNonce({
     wallet,
     amount: 1,
@@ -2744,6 +2779,7 @@ export async function setMusicPublicationSaved(
 export async function createMusicPlaylist(
   input: { wallet?: string; title: string; description?: string; is_public?: boolean }
 ): Promise<MusicPlaylist> {
+  clearMusicLibraryCache();
   const signed = await signWalletNonce({
     wallet: input.wallet || WALLET,
     amount: 1,
@@ -2768,6 +2804,7 @@ export async function updateMusicPlaylist(
   playlistId: string,
   input: { wallet?: string; title?: string; description?: string; is_public?: boolean }
 ): Promise<MusicPlaylist> {
+  clearMusicLibraryCache();
   const signed = await signWalletNonce({
     wallet: input.wallet || WALLET,
     amount: 1,
@@ -2789,6 +2826,7 @@ export async function updateMusicPlaylist(
 }
 
 export async function deleteMusicPlaylist(playlistId: string, wallet: string = WALLET): Promise<{ ok: boolean }> {
+  clearMusicLibraryCache();
   const signed = await signWalletNonce({
     wallet,
     amount: 1,
@@ -2866,6 +2904,7 @@ export async function addMusicPlaylistItem(
   publicationId: string,
   wallet: string = WALLET
 ): Promise<MusicPlaylist> {
+  clearMusicLibraryCache();
   const signed = await signWalletNonce({
     wallet,
     amount: 1,
@@ -2892,6 +2931,7 @@ export async function removeMusicPlaylistItem(
   publicationId: string,
   wallet: string = WALLET
 ): Promise<MusicPlaylist> {
+  clearMusicLibraryCache();
   const signed = await signWalletNonce({
     wallet,
     amount: 1,
@@ -2920,6 +2960,7 @@ export async function reorderMusicPlaylistItems(
   publicationIds: string[],
   wallet: string = WALLET
 ): Promise<MusicPlaylist> {
+  clearMusicLibraryCache();
   const signed = await signWalletNonce({
     wallet,
     amount: 1,
@@ -3036,6 +3077,7 @@ export async function setMusicPublicationLike(
   liked: boolean,
   wallet: string = WALLET
 ): Promise<{ ok: boolean; liked: boolean; like_count: number }> {
+  clearMusicLibraryCache();
   const signed = await signWalletNonce({
     wallet,
     amount: 1,

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearMusicLibraryCache } from "../musicLibraryCache";
 import {
   addMusicPlaylistItem,
   createMusicPlaylist,
@@ -58,6 +59,7 @@ vi.mock("../wallet", () => {
 
 describe("music discover API", () => {
   afterEach(() => {
+    clearMusicLibraryCache();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -250,6 +252,8 @@ describe("music discover API", () => {
     expect(response.publications[0].saved_by_me).toBe(true);
     expect(response.publications[0].job_id).toBeUndefined();
     expect(response.playlists[0].title).toBe("Mix");
+    expect(await fetchMusicLibrary({ wallet: TEST_WALLET, search: "saved" })).toEqual(response);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("loads owned playlists with signed wallet access", async () => {

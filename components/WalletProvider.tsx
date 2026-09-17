@@ -13,6 +13,7 @@ import {
   WalletSnapshot,
 } from "../lib/wallet";
 import { SITE_SESSION_MESSAGE } from "../lib/publicAlpha";
+import { clearMusicLibraryCache } from "../lib/musicLibraryCache";
 
 const CONNECT_TIMEOUT_MS = 30_000;
 const SAFETY_TIMEOUT_MS = 35_000;
@@ -96,6 +97,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const safetyTimerRef = useRef<number | null>(null);
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
+  useEffect(() => {
+    clearMusicLibraryCache();
+    return clearMusicLibraryCache;
+  }, [snapshot.connectedWallet]);
 
   const clearConnectTimers = useCallback(() => {
     if (promptTimerRef.current != null) {

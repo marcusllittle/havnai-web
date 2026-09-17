@@ -9,6 +9,7 @@ import {
   fetchLeaderboard,
   fetchNetworkSummary,
   fetchNetworkControlPlane,
+  HavnaiApiError,
   NodeInfo,
   LeaderboardEntry,
   NetworkSummary,
@@ -32,6 +33,7 @@ const NodesPage: NextPage = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [unavailable, setUnavailable] = useState<string[]>([]);
   const [controlError, setControlError] = useState(false);
+  const [controlUnsupported, setControlUnsupported] = useState(false);
   const [nodesAvailable, setNodesAvailable] = useState(false);
   const [leaderboardAvailable, setLeaderboardAvailable] = useState(false);
 
@@ -63,16 +65,22 @@ const NodesPage: NextPage = () => {
   useEffect(() => {
     let active = true;
     let pending: AbortController | null = null;
+    let unsupported = false;
+    setControlUnsupported(false);
     let timeout: number | undefined;
     const refresh = async () => {
-      if (pending) return;
+      if (pending || unsupported) return;
       pending = new AbortController();
       timeout = window.setTimeout(() => pending?.abort(), 12000);
       try {
         const control = await fetchNetworkControlPlane(pending.signal);
         if (active) { setControlPlane(control); setControlError(false); }
-      } catch {
-        if (active) setControlError(true);
+      } catch (error) {
+        if (active) {
+          unsupported = error instanceof HavnaiApiError && error.status === 404;
+          setControlUnsupported(unsupported);
+          setControlError(!unsupported);
+        }
       } finally {
         window.clearTimeout(timeout); pending = null;
       }
@@ -182,7 +190,7 @@ const NodesPage: NextPage = () => {
           </>}
           <div className="network-health">
             <span className={controlPlane?.health.status === "healthy" && !controlError ? "network-health-indicator" : "network-health-indicator is-unavailable"} aria-hidden="true" />
-            <span>{controlError ? "Live health is unavailable. Retrying automatically." : controlPlane ? `Network health: ${controlPlane.health.status}` : "Checking network health..."}</span>
+            <span>{controlUnsupported ? "Advanced telemetry is not available on this coordinator." : controlError ? "Live health is unavailable. Retrying automatically." : controlPlane ? `Network health: ${controlPlane.health.status}` : "Checking network health..."}</span>
           </div>
           {!controlError && controlPlane?.health.alerts.map(alert => <p className="network-notice" key={alert.code}>{alert.severity}: {alert.message}</p>)}
           <div className="network-section-heading"><h2>Explore operators</h2><span>{!loading && nodesAvailable ? `${nodes.length} nodes reporting` : "Public Alpha"}</span></div>

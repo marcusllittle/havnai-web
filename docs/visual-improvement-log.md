@@ -765,3 +765,22 @@ from this environment.
   behavior, and navigation remain intact, including the user's Astra cover.
 - Reviewed homepage desktop/mobile and Create phone screenshots. Create fits a
   390px viewport with no document overflow; browser reported no errors.
+
+## September 17, 2026 - Network compatibility and Library wallet prompts
+
+- Leaderboard requests now explicitly request format=json; the coordinator's
+  default response is an HTML page. A 404 from the newer network-summary endpoint
+  falls back to existing /nodes and /jobs/recent APIs for live capacity and queue
+  counts. Unsupported recovery counters remain unavailable, not fabricated zeros.
+- A missing advanced telemetry endpoint is identified as unsupported and no
+  longer retried every 15 seconds. Transient failures still retry.
+- Music Library now shares concurrent reads and reuses verified results in memory
+  for 15 minutes. Wallet changes/disconnects and library mutations clear the cache;
+  failures are not cached. No signatures or private data are persisted to storage.
+- Library copy explains that reading is free. The legacy music nonce's amount=1
+  is an authentication schema placeholder; its read handler deducts no credits.
+  Marketplace listing prices are separate purchase amounts.
+- Regression tests cover JSON leaderboard requests, legacy capacity fallback,
+  offline-node exclusion, genuine server failures, cache expiry/invalidation,
+  rejected signatures, and returning reads without another nonce request.
+  Full web suite: 41 files / 226 tests passed.

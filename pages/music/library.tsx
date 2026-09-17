@@ -209,7 +209,7 @@ export default function MusicLibraryPage() {
         <section className="listening-heading">
           <div>
             <span className="listening-eyebrow"><Music2 size={15} aria-hidden="true" /> Your listening space</span>
-            <h1>Keep the songs that stay.</h1><p>Your saved tracks, favorite finds, and playlists.</p>
+            <h1>Keep the songs that stay.</h1><p>Your saved tracks, favorite finds, and playlists. Browsing your library is free.</p>
           </div>
           <Link className="listening-create" href="/discover">Discover music</Link>
         </section>
@@ -218,7 +218,7 @@ export default function MusicLibraryPage() {
           <section className="listening-empty">
             <span className="listening-state-icon"><Music2 size={30} aria-hidden="true" /></span>
             <h2>Your music, in one place.</h2>
-            <p>Connect your wallet to find your saved songs and build your own playlists.</p>
+            <p>Connect your wallet to find your saved songs and build your own playlists. The signature verifies ownership; it does not spend credits.</p>
             <button className="listening-create" disabled={wallet.connecting} onClick={() => { setActionError(""); void wallet.connect().catch(reason => setActionError(reason instanceof Error ? reason.message : "Wallet connection failed. Please try again.")); }}>{wallet.connecting ? "Connecting..." : "Connect wallet"}</button>
           </section>
         )}
