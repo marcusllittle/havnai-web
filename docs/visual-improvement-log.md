@@ -666,3 +666,23 @@ from this environment.
   `design/mobile-visual-overhaul` from the existing music feature branch, preserving
   its nine commits above main. This includes the visual changes across the site and
   their supporting tests/assets; no core changes are required for this preview.
+
+## September 17, 2026 - Deployed review and recent creations
+
+- The overhaul is published on `design/mobile-visual-overhaul` with draft PR #104.
+  The first preview (commit 0104b80) reached READY, and both GitHub CI runs passed.
+  Production remains unchanged. On the deployed preview, live model lists loaded,
+  inspiration populated the prompt, switching to Video preserved it, and the
+  Collection empty state rendered correctly. Create, Collection, Discover, and Home
+  fit 320px and 1440px without horizontal overflow or reported browser errors.
+  These checks did not submit generation, spend credits, or test transactions.
+- Updated Create's recent history with visible prompt titles and image/video
+  labels. Failed media stays identifiable and its details remain accessible.
+  Six desktop columns become three on tablets and two on narrow phones. Controls
+  have explicit accessible names and selected state. Replaced the timed double-tap
+  clear action with explicit confirmation and cancellation that explains its scope.
+- Targeted history/Create regressions: 2 files / 14 tests passed; TypeScript passed.
+  Production webpack build passed with the existing optional MetaMask warning.
+  Browser fixtures include two local images and an intentionally unavailable video.
+  Reviewed phone and desktop layouts; checked 320, 390, 760, 761, 1000, and 1440px.
+  No horizontal overflow or unnamed history controls were found.
