@@ -813,3 +813,20 @@ from this environment.
   Discover tests confirm public loading even with an already-connected wallet.
   Full suite: 42 files / 232 tests passed. MetaMask itself was not used to sign or
   submit real transactions during verification.
+
+## September 17, 2026 - Stop Music polling signatures; complete ledger APIs
+
+- Removed signed catalog reads from Music Studio mount and its six-second polling
+  loop. Polling now only loads studio jobs and capabilities. Private publishing
+  status is fetched by an explicit, labeled button; publishing/unpublishing still
+  require wallet authorization. Added a mounted regression test covering opening,
+  five poll cycles, and revisiting the studio without a signed read.
+- Coordinator integration branch fix/music-rewards-receipts includes the existing
+  receipt, Merkle batch, and reward-claim implementations alongside music and the
+  marketplace fix. Added compatibility migration for older Astra reward tables.
+- Test HAI's route referenced missing backend queue functions. Implemented its
+  manual review queue, history, validation, optional allowlist/disable controls,
+  duplicate-request protection, cooldown, and admin resolution metadata. It does
+  not transfer tokens or deposit credits automatically.
+- Web suite: 43 files / 233 tests pass. Backend targeted suite: 59 tests and 10
+  subtests pass. Live chain transactions and token distribution were not performed.

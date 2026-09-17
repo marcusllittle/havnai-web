@@ -97,10 +97,10 @@ export default function MusicStudioPage() {
   const wallet = useWallet();
   const activeWallet = wallet.activeWallet;
   const connectedWallet = wallet.connectedWallet;
-  const creatorReadWallet =
-    activeWallet && connectedWallet && connectedWallet.toLowerCase() === activeWallet.toLowerCase()
-      ? connectedWallet
-      : undefined;
+  const [loadingPublications, setLoadingPublications] = useState(false);
+  const publicationReadInFlight = useRef(false);
+  const publicationWallet = useRef(connectedWallet);
+  publicationWallet.current = connectedWallet;
 
   useEffect(() => {
     setForm(restoreMusicForm(window.localStorage.getItem(FORM_STORAGE_KEY)));
@@ -139,29 +139,28 @@ export default function MusicStudioPage() {
       void Promise.all([
         fetchMusicJobs(accessKey),
         fetchMusicCapabilities(accessKey),
-        activeWallet
-          ? fetchMusicDiscover({ creator_wallet: activeWallet, wallet: creatorReadWallet, limit: 100 })
-          : Promise.resolve(null),
       ])
-        .then(([recent, nextCapabilities, creatorPublications]) => {
+        .then(([recent, nextCapabilities]) => {
           setJobs((current) => mergeJobs(current, recent));
           setCapabilities(nextCapabilities);
-          if (creatorPublications) setPublications(creatorPublications.publications);
         })
         .catch(() => undefined);
     }, 6000);
     return () => window.clearInterval(timer);
-  }, [accessKey, activeWallet, creatorReadWallet, unlocked]);
+  }, [accessKey, unlocked]);
 
-  useEffect(() => {
-    if (!unlocked || !activeWallet) {
-      setPublications([]);
-      return;
-    }
-    void fetchMusicDiscover({ creator_wallet: activeWallet, wallet: creatorReadWallet, limit: 100 })
-      .then((response) => setPublications(response.publications))
-      .catch(() => undefined);
-  }, [activeWallet, creatorReadWallet, unlocked]);
+  useEffect(() => { setPublications([]); }, [activeWallet]);
+
+  async function loadPublishingStatus() {
+    if (!connectedWallet || publicationReadInFlight.current) return;
+    publicationReadInFlight.current = true;
+    setLoadingPublications(true);
+    try {
+      const response = await fetchMusicDiscover({ creator_wallet: connectedWallet, wallet: connectedWallet, limit: 100 });
+      if (publicationWallet.current === connectedWallet) setPublications(response.publications);
+    } catch (reason) { setError(friendlyError(reason)); }
+    finally { publicationReadInFlight.current = false; setLoadingPublications(false); }
+  }
 
   const musicModels = capabilities?.models.filter((model) =>
     model.available && model.capabilities?.includes("text_to_music")
@@ -389,6 +388,7 @@ export default function MusicStudioPage() {
 
         <section className="music-results" aria-live="polite">
           <div className="music-results-heading"><div><span>Your studio</span><h2>Recent songs <span className="studio-song-count">{jobs.length}</span></h2></div><Link href="/music/library">Music library <ArrowUpRight size={14} aria-hidden="true" /></Link></div>
+          {connectedWallet && jobs.length > 0 && <button type="button" className="studio-publishing-status" disabled={loadingPublications} onClick={() => void loadPublishingStatus()}>{loadingPublications ? "Checking publishing status..." : "Check publishing status (wallet signature)"}</button>}
           {jobs.length === 0 ? (
             <div className="music-empty studio-music-empty"><div className="studio-record" aria-hidden="true"><Image src="/music-default-cover.png" alt="" fill sizes="200px" /></div><strong>There’s a song in that idea.</strong><span>Your creations will appear here, ready to play, download, or publish.</span><Link href="/discover">Find inspiration in Discover <ArrowUpRight size={14} aria-hidden="true" /></Link></div>
           ) : (
@@ -483,3 +483,4 @@ export default function MusicStudioPage() {
     </>
   );
 }
+
