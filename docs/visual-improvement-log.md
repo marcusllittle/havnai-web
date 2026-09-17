@@ -706,3 +706,23 @@ from this environment.
 - Preserved the full 4:3 composition at every breakpoint so all three pilots remain
   visible. Removed the extra gradient and top label; the caption uses the artwork's
   existing bottom fade. Reviewed phone and desktop screenshots and responsive fit.
+
+## September 17, 2026 - Rounded navigation requested by user
+
+- Restored the supplied rounded-bar direction: standalone logo, cyan active pill,
+  outlined wallet action, and the requested Astra-first link order. Removed the
+  duplicate HavnAI wordmark beside the icon. Library leads to music; Collection
+  remains the image/video archive. Templates stays out of navigation.
+- Navigation measures actual label and wallet widths with ResizeObserver and moves
+  whole links into More before they overflow. It recalculates on resize and font
+  readiness, including wallet-width changes. Narrow phones place the wallet action
+  inside More. Every label uses one line, including Run a Node; no ellipsis is used.
+- Retained outside dismissal, Escape focus return, active-page announcements, and
+  route-change dismissal. Focus moves to More when resizing relocates the focused
+  control. Dropdown height is bounded to the viewport and scrolls on short phones.
+- Nine navigation/wallet regressions and TypeScript passed. Browser checks at 320,
+  390, 600, 601, 760, 1000, 1001, 1280, 1440, and 1920px found no document overflow,
+  clipped inline labels, or overlapping controls. The header accessibility scan
+  returned zero violations, with gradient contrast flagged for manual review.
+  Full suite: 39 files / 223 tests passed. Production webpack build passed with the
+  existing optional MetaMask native-storage warning.
