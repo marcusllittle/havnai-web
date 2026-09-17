@@ -726,3 +726,18 @@ from this environment.
   returned zero violations, with gradient contrast flagged for manual review.
   Full suite: 39 files / 223 tests passed. Production webpack build passed with the
   existing optional MetaMask native-storage warning.
+
+## September 17, 2026 - All navigation links without More
+
+- Followed the revised preference to remove More entirely. All 13 destinations
+  remain direct links in the rounded bar, with a standalone brand icon and cyan
+  active state. Removed measurement observers, duplicate wallet controls, and
+  disclosure state. Templates remains out of navigation.
+- Wide screens use one header row. Smaller screens put the logo and wallet above
+  a full-width navigation rail, which scrolls horizontally on phones. Labels stay
+  on one line with no ellipsis; wallet dropdowns sit outside the scrolling rail.
+- Reviewed desktop and phone screenshots and checked widths from 320 to 1920px.
+  Every destination remains reachable, the wallet stays visible, and the document
+  has no horizontal overflow. Browser reported no errors. Updated navigation
+  regressions; all 39 test files / 220 tests passed. Production webpack build
+  passed with the existing optional MetaMask native-storage warning.

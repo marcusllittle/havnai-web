@@ -7,7 +7,7 @@ const route = vi.hoisted(() => ({ pathname: "/music/library", asPath: "/music/li
 vi.mock("next/router", () => ({ useRouter: () => route }));
 vi.mock("../WalletButton", () => ({ WalletButton: () => <button type="button">Wallet menu</button> }));
 
-describe("Site navigation disclosures", () => {
+describe("Site navigation", () => {
   let container: HTMLDivElement;
   let root: Root;
   beforeEach(() => {
@@ -16,7 +16,7 @@ describe("Site navigation disclosures", () => {
     root = createRoot(container);
     act(() => root.render(<SiteHeader />));
   });
-  afterEach(() => { act(() => root.unmount()); container.remove(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+  afterEach(() => { act(() => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 
   it("identifies Library separately from Music and uses only the brand icon", () => {
     const active = container.querySelectorAll('[aria-current="page"]');
@@ -26,53 +26,15 @@ describe("Site navigation disclosures", () => {
     expect(container.querySelector(".brand")?.getAttribute("aria-label")).toBe("HavnAI home");
   });
 
-  it("keeps the navigation open for wallet controls and closes it on an outside press", () => {
-    const toggle = container.querySelector<HTMLButtonElement>(".nav-more-toggle")!;
-    act(() => toggle.click());
-    act(() => container.querySelector<HTMLButtonElement>(".nav-mobile-wallet button")!.click());
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    act(() => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })));
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-  });
-
-  it("closes More with Escape and restores its trigger's focus", () => {
-    const more = container.querySelector<HTMLButtonElement>(".nav-more-toggle")!;
-    act(() => more.click());
-    expect(more.getAttribute("aria-expanded")).toBe("true");
-    const link = container.querySelector<HTMLAnchorElement>(".nav-more-links a")!;
-    act(() => { link.focus(); link.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
-    expect(more.getAttribute("aria-expanded")).toBe("false");
-    expect(document.activeElement).toBe(more);
-  });
-
-  it("makes wallet and the introductory guide reachable without promoting templates", () => {
-    for (const href of ["/wallet", "/how-it-works"]) expect(container.querySelector(`.nav-more-links a[href="${href}"]`)).not.toBeNull();
+  it("makes every destination available without a disclosure", () => {
+    const links = Array.from(container.querySelectorAll("nav a"));
+    expect(links.map(link => link.textContent)).toEqual([
+      "Astra", "Create", "Music", "Discover", "Library", "Video", "Collection",
+      "Marketplace", "Network", "Credits", "Run a Node", "Wallet", "How it works",
+    ]);
+    expect(new Set(links.map(link => link.getAttribute("href"))).size).toBe(13);
+    expect(container.querySelector("nav button")).toBeNull();
     expect(container.querySelector('a[href="/templates"]')).toBeNull();
-  });
-
-  it("moves whole links into More when space shrinks and preserves keyboard focus", () => {
-    let availableWidth = 1500;
-    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
-      return this.classList.contains("nav-links") ? availableWidth : 0;
-    });
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-      return { width: this.classList.contains("nav-measure-more") ? 80 : 100 } as DOMRect;
-    });
-    act(() => window.dispatchEvent(new Event("resize")));
-    expect(container.querySelectorAll(".nav-main-links a")).toHaveLength(11);
-    const network = container.querySelector<HTMLAnchorElement>('.nav-main-links a[href="/nodes"]')!;
-    network.focus();
-    availableWidth = 420;
-    act(() => window.dispatchEvent(new Event("resize")));
-    expect(container.querySelectorAll(".nav-main-links a")).toHaveLength(2);
-    expect(container.querySelector('.nav-main-links a[href="/nodes"]')).toBeNull();
-    expect(container.querySelector('.nav-more-links a[href="/nodes"]')).not.toBeNull();
-    expect(document.activeElement).toBe(container.querySelector(".nav-more-toggle"));
-    const links = Array.from(container.querySelectorAll("nav a")).map(link => link.getAttribute("href"));
-    expect(new Set(links).size).toBe(13);
-    expect(links).toHaveLength(13);
-    availableWidth = 1500;
-    act(() => window.dispatchEvent(new Event("resize")));
-    expect(container.querySelectorAll(".nav-main-links a")).toHaveLength(11);
+    expect(container.querySelectorAll("button")).toHaveLength(1);
   });
 });
