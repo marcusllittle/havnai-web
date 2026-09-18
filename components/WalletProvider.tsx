@@ -16,7 +16,6 @@ import { SITE_SESSION_MESSAGE } from "../lib/publicAlpha";
 import { clearMusicLibraryCache } from "../lib/musicLibraryCache";
 
 const CONNECT_TIMEOUT_MS = 30_000;
-const SAFETY_TIMEOUT_MS = 35_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
@@ -129,7 +128,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const version = ++refreshVersion.current;
     let selection: InjectedProviderSelection;
     try {
-      selection = selectedRef.current || await ensureInjectedProvider();
+      selection = selectedRef.current || await ensureInjectedProvider({ allowSdk: false });
     } catch {
       patchSnapshot({
         ...(snapshotRef.current.connectedWallet ? {} : { connectedWallet: null }),
@@ -143,8 +142,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
     if (version !== refreshVersion.current || explicitlyDisconnected.current || connectPromiseRef.current) return;
-    selectedRef.current = selection.provider ? selection : null;
-    if (selection.provider) setActiveWalletProvider(selection.provider);
+    // Do not pin an unconnected provider during startup; MetaMask may inject later.
     setProvider(selection.provider);
 
     if (!connectPromiseRef.current) {
@@ -181,6 +179,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         readChainInfo(selection.provider),
       ]);
       if (version !== refreshVersion.current || explicitlyDisconnected.current || connectPromiseRef.current) return;
+      if (accounts.length) {
+        selectedRef.current = selection;
+        setActiveWalletProvider(selection.provider);
+      }
       patchSnapshot({
         connectedWallet: accounts[0]?.toLowerCase() || null,
         hasProvider: true,
@@ -224,6 +226,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [envWallet, patchSnapshot]);
 
   const disconnect = useCallback(() => {
+    clearMusicLibraryCache();
+    selectedRef.current = null;
+    setActiveWalletProvider(null);
     explicitlyDisconnected.current = true;
     refreshVersion.current += 1;
     clearConnectTimers();
@@ -237,195 +242,50 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
   }, [clearConnectTimers, envWallet, patchSnapshot]);
 
-  const connect = useCallback(async () => {
+  const connect = useCallback((): Promise<string | null> => {
     if (connectPromiseRef.current) return connectPromiseRef.current;
-    if (snapshotRef.current.connectedWallet) return snapshotRef.current.connectedWallet;
+    if (snapshotRef.current.connectedWallet) return Promise.resolve(snapshotRef.current.connectedWallet);
     explicitlyDisconnected.current = false;
-    const connectVersion = ++refreshVersion.current;
-    let selection: InjectedProviderSelection;
-    try {
-      selection = await ensureInjectedProvider();
-    } catch (err) {
-      const issue = new WalletError("wallet_unknown", "Failed to detect wallet provider. Try disabling other wallet extensions.");
-      patchSnapshot({
-        error: issue,
-        message: issue.message,
-        hasProvider: false,
-        hasConflict: false,
-        connecting: false,
-        status: envWallet ? "fallback" : "error",
-      });
-      throw issue;
-    }
-    if (connectVersion !== refreshVersion.current || explicitlyDisconnected.current) return null;
-    selectedRef.current = selection.provider ? selection : null;
-    setProvider(selection.provider);
-
-    if (!selection.provider) {
-      const issue =
-        selection.error ||
-        new WalletError(
-          "wallet_unavailable",
-          "No compatible wallet was found. Install MetaMask or open a supported browser wallet and try again."
-        );
-      patchSnapshot({
-        error: issue,
-        message: issue.message,
-        hasProvider: selection.hasProvider,
-        hasConflict: selection.hasConflict,
-        providerName: selection.providerName,
-        connecting: false,
-        status: envWallet ? "fallback" : "error",
-      });
-      throw issue;
-    }
-
-    if (connectPromiseRef.current) {
-      const issue = new WalletError(
-        "wallet_request_pending",
-        "A wallet connection request is already open. Finish or cancel it in your wallet."
-      );
-      patchSnapshot({
-        error: issue,
-        message: issue.message,
-        hasProvider: true,
-        hasConflict: selection.hasConflict,
-        providerName: selection.providerName,
-        connecting: true,
-        status: "attention",
-      });
-      return connectPromiseRef.current;
-    }
-
+    const version = ++refreshVersion.current;
     clearConnectTimers();
-    patchSnapshot({
-      error: null,
-      message: undefined,
-      hasProvider: true,
-      hasConflict: selection.hasConflict,
-      providerName: selection.providerName,
-      connecting: true,
-      status: "prompting",
-    });
+    patchSnapshot({ connecting: true, status: "prompting", error: null, message: "Approve the connection in MetaMask." });
 
-    promptTimerRef.current = window.setTimeout(() => {
-      patchSnapshot({
-        connecting: true,
-        status: "prompting",
-        message: "Approve the request in your wallet to continue.",
-      });
-    }, 1000);
-
-    attentionTimerRef.current = window.setTimeout(() => {
-      const issue = new WalletError(
-        "wallet_request_timeout",
-        "Your wallet has not finished yet. Open the extension and complete or cancel the request."
-      );
-      patchSnapshot({
-        error: issue,
-        message: issue.message,
-        connecting: true,
-        status: "attention",
-      });
-    }, 15000);
-
-    // Keep one provider for the connection; never open a second wallet after a timeout.
-    const providerOrder = [selection.provider];
-    const PER_PROVIDER_TIMEOUT_MS = CONNECT_TIMEOUT_MS;
-
-    const tryProviders = async (): Promise<string | null> => {
-      let lastError: WalletError | null = null;
-      for (let i = 0; i < providerOrder.length; i++) {
-        const currentProvider = providerOrder[i];
-        const isLast = i === providerOrder.length - 1;
-        // Give last provider the full remaining timeout
-        const timeout = isLast ? CONNECT_TIMEOUT_MS : PER_PROVIDER_TIMEOUT_MS;
-
-        try {
-          const accounts = await withTimeout(
-            readConnectedAccounts(currentProvider).then(accounts => accounts.length ? accounts : requestAccounts(currentProvider)),
-            timeout,
-            "Wallet did not respond. Open MetaMask to finish or cancel the pending request."
-          );
-          const wallet = accounts[0]?.toLowerCase() || null;
-          if (!wallet) {
-            throw new WalletError("wallet_unknown", "No wallet account returned.");
-          }
-          // Success — use this provider
-          if (explicitlyDisconnected.current) return null;
-          setActiveWalletProvider(currentProvider);
-          setProvider(currentProvider);
-          const chain = await readChainInfo(currentProvider);
-          if (connectVersion !== refreshVersion.current || explicitlyDisconnected.current) return null;
-          const hasConflict = providerOrder.length > 1;
-          const providerName = currentProvider.isMetaMask ? "MetaMask" : "Browser wallet";
-          patchSnapshot({
-            connectedWallet: wallet,
-            hasProvider: true,
-            hasConflict,
-            providerName,
-            chainId: chain.chainId,
-            chainName: chain.chainName,
-            chainAllowed: chain.chainAllowed,
-            error: null,
-            message: hasConflict ? getConflictMessage(providerName) : undefined,
-            connecting: false,
-            status: "connected",
-          });
-          return wallet;
-        } catch (err) {
-          if (connectVersion !== refreshVersion.current || explicitlyDisconnected.current) return null;
-          lastError = normalizeWalletError(err);
-          // User explicitly rejected — don't try other providers
-          if (lastError.code === "wallet_rejected") break;
-          // Request already pending in this provider — don't try others
-          if (lastError.code === "wallet_request_pending") break;
-          // Otherwise (timeout, unknown error) — try next provider
-          if (!isLast) {
-            console.warn(
-              `[WalletProvider] Provider ${i} failed (${lastError.message}), trying next...`
-            );
-          }
-        }
-      }
-
-      // All providers failed
-      const issue = lastError || new WalletError("wallet_unknown", "Wallet connection failed.");
-      if (issue.code === "wallet_request_pending") {
-        patchSnapshot({ error: issue, message: issue.message, connecting: false, status: "attention" });
-      } else if (issue.code === "wallet_rejected") {
-        patchSnapshot({ error: issue, message: issue.message, connecting: false, status: envWallet ? "fallback" : "idle" });
-      } else {
-        patchSnapshot({ error: issue, message: issue.message, connecting: false, status: envWallet ? "fallback" : "error" });
-      }
-      throw issue;
-    };
-
-    const promise = tryProviders()
-      .finally(() => {
-        if (connectPromiseRef.current !== promise) return;
-        clearConnectTimers();
-        connectPromiseRef.current = null;
-      });
-
-    connectPromiseRef.current = promise;
-
-    // Safety net: forcefully reset if the promise chain somehow never settles
-    safetyTimerRef.current = window.setTimeout(() => {
-      if (connectPromiseRef.current) {
-        connectPromiseRef.current = null;
-        clearConnectTimers();
-        patchSnapshot({
-          connecting: false,
-          error: new WalletError("wallet_unknown", "Connection timed out. Try again."),
-          message: "Connection timed out. Try again.",
-          status: envWallet ? "fallback" : "error",
+    // Reserve the entire connection operation before provider discovery can yield.
+    const operation = Promise.resolve().then(async () => {
+      try {
+        setActiveWalletProvider(null);
+        const selection = await withTimeout(ensureInjectedProvider(), CONNECT_TIMEOUT_MS,
+          "Wallet detection timed out. Open MetaMask and try again.");
+        if (version !== refreshVersion.current || explicitlyDisconnected.current) return null;
+        if (!selection.provider) throw selection.error || new WalletError("wallet_unavailable", "MetaMask was not found. Enable the extension for this site and try again.");
+        setProvider(selection.provider);
+        // This explicit click must reach the permission RPC even if eth_accounts is stuck.
+        const accounts = await withTimeout(requestAccounts(selection.provider), CONNECT_TIMEOUT_MS,
+          "MetaMask has not answered. Open the extension to complete or cancel the pending connection request.");
+        if (version !== refreshVersion.current || explicitlyDisconnected.current) return null;
+        const wallet = accounts[0]?.toLowerCase();
+        if (!wallet) throw new WalletError("wallet_unknown", "MetaMask returned no account.");
+        selectedRef.current = selection;
+        setActiveWalletProvider(selection.provider);
+        // Account access is enough to connect; a slow chain RPC must not hide success.
+        patchSnapshot({ connectedWallet: wallet, connecting: false, status: "connected", error: null,
+          message: undefined, hasProvider: true, hasConflict: selection.hasConflict, providerName: selection.providerName });
+        void readChainInfo(selection.provider).then(chain => {
+          if (version === refreshVersion.current && !explicitlyDisconnected.current) patchSnapshot(chain);
         });
+        return wallet;
+      } catch (error) {
+        if (version !== refreshVersion.current || explicitlyDisconnected.current) return null;
+        const issue = normalizeWalletError(error);
+        patchSnapshot({ connecting: false, status: issue.code === "wallet_rejected" ? "idle" : "error", error: issue, message: issue.message });
+        throw issue;
       }
-    }, SAFETY_TIMEOUT_MS);
-
-    return promise;
-  }, [clearConnectTimers, envWallet, patchSnapshot]);
+    }).finally(() => {
+      if (connectPromiseRef.current === operation) connectPromiseRef.current = null;
+    });
+    connectPromiseRef.current = operation;
+    return operation;
+  }, [clearConnectTimers, patchSnapshot]);
 
   useEffect(() => {
     void refresh();
