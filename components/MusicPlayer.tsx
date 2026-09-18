@@ -27,6 +27,12 @@ interface PlayerContextValue {
   hasNext: boolean;
   hasPrevious: boolean;
   toggle: () => void;
+  /** Playback position of the current track, in seconds. */
+  currentTime: number;
+  /** Duration of the current track, in seconds; 0 until metadata loads. */
+  duration: number;
+  /** Seek the current track to an absolute position, in seconds. */
+  seek: (seconds: number) => void;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -177,11 +183,26 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     else audio.pause();
   }, [currentTrack]);
 
-  const contextValue = useMemo(
-    () => ({ currentTrack, isPlaying, queue, queueIndex, playTrack, playQueue, next, previous, hasNext, hasPrevious, toggle }),
-    [currentTrack, hasNext, hasPrevious, isPlaying, next, playQueue, playTrack, previous, queue, queueIndex, toggle]
-  );
   const displayedDuration = duration || currentTrack?.duration || 0;
+
+  const seek = useCallback((seconds: number) => {
+    const element = audioRef.current;
+    if (!element) return;
+    const target = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+    element.currentTime = target;
+    setCurrentTime(target);
+  }, []);
+
+  const contextValue = useMemo(
+    () => ({
+      currentTrack, isPlaying, queue, queueIndex, playTrack, playQueue, next, previous,
+      hasNext, hasPrevious, toggle, currentTime, duration: displayedDuration, seek,
+    }),
+    [
+      currentTime, currentTrack, displayedDuration, hasNext, hasPrevious, isPlaying, next,
+      playQueue, playTrack, previous, queue, queueIndex, seek, toggle,
+    ]
+  );
 
   return (
     <PlayerContext.Provider value={contextValue}>

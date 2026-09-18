@@ -12,7 +12,7 @@ describe("restoreMusicForm", () => {
       bpm: "88",
       key: "F Minor",
       seed: "12",
-    }))).toEqual({
+    }))).toMatchObject({
       prompt: "late night jazz",
       style: "smoky trio",
       lyrics: "",

@@ -10,8 +10,6 @@ import {
   Music2,
   Pause,
   Play,
-  SlidersHorizontal,
-  Sparkles,
   WifiOff,
   X,
 } from "lucide-react";
@@ -19,6 +17,8 @@ import { SiteHeader } from "../components/SiteHeader";
 import { StudioAccessGate } from "../components/StudioAccessGate";
 import { useMusicPlayer } from "../components/MusicPlayer";
 import { useWallet } from "../components/WalletProvider";
+import { MusicComposer, type SourceClip } from "../components/MusicComposer";
+import { MusicWaveform } from "../components/MusicWaveform";
 import {
   fetchMusicDiscover,
   publishMusicJob,
@@ -31,7 +31,10 @@ import {
   fetchMusicCapabilities,
   fetchMusicJob,
   fetchMusicJobs,
+  musicJobRequest,
   musicMediaUrl,
+  musicTakes,
+  uploadMusicAsset,
   type MusicCapabilities,
   type MusicJob,
 } from "../lib/musicStudioApi";
@@ -42,8 +45,20 @@ import {
   musicJobTitle,
   musicStageLabel,
 } from "../lib/musicJobPresentation";
-import { DEFAULT_MUSIC_FORM, restoreMusicForm, type MusicFormState } from "../lib/musicStudioState";
+import {
+  availableModes,
+  musicFormBlocker,
+  restoreMusicForm,
+  trackLabel,
+  DEFAULT_MUSIC_FORM,
+  MUSIC_MODES_NEEDING_SOURCE,
+  MUSIC_MODE_LABELS,
+  type MusicFormState,
+  type MusicMode,
+} from "../lib/musicStudioState";
 
+// v1 key retained deliberately: restoreMusicForm fills new fields with defaults,
+// so older saved drafts still load instead of being discarded.
 const FORM_STORAGE_KEY = "havnai_music_studio_form_v1";
 const ACTIVE_STORAGE_KEY = "havnai_music_studio_active_job";
 const STUDIO_KEY = "havnai_studio_key";
@@ -65,6 +80,14 @@ function friendlyError(reason: unknown): string {
   if (message.includes("invalid_bpm")) return "BPM must be between 30 and 300.";
   if (message.includes("invalid_seed")) return "Seed must be a whole number from 0 to 2,147,483,647.";
   if (message.includes("unknown_model")) return "The selected music model is no longer available.";
+  if (message.includes("mode_unsupported_by_model")) {
+    return "This model cannot run that mode. Pick another model in Advanced settings.";
+  }
+  if (message.includes("source_audio_required")) return "Add the track you want to work from first.";
+  if (message.includes("invalid_repaint_range")) return "The repaint end must come after the start.";
+  if (message.includes("invalid_track_classes")) return "Pick at least one part to add.";
+  if (message.includes("unsupported_asset_type")) return "That file is not an audio format we can read.";
+  if (message.includes("insufficient_storage")) return "The network is out of upload space right now.";
   return message || "Something interrupted the request. Please try again.";
 }
 
@@ -77,6 +100,11 @@ function jobStyle(job: MusicJob): string {
   return String(job.resolved_spec?.parameters?.style || "HavnAI original");
 }
 
+function jobMode(job: MusicJob): MusicMode | null {
+  const raw = String(job.resolved_spec?.mode || job.resolved_spec?.parameters?.mode || "");
+  return raw in MUSIC_MODE_LABELS ? (raw as MusicMode) : null;
+}
+
 export default function MusicStudioPage() {
   const [accessKey, setAccessKey] = useState("");
   const [unlocked, setUnlocked] = useState(false);
@@ -86,6 +114,9 @@ export default function MusicStudioPage() {
   const [jobs, setJobs] = useState<MusicJob[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [source, setSource] = useState<SourceClip | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [publications, setPublications] = useState<MusicPublication[]>([]);
   const [publishJob, setPublishJob] = useState<MusicJob | null>(null);
   const [publishTitle, setPublishTitle] = useState("");
@@ -93,7 +124,7 @@ export default function MusicStudioPage() {
   const [publishing, setPublishing] = useState(false);
   const [publishProgress, setPublishProgress] = useState("");
   const mountedRef = useRef(false);
-  const { currentTrack, isPlaying, playTrack, toggle } = useMusicPlayer();
+  const { currentTrack, isPlaying, playTrack, toggle, currentTime, duration, seek } = useMusicPlayer();
   const wallet = useWallet();
   const activeWallet = wallet.activeWallet;
   const connectedWallet = wallet.connectedWallet;
@@ -116,6 +147,14 @@ export default function MusicStudioPage() {
     if (!mountedRef.current) return;
     try { window.localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(form)); } catch { /* ignore */ }
   }, [form]);
+
+  // Close the row action menu on any outside click.
+  useEffect(() => {
+    if (!openMenu) return;
+    const close = () => setOpenMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [openMenu]);
 
   const activeIds = jobs.filter((job) => !job.id.startsWith("pending-") && !FINAL_MUSIC_STATES.has(job.status)).map((job) => job.id).join(",");
   useEffect(() => {
@@ -162,11 +201,44 @@ export default function MusicStudioPage() {
     finally { publicationReadInFlight.current = false; setLoadingPublications(false); }
   }
 
-  const musicModels = capabilities?.models.filter((model) =>
-    model.available && model.capabilities?.includes("text_to_music")
-  ) || [];
-  const selectedModel = musicModels[0]?.id || "";
+  const musicModels = useMemo(
+    () =>
+      (capabilities?.models || [])
+        .filter((model) => model.available && (model.capabilities || []).includes("text_to_music"))
+        .map((model) => ({
+          id: model.id,
+          label: `${model.id}${model.model_version ? ` · ${model.model_version}` : ""}`,
+          capabilities: model.capabilities || [],
+          maxBatch: Number(model.max_batch_size) || 1,
+        })),
+    [capabilities]
+  );
   const musicAvailable = musicModels.length > 0;
+  const selectedModel = useMemo(
+    () => musicModels.find((model) => model.id === form.model) || musicModels[0] || null,
+    [form.model, musicModels]
+  );
+  const modes = useMemo(() => availableModes(selectedModel?.capabilities), [selectedModel]);
+
+  // Keep the form pointed at a model and a mode that actually exist right now.
+  useEffect(() => {
+    if (!selectedModel) return;
+    setForm((current) => {
+      const nextModel = current.model === selectedModel.id ? current.model : selectedModel.id;
+      const nextMode = modes.includes(current.mode) ? current.mode : modes[0] || "create";
+      const ceiling = Math.max(1, selectedModel.maxBatch);
+      const nextBatch = Math.min(current.batchSize, ceiling);
+      if (nextModel === current.model && nextMode === current.mode && nextBatch === current.batchSize) {
+        return current;
+      }
+      return { ...current, model: nextModel, mode: nextMode, batchSize: nextBatch };
+    });
+  }, [modes, selectedModel]);
+
+  const blocker = musicAvailable
+    ? musicFormBlocker(form, Boolean(source))
+    : "Music creation is offline.";
+
   const publicationByJobId = useMemo(() => {
     return new Map(
       publications
@@ -208,9 +280,22 @@ export default function MusicStudioPage() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  async function uploadSource(file: File) {
+    setUploading(true);
+    setError("");
+    try {
+      const asset = await uploadMusicAsset(file, accessKey);
+      setSource({ assetId: asset.id, filename: asset.filename || file.name });
+    } catch (reason) {
+      setError(friendlyError(reason));
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!selectedModel || !form.prompt.trim()) return;
+    if (blocker || !selectedModel) return;
     setError("");
     setSubmitting(true);
     const optimisticId = `pending-${Date.now()}`;
@@ -220,26 +305,33 @@ export default function MusicStudioPage() {
       status: "queued",
       stage: "queued",
       progress: 0,
-      model: selectedModel,
+      model: selectedModel.id,
       wallet: activeWallet || undefined,
       created_at: Date.now() / 1000,
-      resolved_spec: { parameters: { ...form, bpm: form.bpm ? Number(form.bpm) : null, seed: form.seed ? Number(form.seed) : null } },
+      resolved_spec: {
+        mode: form.mode,
+        parameters: {
+          mode: form.mode,
+          prompt: form.prompt,
+          style: form.style,
+          duration: form.duration,
+          instrumental: form.instrumental,
+          bpm: form.bpm ? Number(form.bpm) : null,
+          batch_size: form.batchSize,
+          track_name: form.trackName,
+        },
+      },
       artifacts: [],
     };
     setJobs((current) => mergeJobs(current, [optimistic]));
     try {
-      const created = await createMusicJob({
-        model: selectedModel,
-        prompt: form.prompt.trim(),
-        style: form.style.trim(),
-        lyrics: form.instrumental ? "" : form.lyrics,
-        instrumental: form.instrumental,
-        duration: form.duration,
-        bpm: form.bpm ? Number(form.bpm) : undefined,
-        key: form.key.trim() || undefined,
-        seed: form.seed ? Number(form.seed) : undefined,
-        wallet: activeWallet || undefined,
-      }, accessKey);
+      const created = await createMusicJob(
+        musicJobRequest(form, {
+          audioAssetId: source?.assetId,
+          wallet: activeWallet || undefined,
+        }),
+        accessKey
+      );
       setJobs((current) => mergeJobs(current.filter((job) => job.id !== optimisticId), [created]));
       window.localStorage.setItem(ACTIVE_STORAGE_KEY, created.id);
     } catch (reason) {
@@ -351,93 +443,158 @@ export default function MusicStudioPage() {
         {error && <div className="music-alert" role="alert"><span>{error}</span><button type="button" onClick={() => setError("")} aria-label="Dismiss error"><X size={17} /></button></div>}
 
         <div className="studio-music-layout">
-        <form className="music-composer" onSubmit={submit}>
-          <label className="music-prompt-field">
-            <span>Song description</span>
-            <textarea value={form.prompt} onChange={(event) => update("prompt", event.target.value)} maxLength={4000} required placeholder="A hazy late-night R&B track with brushed drums, warm bass, and a hopeful chorus..." />
-          </label>
-          <div className="studio-music-starters" role="group" aria-label="Song ideas">
-            <span>Try a direction</span>
-            {[
-              { title: "Midnight R&B", style: "R&B, soulful, late night", prompt: "A warm late-night R&B track with brushed drums, deep bass, intimate vocals, and a hopeful chorus." },
-              { title: "Indie lift", style: "Indie pop, bright, uplifting", prompt: "An uplifting indie pop song with jangly guitars, a driving beat, and a chorus that feels like the first day of summer." },
-              { title: "Ambient focus", style: "Ambient, minimal, atmospheric", prompt: "A gentle instrumental soundscape with soft piano, slow evolving synths, and plenty of space to think." },
-            ].map(idea => <button type="button" key={idea.title} onClick={() => setForm(current => ({ ...current, prompt: idea.prompt, style: idea.style }))}>{idea.title}</button>)}
-          </div>
-          <div className="music-composer-grid">
-            <label><span>Style</span><input value={form.style} maxLength={500} onChange={(event) => update("style", event.target.value)} placeholder="Dream pop, soulful, cinematic" /></label>
-            <label><span>Length</span><select value={form.duration} onChange={(event) => update("duration", Number(event.target.value))}><option value={30}>0:30</option><option value={60}>1:00</option><option value={90}>1:30</option><option value={120}>2:00</option><option value={180}>3:00</option></select></label>
-            <label className="music-switch"><span><strong>Instrumental</strong><small>Create without vocals</small></span><input type="checkbox" checked={form.instrumental} onChange={(event) => update("instrumental", event.target.checked)} /></label>
-          </div>
-          {!form.instrumental && (
-            <details className="music-lyrics" open={Boolean(form.lyrics)}>
-              <summary>Lyrics <span>Optional</span></summary>
-              <label><span>Lyrics</span><textarea value={form.lyrics} maxLength={12000} onChange={(event) => update("lyrics", event.target.value)} placeholder="[Verse]\nWrite your lyrics here..." /></label>
-            </details>
-          )}
-          <details className="music-advanced">
-            <summary><SlidersHorizontal size={17} /> Advanced settings</summary>
-            <div>
-              <label><span>BPM</span><input type="number" min={30} max={300} value={form.bpm} onChange={(event) => update("bpm", event.target.value)} placeholder="Auto" /></label>
-              <label><span>Key</span><input value={form.key} maxLength={64} onChange={(event) => update("key", event.target.value)} placeholder="Auto" /></label>
-              <label><span>Seed</span><input type="number" min={0} max={2147483647} value={form.seed} onChange={(event) => update("seed", event.target.value)} placeholder="Random" /></label>
-            </div>
-          </details>
-          <button className="music-generate" type="submit" disabled={submitting || !musicAvailable || !form.prompt.trim()}><Sparkles size={19} />{submitting ? "Adding to studio..." : "Create song"}</button>
-        </form>
+        <MusicComposer
+          form={form}
+          modes={modes}
+          models={musicModels}
+          source={source}
+          uploading={uploading}
+          submitting={submitting}
+          blocker={blocker}
+          maxBatch={selectedModel?.maxBatch || 1}
+          onChange={update}
+          onApplyStarter={(prompt, style) => setForm((current) => ({ ...current, prompt, style }))}
+          onUpload={(file) => void uploadSource(file)}
+          onClearSource={() => setSource(null)}
+          onSubmit={submit}
+        />
 
         <section className="music-results" aria-live="polite">
           <div className="music-results-heading"><div><span>Your studio</span><h2>Recent songs <span className="studio-song-count">{jobs.length}</span></h2></div><Link href="/music/library">Music library <ArrowUpRight size={14} aria-hidden="true" /></Link></div>
           {connectedWallet && jobs.length > 0 && <button type="button" className="studio-publishing-status" disabled={loadingPublications} onClick={() => void loadPublishingStatus()}>{loadingPublications ? "Checking publishing status..." : "Check publishing status (wallet signature)"}</button>}
           {jobs.length === 0 ? (
-            <div className="music-empty studio-music-empty"><div className="studio-record" aria-hidden="true"><Image src="/music-default-cover.png" alt="" fill sizes="200px" /></div><strong>There’s a song in that idea.</strong><span>Your creations will appear here, ready to play, download, or publish.</span><Link href="/discover">Find inspiration in Discover <ArrowUpRight size={14} aria-hidden="true" /></Link></div>
+            <div className="music-empty studio-music-empty"><div className="studio-record" aria-hidden="true"><Image src="/music-default-cover.png" alt="" fill sizes="200px" /></div><strong>There&rsquo;s a song in that idea.</strong><span>Your creations will appear here, ready to play, download, or publish.</span><Link href="/discover">Find inspiration in Discover <ArrowUpRight size={14} aria-hidden="true" /></Link></div>
           ) : (
             <div className="music-song-list">
               {jobs.map((job) => {
-                const audio = musicMediaUrl(job.artifacts.find((artifact) => artifact.kind === "audio")?.url);
+                const takes = musicTakes(job);
+                const audio = takes[0]?.url || musicMediaUrl(job.artifacts.find((artifact) => artifact.kind === "audio")?.url);
                 const title = musicJobTitle(job);
                 const style = jobStyle(job);
-                const duration = jobDuration(job);
+                const songDuration = jobDuration(job);
                 const playing = currentTrack?.id === job.id && isPlaying;
+                const isCurrent = currentTrack?.id === job.id;
                 const active = !FINAL_MUSIC_STATES.has(job.status);
                 const jobError = musicJobError(job);
                 const publication = publicationByJobId.get(job.id);
+                const mode = jobMode(job);
+                const track = job.resolved_spec?.parameters?.track_name;
                 const canPublish = Boolean(audio && !active && activeWallet && job.wallet?.toLowerCase() === activeWallet.toLowerCase());
+                const progress = isCurrent && duration > 0 ? currentTime / duration : 0;
                 return (
                   <article className={`music-song ${active ? "is-generating" : ""}`} key={job.id}>
                     <div className="music-cover">
                       <Image src="/music-default-cover.png" alt="" fill sizes="(max-width: 640px) 88px, 112px" />
                       {audio ? (
-                        <button type="button" aria-label={playing ? `Pause ${title}` : `Play ${title}`} onClick={() => playing ? toggle() : playTrack({ id: job.id, title, style, audioUrl: audio, artworkUrl: "/music-default-cover.png", duration })}>
+                        <button type="button" aria-label={playing ? `Pause ${title}` : `Play ${title}`} onClick={() => playing ? toggle() : playTrack({ id: job.id, title, style, audioUrl: audio, artworkUrl: "/music-default-cover.png", duration: songDuration })}>
                           {playing ? <Pause size={23} fill="currentColor" /> : <Play size={23} fill="currentColor" />}
                         </button>
                       ) : active ? <span className="music-cover-pulse" /> : null}
                     </div>
                     <div className="music-song-body">
-                      <div className="music-song-title"><div><strong>{title}</strong><span>{style}</span></div><span className={`music-song-state state-${job.status}`}>{publication ? "Published" : musicStageLabel(job)}</span></div>
+                      <div className="music-song-title">
+                        <div>
+                          <strong>{title}</strong>
+                          <span>{style}</span>
+                        </div>
+                        <span className={`music-song-state state-${job.status}`}>{publication ? "Published" : musicStageLabel(job)}</span>
+                      </div>
                       {active && <div className="music-job-progress"><span style={{ width: `${Math.max(8, Math.min(99, job.progress || 8))}%` }} /></div>}
+                      {audio && !active && (
+                        <MusicWaveform
+                          audioUrl={audio}
+                          progress={progress}
+                          height={44}
+                          label={`Waveform for ${title}`}
+                          onSeek={isCurrent && duration > 0 ? (position) => seek(position * duration) : undefined}
+                        />
+                      )}
                       {jobError && <p className="music-song-error">{jobError}</p>}
-                      <div className="music-song-meta"><span>{formatMusicDuration(duration)}</span>{job.resolved_spec?.parameters?.bpm && <span>{job.resolved_spec.parameters.bpm} BPM</span>}{job.resolved_spec?.parameters?.key && <span>{job.resolved_spec.parameters.key}</span>}{job.resolved_spec?.parameters?.instrumental && <span>Instrumental</span>}</div>
+                      <div className="music-song-meta">
+                        {mode && mode !== "create" && <span className="music-song-mode">{MUSIC_MODE_LABELS[mode].title}</span>}
+                        {track && <span>{trackLabel(String(track))}</span>}
+                        <span>{formatMusicDuration(songDuration)}</span>
+                        {job.resolved_spec?.parameters?.bpm && <span>{job.resolved_spec.parameters.bpm} BPM</span>}
+                        {job.resolved_spec?.parameters?.key && <span>{job.resolved_spec.parameters.key}</span>}
+                        {job.resolved_spec?.parameters?.instrumental && <span>Instrumental</span>}
+                      </div>
+                      {takes.length > 1 && (
+                        <div className="music-takes" role="group" aria-label={`Takes for ${title}`}>
+                          <span>{takes.length} takes</span>
+                          {takes.map((take) => {
+                            const takeId = `${job.id}::${take.index}`;
+                            const takePlaying = currentTrack?.id === takeId && isPlaying;
+                            return (
+                              <button
+                                key={takeId}
+                                type="button"
+                                className={currentTrack?.id === takeId ? "is-active" : ""}
+                                onClick={() =>
+                                  takePlaying
+                                    ? toggle()
+                                    : playTrack({
+                                        id: takeId,
+                                        title: `${title} — take ${take.index}`,
+                                        style,
+                                        audioUrl: take.url,
+                                        artworkUrl: "/music-default-cover.png",
+                                        duration: songDuration,
+                                      })
+                                }
+                              >
+                                {takePlaying ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
+                                {take.index}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                     <div className="music-song-actions">
                       {active && !job.id.startsWith("pending-") && <button type="button" onClick={() => void cancel(job)} aria-label={`Cancel ${title}`} title="Cancel"><X size={18} /></button>}
                       {audio && <a href={audio} download aria-label={`Download ${title}`} title="Download"><Download size={18} /></a>}
-                      <details>
-                        <summary aria-label={`More actions for ${title}`} title="More actions"><MoreHorizontal size={19} /></summary>
-                        <div>
-                          {audio ? <a href={audio} target="_blank" rel="noreferrer">Open audio</a> : <span>{musicStageLabel(job)}</span>}
-                          {publication ? (
-                            <>
-                              <Link href={`/discover?track=${encodeURIComponent(publication.id)}`}>View in Discover</Link>
-                              <button type="button" onClick={() => void unpublish(publication)}>Unpublish</button>
-                            </>
-                          ) : canPublish ? (
-                            <button type="button" onClick={() => beginPublish(job)}>Publish</button>
-                          ) : audio && !active ? (
-                            <span>{activeWallet ? "Connect the creator wallet to publish" : "Connect wallet to publish"}</span>
-                          ) : null}
-                        </div>
-                      </details>
+                      <div className={`music-song-menu${openMenu === job.id ? " is-open" : ""}`}>
+                        <button
+                          type="button"
+                          aria-label={`More actions for ${title}`}
+                          aria-expanded={openMenu === job.id}
+                          aria-haspopup="menu"
+                          title="More actions"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenMenu(openMenu === job.id ? null : job.id);
+                          }}
+                        >
+                          <MoreHorizontal size={19} />
+                        </button>
+                        {openMenu === job.id && (
+                          <div role="menu" onClick={(event) => event.stopPropagation()}>
+                            {audio ? <a href={audio} target="_blank" rel="noreferrer" role="menuitem">Open audio</a> : <span>{musicStageLabel(job)}</span>}
+                            {audio && !active && MUSIC_MODES_NEEDING_SOURCE.size > 0 && (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setOpenMenu(null);
+                                  setError("Download this take, then add it as the source track to remix or repaint it.");
+                                }}
+                              >
+                                Use as source
+                              </button>
+                            )}
+                            {publication ? (
+                              <>
+                                <Link href={`/discover?track=${encodeURIComponent(publication.id)}`} role="menuitem">View in Discover</Link>
+                                <button type="button" role="menuitem" onClick={() => void unpublish(publication)}>Unpublish</button>
+                              </>
+                            ) : canPublish ? (
+                              <button type="button" role="menuitem" onClick={() => { setOpenMenu(null); beginPublish(job); }}>Publish</button>
+                            ) : audio && !active ? (
+                              <span>{activeWallet ? "Connect the creator wallet to publish" : "Connect wallet to publish"}</span>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </article>
                 );
@@ -473,7 +630,7 @@ export default function MusicStudioPage() {
                 </div>
                 {publishProgress && <p className="music-publish-progress">{publishProgress}</p>}
                 <button className="music-generate" type="submit" disabled={publishing || !publishTitle.trim()}>
-                  <Sparkles size={18} />{publishing ? "Publishing..." : activeWallet ? "Publish" : "Connect and publish"}
+                  {publishing ? "Publishing..." : activeWallet ? "Publish" : "Connect and publish"}
                 </button>
               </div>
             </form>
@@ -483,4 +640,3 @@ export default function MusicStudioPage() {
     </>
   );
 }
-
