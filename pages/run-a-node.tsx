@@ -1,7 +1,8 @@
 import type { NextPage } from "next";
 import Link from "next/link";
-import { useState } from "react";
-import { CinematicPageHero } from "../components/CinematicPageHero";
+import { useEffect, useRef, useState } from "react";
+import { ArrowUpRight, Cpu, Terminal } from "lucide-react";
+import { NetworkNavigation } from "../components/NetworkNavigation";
 import { NodeAppDownload } from "../components/NodeAppDownload";
 import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
@@ -35,7 +36,7 @@ const setupSteps = [
 const faqs = [
   {
     q: "What hardware do I need to run a JoinHavn node?",
-    a: "A 64-bit Linux or macOS machine with Python 3.10+, stable internet, and ideally an NVIDIA GPU with at least 12 GB VRAM. CPU-only nodes can run, but GPU nodes are the practical target for meaningful throughput.",
+    a: "A 64-bit Linux or macOS machine with Python 3.10+, stable internet, and ideally an NVIDIA GPU with at least 12 GB VRAM. On Windows, use WSL2 for installation. CPU-only nodes can run, but GPU nodes are the practical target for meaningful throughput.",
   },
   {
     q: "Can I run video jobs too?",
@@ -65,6 +66,9 @@ const faqs = [
 
 const RunANodePage: NextPage = () => {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState("");
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (copyTimer.current) clearTimeout(copyTimer.current); }, []);
   const apiBase = getApiBase();
 
   const getInstallBase = (): string => {
@@ -76,11 +80,16 @@ const RunANodePage: NextPage = () => {
   const installBase = getInstallBase();
   const installCmd = `curl -fsSL ${installBase}/installers/install-node.sh | bash -s -- --server ${installBase}`;
 
-  const copyCmd = () => {
-    navigator.clipboard.writeText(installCmd).then(() => {
+  const copyCmd = async () => {
+    setCopyError("");
+    try {
+      await navigator.clipboard.writeText(installCmd);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopyError("Copy is unavailable in this browser. Select and copy the command below.");
+    }
   };
 
   const schema = [
@@ -131,170 +140,46 @@ const RunANodePage: NextPage = () => {
 
       <SiteHeader />
 
-      <main className="library-page jh-page-shell">
-        <CinematicPageHero
-          eyebrow="Run a Node"
-          title="Put your GPU on the JoinHavn network."
-          description="Install the node client, bring your machine online, and serve real AI image and video generation jobs for the JoinHavn ecosystem."
-          mediaVariant="join"
-          panelEyebrow="Operator Flow"
-          panelTitle="Install fast. Show up live. Start serving jobs."
-          panelDescription="The node path is built for operators who want a straightforward install, live visibility, and a real role in the creation network."
-          stats={[
-            {
-              label: "GPU",
-              value: "12 GB+",
-              detail: "Recommended for image workloads",
-            },
-            {
-              label: "Video",
-              value: "16 GB+",
-              detail: "Recommended for heavier video jobs",
-            },
-            {
-              label: "Runtime",
-              value: "Python 3.10+",
-              detail: "Linux or macOS, 64-bit",
-            },
-          ]}
-          actions={
-            <>
-              <a href="#quick-install" className="jh-btn jh-btn-primary">
-                View Install Command
-              </a>
-              <Link href="/nodes" className="jh-btn jh-btn-secondary">
-                See Live Nodes
-              </Link>
-            </>
-          }
-        />
-
-        <section className="page-container">
-          <div className="chart-section">
-            <div className="chart-header">
-              <h2 className="chart-title">Why run a node</h2>
-            </div>
-            <ul style={{ margin: 0, paddingLeft: "1.2rem", color: "var(--text-muted)", lineHeight: 1.75 }}>
-              {reasons.map((reason) => (
-                <li key={reason}>{reason}</li>
-              ))}
-            </ul>
-          </div>
-
+      <main className="network-page node-setup-page">
+        <header className="network-heading"><div><span className="network-eyebrow"><Cpu size={15} aria-hidden="true" /> Run a node</span><h1>Put your GPU to work.</h1><p>Help power image, face swap, and video creation. Start with the desktop app or install directly from your terminal.</p></div><Link href="/nodes" className="network-secondary">See the network <ArrowUpRight size={16} aria-hidden="true" /></Link></header>
+        <NetworkNavigation active="run-a-node" />
+        <div className="setup-install-grid">
           <NodeAppDownload />
-
-          <div className="chart-section" id="quick-install">
-            <div className="chart-header">
-              <h2 className="chart-title">Or install from the terminal</h2>
-            </div>
-            <p style={{ color: "var(--text-muted)", marginBottom: "1rem", lineHeight: 1.7 }}>
-              Run this on the machine that will serve jobs. It installs the complete runtime — image,
-              face swap and video — sets up the Python environment, downloads model weights, and
-              finishes by running a preflight check that tells you exactly what your machine can serve.
-              Re-running it is safe: the new runtime is staged and verified before it replaces the
-              running one.
-            </p>
-            <div style={{ position: "relative" }}>
-              <pre style={{ padding: "1rem", borderRadius: "12px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.85rem", lineHeight: 1.5 }}>
-                <code>{installCmd}</code>
-              </pre>
-              <button
-                type="button"
-                onClick={copyCmd}
-                style={{
-                  position: "absolute",
-                  top: "0.5rem",
-                  right: "0.5rem",
-                  padding: "0.3rem 0.6rem",
-                  borderRadius: "6px",
-                  border: "1px solid var(--border-subtle)",
-                  background: "var(--bg-elevated)",
-                  color: copied ? "#8ff0b6" : "var(--text-muted)",
-                  fontSize: "0.75rem",
-                  cursor: "pointer",
-                }}
-              >
-                {copied ? "Copied!" : "Copy"}
-              </button>
-            </div>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.75rem", lineHeight: 1.6 }}>
-              Optional flags: <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>--token TOKEN</code> if
-              you were issued operator access, and <code style={{ background: "var(--bg-elevated)", padding: "2px 6px", borderRadius: "4px" }}>--wallet 0x...</code> to
-              prefill the wallet used for operator attribution.
-            </p>
+          <section className="network-panel setup-terminal" id="quick-install" aria-labelledby="terminal-title">
+            <span className="network-eyebrow"><Terminal size={15} aria-hidden="true" /> Terminal setup</span>
+            <h2 id="terminal-title">One command to get started.</h2>
+            <p>Run this on the Linux or macOS machine that will serve jobs. On Windows, run it inside WSL2.</p>
+            <p>The installer sets up the runtime, downloads model weights, and checks what your machine can serve.</p>
+            <div className="setup-command-heading"><span>Install the node runtime</span><button className="network-secondary" onClick={() => void copyCmd()}>{copied ? "Copied!" : "Copy command"}</button></div>
+            <pre className="setup-command" tabIndex={0} aria-label="Node install command"><code>{installCmd}</code></pre>
+            {copyError && <p className="network-notice" role="alert">{copyError}</p>}
+            <details className="network-disclosure"><summary>Optional install flags</summary><p>Add <code>--token TOKEN</code> if you were issued operator access, or <code>--wallet 0x...</code> to prefill your wallet for attribution.</p></details>
+          </section>
+        </div>
+        <section className="setup-requirements" aria-labelledby="requirements-title">
+          <div className="network-section-heading"><h2 id="requirements-title">Check your machine</h2><span>Use the preflight check to confirm workload readiness.</span></div>
+          <div className="setup-requirement-grid">
+            <article><span>01 / Compute</span><h3>12 GB+ GPU memory</h3><p>NVIDIA GPU recommended for image jobs. Plan for 16 GB+ VRAM for video workloads.</p></article>
+            <article><span>02 / Runtime</span><h3>Linux or macOS</h3><p>64-bit system, Python 3.10+, and stable internet. Windows installation requires WSL2.</p></article>
+            <article><span>03 / Storage</span><h3>Room for your models</h3><p>25 GB free minimum. Allow 150 GB+ when serving many models; checkpoints are several GB each.</p></article>
           </div>
-
-          <div className="chart-section">
-            <div className="chart-header">
-              <h2 className="chart-title">What you need</h2>
-            </div>
-            <div style={{ color: "var(--text-muted)", lineHeight: 1.7 }}>
-              <table className="data-table">
-                <thead>
-                  <tr><th>Requirement</th><th>Details</th></tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Operating system</td>
-                    <td>64-bit Linux or macOS</td>
-                  </tr>
-                  <tr>
-                    <td>Python</td>
-                    <td>Python 3.10 or newer</td>
-                  </tr>
-                  <tr>
-                    <td>GPU</td>
-                    <td>NVIDIA GPU with 12 GB+ VRAM recommended for image jobs. 16 GB+ VRAM recommended for video workloads.</td>
-                  </tr>
-                  <tr>
-                    <td>Disk</td>
-                    <td>25 GB free minimum. Checkpoints are 2–7 GB each, so 150 GB+ is realistic if you serve many models.</td>
-                  </tr>
-                  <tr>
-                    <td>Network</td>
-                    <td>Stable internet and outbound access to the coordinator.</td>
-                  </tr>
-                  <tr>
-                    <td>Wallet</td>
-                    <td>An EVM-compatible wallet address for Public Alpha operator attribution.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="chart-section">
-            <div className="chart-header">
-              <h2 className="chart-title">Setup flow</h2>
-            </div>
-            <div className="gallery-grid" style={{ marginTop: "1rem" }}>
-              {setupSteps.map((step, index) => (
-                <article key={step.title} className="output-card">
-                  <div className="history-meta">Step {index + 1}</div>
-                  <h3 style={{ marginTop: "0.4rem" }}>{step.title}</h3>
-                  <p style={{ color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 0 }}>{step.body}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-
-          <div className="chart-section">
-            <div className="chart-header">
-              <h2 className="chart-title">Post-install commands</h2>
-            </div>
+          <p className="network-caption">Use an EVM-compatible wallet address for Public Alpha operator attribution.</p>
+        </section>
+        <section aria-labelledby="setup-flow-title"><div className="network-section-heading"><h2 id="setup-flow-title">From install to online</h2></div><ol className="setup-steps">{setupSteps.map((step, index) => <li key={step.title}><span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span><div><h3>{step.title}</h3><p>{step.body}</p></div></li>)}</ol></section>
+          <details className="network-disclosure setup-details"><summary>Post-install commands</summary>
             <div style={{ color: "var(--text-muted)", lineHeight: 1.7 }}>
               <p style={{ marginBottom: "0.5rem" }}><strong style={{ color: "var(--text)" }}>1. Set your wallet</strong></p>
-              <pre style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
+              <pre tabIndex={0} aria-label="Wallet configuration" style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
                 <code>{`# ~/.havnai/.env\nWALLET=0xYourWalletAddressHere`}</code>
               </pre>
 
               <p style={{ marginBottom: "0.5rem" }}><strong style={{ color: "var(--text)" }}>2. Add operator access if issued</strong></p>
-              <pre style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
+              <pre tabIndex={0} aria-label="Operator access configuration" style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
                 <code>{`# ~/.havnai/.env\nJOIN_TOKEN=your-token-here`}</code>
               </pre>
 
               <p style={{ marginBottom: "0.5rem" }}><strong style={{ color: "var(--text)" }}>3. Download model weights</strong></p>
-              <pre style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
+              <pre tabIndex={0} aria-label="Model download command" style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
                 <code>{`~/.havnai/bin/havnai-fetch-models --face-assets`}</code>
               </pre>
               <p style={{ marginBottom: "1rem", fontSize: "0.85rem" }}>
@@ -303,7 +188,7 @@ const RunANodePage: NextPage = () => {
               </p>
 
               <p style={{ marginBottom: "0.5rem" }}><strong style={{ color: "var(--text)" }}>4. Check what your node can serve</strong></p>
-              <pre style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
+              <pre tabIndex={0} aria-label="Node preflight command" style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
                 <code>{`~/.havnai/bin/havnai-doctor`}</code>
               </pre>
               <p style={{ marginBottom: "1rem", fontSize: "0.85rem" }}>
@@ -313,7 +198,7 @@ const RunANodePage: NextPage = () => {
               </p>
 
               <p style={{ marginBottom: "0.5rem" }}><strong style={{ color: "var(--text)" }}>5. Start the node</strong></p>
-              <pre style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
+              <pre tabIndex={0} aria-label="Node start commands" style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginBottom: "1rem" }}>
                 <code>{`# Linux\nsystemctl --user start havnai-node\nsystemctl --user enable havnai-node\n\n# Or run directly\n~/.havnai/bin/havnai-node`}</code>
               </pre>
 
@@ -322,55 +207,11 @@ const RunANodePage: NextPage = () => {
                 <a href={`${apiBase}/dashboard`} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>coordinator dashboard</a>.
               </p>
             </div>
-          </div>
-
-          <div className="chart-section">
-            <div className="chart-header">
-              <h2 className="chart-title">Optional video setup</h2>
-            </div>
-            <p style={{ color: "var(--text-muted)", lineHeight: 1.7 }}>
-              If your machine has 16 GB+ VRAM, you can take on video jobs too. These are heavier than image generations,
-              but they matter more to network capacity and usually carry stronger reward weighting during Public Alpha.
-            </p>
-            <pre style={{ padding: "0.75rem", borderRadius: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", overflow: "auto", fontSize: "0.82rem", marginTop: "1rem" }}>
-              <code>{`cd ~/.havnai && ./venv/bin/python havnai_client.py --preload-video`}</code>
-            </pre>
-          </div>
-
-          <div className="chart-section">
-            <div className="chart-header">
-              <h2 className="chart-title">FAQ</h2>
-            </div>
-            <div style={{ display: "grid", gap: "1rem" }}>
-              {faqs.map((faq) => (
-                <article key={faq.q} className="output-card">
-                  <h3 style={{ marginTop: 0 }}>{faq.q}</h3>
-                  <p style={{ color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 0 }}>{faq.a}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-
-          <div className="chart-section">
-            <div className="chart-header">
-              <h2 className="chart-title">See the network live</h2>
-            </div>
-            <p style={{ color: "var(--text-muted)", lineHeight: 1.7, marginBottom: "1rem" }}>
-              Once your machine is online, it becomes part of the visible JoinHavn operator layer. You can track node presence,
-              capacity, and activity from the public-facing network pages.
-            </p>
-            <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap" }}>
-              <Link href="/nodes" className="jh-btn jh-btn-primary">View Nodes</Link>
-              <Link href="/create" className="jh-btn jh-btn-secondary">Open Generator</Link>
-              <Link href="/astra" className="jh-btn jh-btn-tertiary">See Astra</Link>
-            </div>
-            <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", marginTop: "1rem" }}>
-              <Link href="/how-it-works" className="jh-btn jh-btn-secondary">How It Works</Link>
-              <Link href="/ownership" className="jh-btn jh-btn-secondary">Ownership</Link>
-              <Link href="/pricing" className="jh-btn jh-btn-tertiary">Credits & Pricing</Link>
-            </div>
-          </div>
-        </section>
+          </details>
+        <details className="network-disclosure setup-details"><summary>Optional video setup</summary><div><p>For machines with 16 GB+ VRAM, preload video support after installation. Run the preflight check to confirm readiness before serving video jobs.</p><pre className="setup-command" tabIndex={0} aria-label="Preload video command"><code>{'cd ~/.havnai && ./venv/bin/python havnai_client.py --preload-video'}</code></pre></div></details>
+        <section className="setup-why" aria-labelledby="why-node"><h2 id="why-node">More capacity. More room to create.</h2><ul>{reasons.map(reason => <li key={reason}>{reason}</li>)}</ul><Link href="/nodes" className="network-primary">Find your node <ArrowUpRight size={16} aria-hidden="true" /></Link></section>
+        <section className="setup-faq" aria-labelledby="faq-title"><div className="network-section-heading"><h2 id="faq-title">Before you get started</h2></div>{faqs.map(faq => <details className="network-disclosure" key={faq.q}><summary>{faq.q}</summary><p>{faq.a}</p></details>)}</section>
+        <p className="network-footnote">Node activity and rewards are tracked during Public Alpha. <Link href="/how-it-works">How HavnAI works</Link> / <Link href="/ownership">Ownership</Link> / <Link href="/pricing">Credits and pricing</Link></p>
       </main>
     </>
   );

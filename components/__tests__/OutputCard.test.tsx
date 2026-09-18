@@ -24,7 +24,7 @@ describe("OutputCard", () => {
     );
 
     expect(html).toContain('src="/api/static/outputs/job-complete.png"');
-    expect(html).toContain('alt="job-complete"');
+    expect(html).toContain('alt="Generated image"');
   });
 
   it("offers direct refinement for a completed image", () => {

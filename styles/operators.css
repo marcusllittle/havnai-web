@@ -1,0 +1,111 @@
+/* Operator setup and public ledgers share the network palette. */
+.node-setup-page .setup-install-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; align-items: start; }
+.setup-install-grid > .network-panel { margin-top: 0; padding: 29px; }
+.setup-install-grid h2 { font-size: 28px; line-height: 1.2; margin: 17px 0; }
+.setup-install-grid p { color: var(--text-muted); font-size: 13px; line-height: 1.85; }
+.setup-downloads { display: grid; gap: 9px; margin: 23px 0; }
+.setup-downloads a { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 14px 15px; background: #1b2630; border: 1px solid #758a9e55; border-radius: 9px; color: #d5e1ed; text-decoration: none; font-size: 12px; line-height: 1.6; }
+.setup-downloads small { font-size: 10px; color: #b2c0ce; white-space: nowrap; }
+.setup-downloads a.is-recommended { background: var(--brand-accent); color: #18293a; }
+.setup-downloads a.is-recommended small { color: #31465b; }
+.setup-release-link { display: inline-flex; align-items: center; min-height: 44px; color: #c1d3e6; font-size: 12px; }
+.node-setup-page .network-disclosure > p { padding: 0 18px 18px; margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.85; }
+.setup-command-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 23px; }
+.setup-command-heading > span { color: #b2bec9; font-size: 11px; }
+.setup-command { padding: 19px; background: #0a1418; border: 1px solid #ffffff1a; border-radius: 10px; color: #d0dbe5; overflow-x: auto; line-height: 1.9; font-size: 12px; scrollbar-width: thin; }
+.setup-command code { font: inherit; font-family: ui-monospace,SFMono-Regular,Consolas,monospace; }
+.node-setup-page .setup-terminal { background: #131a21; }
+.setup-requirements { margin-top: 36px; }
+.setup-requirement-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 15px; }
+.setup-requirement-grid article { padding: 25px; border: 1px solid var(--border-subtle); border-radius: 12px; background: #141b22; }
+.setup-requirement-grid article > span { font-size: 10px; color: #a6b3c1; }
+.setup-requirement-grid h3 { font-size: 21px; margin: 18px 0 12px; }
+.setup-requirement-grid p { font-size: 12px; line-height: 1.9; color: var(--text-muted); margin: 0; }
+.setup-steps { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px 40px; padding: 0; margin: 28px 0 35px; list-style: none; }
+.setup-steps li { display: flex; gap: 17px; align-items: flex-start; }
+.setup-steps li > span { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; background: #202c37; color: #c3d4e6; border-radius: 50%; font-size: 11px; }
+.setup-steps h3 { font-size: 18px; margin: 5px 0 10px; }
+.setup-steps p { font-size: 12px; line-height: 1.9; color: var(--text-muted); margin: 0; }
+.setup-details > div { padding: 0 23px 23px; font-size: 13px; line-height: 1.9; color: var(--text-muted); }
+.setup-details pre { max-width: 100%; }
+.setup-why { padding: 32px; border-radius: 15px; border: 1px solid #66758466; background: radial-gradient(ellipse at 100% 0,#37475755,transparent 60%),#182129; margin: 35px 0; }
+.setup-why h2 { font-size: 29px; line-height: 1.2; margin: 0 0 20px; }
+.setup-why ul { display: grid; gap: 10px; padding-left: 20px; color: #b5c0cb; line-height: 1.8; font-size: 13px; margin: 0 0 24px; }
+.setup-faq { margin-top: 32px; }
+.setup-faq .network-disclosure { margin-top: 10px; }
+.setup-faq summary { font-size: 13px; line-height: 1.7; padding: 19px; }
+.operator-ledger-page :is(.node-reward-title-actions,.receipt-anchor-title-actions) { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; flex-shrink: 0; }
+.operator-ledger-page :is(.node-reward-button,.receipt-anchor-button) { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 11px 16px; border: 1px solid #64728166; border-radius: 9px; background: #222d38; color: #d1dde8; font: inherit; font-size: 12px; font-weight: 500; text-decoration: none; cursor: pointer; line-height: 1.7; }
+.operator-ledger-page :is(.node-reward-button,.receipt-anchor-button).primary { background: var(--brand-accent); color: #17293b; border-color: transparent; }
+.operator-ledger-page :is(.node-reward-button,.receipt-anchor-button).warning { background: #423628; color: #edd0a7; border-color: #ac815455; }
+.operator-ledger-page button:disabled { cursor: not-allowed; opacity: .45; }
+.operator-ledger-page :is(.node-reward-metrics,.receipt-anchor-metrics) { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 13px; margin: 26px 0; }
+.operator-ledger-page :is(.node-reward-metrics,.receipt-anchor-metrics) > div { padding: 21px; border: 1px solid var(--border-subtle); border-radius: 12px; background: #121920; min-width: 0; }
+.operator-ledger-page :is(.node-reward-metrics,.receipt-anchor-metrics) > div:first-child { background: #1e2933; border-color: #66778766; }
+.operator-ledger-page :is(.node-reward-metrics,.receipt-anchor-metrics) > div:last-child { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; background: transparent; border: 0; padding: 5px 0; }
+.operator-ledger-page :is(.node-reward-metrics,.receipt-anchor-metrics) span { display: block; color: #a8b4c1; font-size: 11px; }
+.operator-ledger-page :is(.node-reward-metrics,.receipt-anchor-metrics) strong { display: block; color: #e1e8ee; font-size: 27px; font-weight: 500; letter-spacing: -.03em; margin-top: 14px; overflow-wrap: anywhere; }
+.operator-ledger-page :is(.node-reward-metrics,.receipt-anchor-metrics) > div:last-child strong { font-family: ui-monospace,Consolas,monospace; font-size: 12px; letter-spacing: 0; margin-top: 0; }
+.operator-ledger-page :is(.node-reward-notice,.receipt-anchor-notice) { padding: 18px 21px; border: 1px solid #5d708266; border-radius: 10px; background: #1d2832; color: #c8d8e7; font-size: 13px; line-height: 1.8; margin: 20px 0; }
+.operator-ledger-page :is(.node-reward-notice,.receipt-anchor-notice)[data-tone="error"] { background: #302521; border-color: #92635366; color: #ebc2b1; }
+.operator-ledger-page :is(.node-reward-ledger,.receipt-anchor-ledger) { margin-top: 29px; }
+.operator-ledger-page :is(.node-reward-ledger,.receipt-anchor-ledger) > header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 22px; }
+.operator-ledger-page :is(.node-reward-ledger,.receipt-anchor-ledger) > header span { color: #a9b5c2; font-size: 10px; }
+.operator-ledger-page :is(.node-reward-ledger,.receipt-anchor-ledger) h2 { font-size: 27px; margin: 9px 0 0; }
+.operator-ledger-page :is(.node-reward-ledger,.receipt-anchor-ledger) > header a { display: inline-flex; min-height: 44px; align-items: center; color: #c3d1df; font-size: 12px; }
+.operator-ledger-page :is(.node-reward-ledger,.receipt-anchor-ledger) > header strong { color: #b1bfcd; font-weight: 400; font-size: 12px; overflow-wrap: anywhere; }
+.operator-ledger-page :is(.node-reward-list,.receipt-anchor-list) { display: grid; gap: 15px; }
+.operator-ledger-page :is(.node-reward-row,.receipt-anchor-row) { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 24px; padding: 26px; border: 1px solid var(--border-subtle); border-radius: 13px; background: #121920; }
+.operator-ledger-page :is(.node-reward-identity,.receipt-anchor-identity) { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; grid-column: 1 / -1; }
+.operator-ledger-page :is(.node-reward-identity,.receipt-anchor-identity) > span:first-child { color: #dde6ee; font-size: 16px; }
+.operator-ledger-page :is(.node-reward-status,.receipt-anchor-status) { display: inline-flex; align-items: center; gap: 7px; font-size: 10px; color: #d5d0ba; background: #333125; border: 1px solid #a68e5355; border-radius: 6px; padding: 5px 8px; text-transform: capitalize; }
+.operator-ledger-page [data-status="claimed"] .node-reward-status, .operator-ledger-page [data-status="published"] .node-reward-status, .operator-ledger-page [data-status="anchored"] .receipt-anchor-status { background: #23303d; color: #c2d4e6; border-color: #74869755; }
+.operator-ledger-page [data-status="invalid"] .node-reward-status { color: #ebc1b4; background: #3a2924; border-color: #a4796455; }
+.operator-ledger-page :is(.node-reward-amount,.receipt-anchor-root) > span { display: block; font-size: 11px; color: #a1b0be; margin-bottom: 12px; }
+.node-reward-amount > strong { font-size: 29px; font-weight: 500; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.operator-ledger-page :is(.node-reward-meta,.receipt-anchor-meta) { display: flex; flex-wrap: wrap; gap: 18px 30px; justify-content: flex-end; }
+.operator-ledger-page :is(.node-reward-meta,.receipt-anchor-meta) span { display: block; font-size: 10px; color: #a2afbc; margin-bottom: 9px; }
+.operator-ledger-page :is(.node-reward-meta,.receipt-anchor-meta) strong { font-size: 13px; color: #d0d9e1; font-weight: 500; }
+.operator-ledger-page :is(.node-reward-row-actions,.receipt-anchor-row-actions) { display: flex; flex-wrap: wrap; gap: 9px; grid-column: 1 / -1; }
+.operator-ledger-page :is(.node-reward-root,.receipt-anchor-tx) { grid-column: 1 / -1; color: #a6b3c1; font-size: 11px; overflow-wrap: anywhere; }
+.operator-ledger-page :is(.node-reward-empty,.receipt-anchor-empty) { padding: 30px 23px; border: 1px dashed #53606c88; border-radius: 11px; font-size: 13px; color: #abb6c1; line-height: 1.8; margin: 18px 0; }
+.reward-treasury > summary, .ledger-treasury > summary { font-size: 13px; padding: 19px 22px; }
+.reward-treasury > .node-reward-ledger { padding: 0 23px 23px; }
+.ledger-treasury-actions { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 23px; }
+.ledger-treasury-actions p { font-size: 12px; line-height: 1.8; color: #abb7c3; margin: 0; max-width: 660px; }
+.ledger-treasury-actions button { flex-shrink: 0; }
+.ledger-treasury > .ledger-treasury-actions { padding: 0 22px; }
+.receipt-filters { width: fit-content; margin-bottom: 23px; }
+.receipt-full-root { color: #c8d3dd; font-family: ui-monospace,Consolas,monospace; font-size: 12px; }
+.receipt-full-root summary { cursor: pointer; overflow-wrap: anywhere; font-family: inherit; min-height: 44px; line-height: 1.9; }
+.receipt-full-root code { display: block; padding: 15px; background: #0c1219; border-radius: 8px; overflow-wrap: anywhere; font-size: 11px; line-height: 1.8; margin-top: 10px; }
+@media (max-width: 1000px) {
+ .setup-install-grid > .network-panel { padding: 24px; }
+ .operator-ledger-page .network-heading { flex-wrap: wrap; }
+ .operator-ledger-page :is(.node-reward-meta,.receipt-anchor-meta) { gap: 18px; }
+}
+@media (max-width: 760px) {
+ .node-setup-page .setup-install-grid { grid-template-columns: minmax(0,1fr); gap: 16px; }
+ .setup-install-grid > .network-panel { padding: 23px 19px; }
+ .setup-install-grid h2 { font-size: 27px; }
+ .setup-install-grid p { font-size: 12px; }
+ .setup-downloads a { flex-wrap: wrap; }
+ .setup-requirement-grid { grid-template-columns: minmax(0,1fr); gap: 12px; }
+ .setup-requirement-grid article { padding: 23px; }
+ .setup-steps { grid-template-columns: minmax(0,1fr); gap: 23px; }
+ .setup-why { padding: 25px; }
+ .setup-why h2 { font-size: 27px; }
+ .setup-command { padding: 16px; font-size: 11px; }
+ .node-setup-page .network-heading > .network-secondary { margin-top: 20px; }
+ .operator-ledger-page :is(.node-reward-title-actions,.receipt-anchor-title-actions) { margin-top: 20px; }
+ .operator-ledger-page :is(.node-reward-metrics,.receipt-anchor-metrics) { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 11px; }
+ .operator-ledger-page :is(.node-reward-metrics,.receipt-anchor-metrics) > div { padding: 18px; }
+ .operator-ledger-page :is(.node-reward-metrics,.receipt-anchor-metrics) strong { font-size: 24px; }
+ .operator-ledger-page :is(.node-reward-row,.receipt-anchor-row) { grid-template-columns: minmax(0,1fr); padding: 22px; gap: 22px; }
+ .operator-ledger-page :is(.node-reward-meta,.receipt-anchor-meta) { justify-content: flex-start; gap: 18px 25px; }
+ .operator-ledger-page :is(.node-reward-ledger,.receipt-anchor-ledger) h2 { font-size: 26px; }
+ .ledger-treasury-actions { flex-direction: column; align-items: flex-start; }
+ .reward-treasury > .node-reward-ledger { padding: 0 12px 12px; }
+ .receipt-filters { width: 100%; }
+ .receipt-filters button { padding: 9px 7px; font-size: 11px; }
+}

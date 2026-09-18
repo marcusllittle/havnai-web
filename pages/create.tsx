@@ -1,7 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { SeoHead } from "../components/SeoHead";
-import { CinematicPageHero } from "../components/CinematicPageHero";
+import { CreateInspiration } from "../components/CreateInspiration";
+import { CreateModelStatus } from "../components/CreateModelStatus";
+import { WorkflowImport } from "../components/WorkflowImport";
+import type { WorkflowTemplate } from "../lib/workflowTemplate";
+import { ArrowUpRight, ImageIcon, Film, ScanFace, SlidersHorizontal, ChevronDown, Wallet, Sparkles } from "lucide-react";
 import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
 import { HavnAIPrompt } from "../components/HavnAIPrompt";
@@ -61,7 +66,6 @@ import {
   getWalletIdentityLabel,
   getWalletSourceLabel,
   getWalletStatusCopy,
-  PUBLIC_ALPHA_LABEL,
 } from "../lib/publicAlpha";
 
 const HISTORY_KEY = "havnai_test_history_v1";
@@ -325,10 +329,23 @@ const inspectPromptIdentityAnchor = (promptText: string): {
 };
 
 const TestPage: React.FC = () => {
+  const router = useRouter();
+  const entryApplied = useRef(false);
   const wallet = useWallet();
   const [mode, setMode] = useState<GeneratorMode>("image");
   const [prompt, setPrompt] = useState("");
+  useEffect(() => {
+    if (!router.isReady || entryApplied.current) return;
+    entryApplied.current = true;
+    // Restoring an in-progress render takes precedence over a new starting point.
+    if (loadActiveCreateJob() || loadActiveVideoChain()) return;
+    const entryMode = router.query.mode;
+    if (entryMode === "image" || entryMode === "video" || entryMode === "face_swap") setMode(entryMode);
+    if (typeof router.query.prompt === "string") setPrompt(router.query.prompt.slice(0, 4000));
+  }, [router.isReady, router.query.mode, router.query.prompt]);
   const [negativePrompt, setNegativePrompt] = useState("");
+  const [pendingTemplate, setPendingTemplate] = useState<(WorkflowTemplate & { targetModel: string }) | null>(null);
+  const [imageTemplateSettings, setImageTemplateSettings] = useState<{ steps?: number; guidance?: number } | null>(null);
   const [jobId, setJobId] = useState<string | undefined>();
   const [statusMessage, setStatusMessage] = useState<string | undefined>();
   const [pollTimedOut, setPollTimedOut] = useState(false);
@@ -342,8 +359,11 @@ const TestPage: React.FC = () => {
   const [model, setModel] = useState<string | undefined>();
   const [runtimeSeconds, setRuntimeSeconds] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [advancedOpen, setAdvancedOpen] = useState(true);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>("");
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [modelsError, setModelsError] = useState(false);
+  const [modelsRevision, setModelsRevision] = useState(0);
   const [imageModels, setImageModels] = useState<{ id: string; label: string }[]>(FALLBACK_IMAGE_MODELS);
   const [videoModels, setVideoModels] = useState<{ id: string; label: string }[]>([]);
   const [faceSwapModels, setFaceSwapModels] = useState<{ id: string; label: string }[]>([]);
@@ -579,14 +599,24 @@ const TestPage: React.FC = () => {
   // Load models from backend
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+    setModelsLoading(true);
+    setModelsError(false);
 
     const loadModels = async () => {
       if (typeof window === "undefined") return;
       try {
-        const res = await fetch(`${getApiBase()}/models/list`, { credentials: "same-origin" });
+        const res = await fetch(`${getApiBase()}/models/list`, {
+          credentials: "same-origin",
+          signal: controller.signal,
+        });
         if (!res.ok) throw new Error(`models HTTP ${res.status}`);
         const data = await res.json();
-        const models: ModelListEntry[] = Array.isArray(data?.models) ? data.models : [];
+        if (!Array.isArray(data?.models)) throw new Error("Invalid model catalog");
+        const models: ModelListEntry[] = data.models.filter(
+          (entry: ModelListEntry | null) => entry && typeof entry.name === "string"
+        );
 
         if (!active) return;
 
@@ -659,18 +689,23 @@ const TestPage: React.FC = () => {
           setModelPipelines(pipelines);
           setModelRuntimeDefaults(defaultsMap);
         }
-      } catch (err: any) {
-        console.error("Failed to load models from /api/models/list:", err);
-        // Keep fallback models on error
+      } catch {
+        if (active) setModelsError(true);
+      } finally {
+        window.clearTimeout(timeout);
+        if (active) setModelsLoading(false);
       }
     };
     void loadModels();
     return () => {
       active = false;
+      window.clearTimeout(timeout);
+      controller.abort();
     };
-  }, []);
+  }, [modelsRevision]);
 
   // Reset mode-specific options when switching modes
+  useEffect(() => { setImageTemplateSettings(null); }, [mode, selectedModel]);
   useEffect(() => {
     if (mode === "image") {
       // Reset video-specific options
@@ -692,8 +727,6 @@ const TestPage: React.FC = () => {
       setSampler("");
       setImageQualityPreset("balanced");
       setImageSizePreset("auto");
-      // Default image mode to the first live model when available.
-      setSelectedModel(imageModels.length > 0 ? imageModels[0].id : "");
     } else if (mode === "video") {
       // Reset sampler (not used in video mode)
       setSampler("");
@@ -709,8 +742,6 @@ const TestPage: React.FC = () => {
       setHeight("");
       setFrames("");
       setFps("");
-      // Prefer the strongest verified video runtime advertised by the node.
-      setSelectedModel(pickPreferredVideoModel(videoModels));
     } else if (mode === "face_swap") {
       // Reset video-specific options
       setFrames("");
@@ -719,9 +750,16 @@ const TestPage: React.FC = () => {
       setVideoInitUrl("");
       setVideoInitData(undefined);
       setVideoInitName(undefined);
-      // Select first available face swap model, otherwise clear selection.
-      setSelectedModel(faceSwapModels.length > 0 ? faceSwapModels[0].id : "");
-      setFaceswapModel(faceSwapModels.length > 0 ? faceSwapModels[0].id : "");
+    }
+  }, [mode]);
+
+  // Refresh capacity without resetting the user's references and settings.
+  useEffect(() => {
+    const options = mode === "image" ? imageModels : mode === "video" ? videoModels : faceSwapModels;
+    const preferred = mode === "video" ? pickPreferredVideoModel(videoModels) : options[0]?.id || "";
+    setSelectedModel(current => options.some(option => option.id === current) ? current : preferred);
+    if (mode === "face_swap") {
+      setFaceswapModel(current => options.some(option => option.id === current) ? current : preferred);
     }
   }, [mode, imageModels, videoModels, faceSwapModels]);
 
@@ -1007,6 +1045,39 @@ const TestPage: React.FC = () => {
       .filter((entry): entry is { name: string; weight?: number } => Boolean(entry));
   };
 
+  const applyTemplate = (template: WorkflowTemplate): string | undefined => {
+    if (loading || loadActiveCreateJob() || loadActiveVideoChain()) return "Finish the current generation before applying a template.";
+    if (modelsLoading || modelsError) return "Load the available models before applying this template.";
+    const options = template.mode === "image" ? imageModels : template.mode === "video" ? videoModels : faceSwapModels;
+    const target = template.model.toLowerCase() === "auto"
+      ? options.find(item => mode === template.mode && item.id === selectedModel) || options[0]
+      : options.find(item => item.id.toLowerCase() === template.model.toLowerCase());
+    if (!target) return template.model.toLowerCase() === "auto" ? "No compatible model is online for this template right now." : `The template's model (${template.model}) is not currently available. Your draft has not changed.`;
+    setMode(template.mode);
+    setSelectedModel(target.id);
+    if (template.mode === "face_swap") setFaceswapModel(target.id);
+    setPendingTemplate({ ...template, targetModel: target.id });
+    return undefined;
+  };
+
+  // Apply after the mode/model defaults above, so they cannot erase imported values.
+  useEffect(() => {
+    if (!pendingTemplate || mode !== pendingTemplate.mode || selectedModel !== pendingTemplate.targetModel) return;
+    setPrompt(pendingTemplate.prompt);
+    setNegativePrompt(pendingTemplate.negativePrompt);
+    if (mode === "image") setImageTemplateSettings({ steps: pendingTemplate.steps, guidance: pendingTemplate.guidance });
+    if (mode === "video") {
+      if (pendingTemplate.steps != null) setSteps(String(pendingTemplate.steps));
+      if (pendingTemplate.guidance != null) setGuidance(String(pendingTemplate.guidance));
+    }
+    if (mode === "face_swap") {
+      setFaceswapSteps(pendingTemplate.steps == null ? "" : String(pendingTemplate.steps));
+      setFaceswapGuidance(pendingTemplate.guidance == null ? "" : String(pendingTemplate.guidance));
+    }
+    setAdvancedOpen(true);
+    setPendingTemplate(null);
+  }, [pendingTemplate, mode, selectedModel]);
+
   const buildOptions = (): SubmitJobOptions | undefined => {
     const options: SubmitJobOptions = {};
     const seedValue = parseOptionalInt(seed);
@@ -1015,8 +1086,9 @@ const TestPage: React.FC = () => {
     const requestedLoras = buildLoraPayload();
 
     if (activeWallet) options.wallet = activeWallet;
-    options.steps = imageStepPresets[imageQualityPreset];
-    if (modelDefaults?.guidance != null) options.guidance = modelDefaults.guidance;
+    options.steps = imageTemplateSettings?.steps ?? imageStepPresets[imageQualityPreset];
+    if (imageTemplateSettings?.guidance != null) options.guidance = imageTemplateSettings.guidance;
+    else if (modelDefaults?.guidance != null) options.guidance = modelDefaults.guidance;
     if (sizePreset?.width != null) options.width = sizePreset.width;
     else if (modelDefaults?.width != null) options.width = modelDefaults.width;
     if (sizePreset?.height != null) options.height = sizePreset.height;
@@ -1330,6 +1402,11 @@ const TestPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    if (loading) return;
+    if (modelsLoading || modelsError) {
+      setStatusMessage(modelsLoading ? "Wait for the available models to load." : "Retry loading models before generating.");
+      return;
+    }
     const trimmed = prompt.trim();
     const selectedVideoModelAvailable =
       mode === "video" && videoModels.some((candidate) => candidate.id === selectedModel);
@@ -1407,7 +1484,7 @@ const TestPage: React.FC = () => {
         const id = await submitAutoJob(
           trimmed,
           selectedModel || undefined,
-          "",
+          negativePrompt,
           options
         );
         setJobId(id);
@@ -1809,6 +1886,12 @@ const TestPage: React.FC = () => {
     setStatusMessage(undefined);
   };
 
+  const returnToComposer = () => {
+    const input = document.getElementById("prompt");
+    input?.focus({ preventScroll: true });
+    input?.scrollIntoView?.({ block: "center", behavior: "auto" });
+  };
+
   const handleUseLastFrame = (dataUrl: string) => {
     setMode("video");
     setAdvancedOpen(true);
@@ -1816,6 +1899,7 @@ const TestPage: React.FC = () => {
     setVideoInitName("last-frame.png");
     setVideoInitUrl("");
     setStatusMessage("Loaded last frame as init image.");
+    returnToComposer();
   };
 
   const handleAnimateImage = () => {
@@ -1827,6 +1911,7 @@ const TestPage: React.FC = () => {
     setVideoInitName(undefined);
     setVideoInitUrl(coordinatorPath);
     setStatusMessage("Image loaded for animation.");
+    returnToComposer();
   };
 
   const handleRefineImage = () => {
@@ -1842,6 +1927,7 @@ const TestPage: React.FC = () => {
     setImagePreservation("maximum");
     setImageSizePreset("auto");
     setStatusMessage("Output loaded as the refinement reference.");
+    returnToComposer();
   };
 
   const openJobDetails = async (id: string, summary?: JobSummary) => {
@@ -1860,30 +1946,43 @@ const TestPage: React.FC = () => {
     }
   };
 
-  // Mobile nav toggle (reuse behavior from index.html)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const navToggle = document.getElementById("navToggle");
-    const primaryNav = document.getElementById("primaryNav");
-    if (!navToggle || !primaryNav) return;
-    const handler = () => {
-      primaryNav.classList.toggle("nav-open");
-      navToggle.classList.toggle("nav-open");
-    };
-    navToggle.addEventListener("click", handler);
-    return () => navToggle.removeEventListener("click", handler);
-  }, []);
-
-  const totalVisibleModels =
-    imageModels.length + videoModels.length + faceSwapModels.length;
-  const creditSummary =
-    credits && credits.credits_enabled
-      ? `${credits.balance.toFixed(1)} cr`
-      : inviteSaved
-      ? "Invite saved"
-      : "Access code";
-  const modeSummary =
-    mode === "face_swap" ? "Face swap" : mode === "video" ? "Video" : "Image";
+  const videoStartFrameInputs = (
+    <>
+                    <span className="generator-label">
+                      Start frame{selectedVideoWorkflow?.requires_init_image ? " · Required" : " (optional)"}
+                    </span>
+                    <label className="generator-label" htmlFor="video-init-url">
+                      Start frame URL
+                    </label>
+                    <input
+                      id="video-init-url"
+                      type="text"
+                      className="generator-input"
+                      placeholder="https://... or data:image/..."
+                      value={videoInitUrl}
+                      onChange={(e) => {
+                        setVideoInitUrl(e.target.value);
+                        if (e.target.value.trim()) {
+                          setVideoInitData(undefined);
+                          setVideoInitName(undefined);
+                        }
+                      }}
+                    />
+                    <label className="generator-label" htmlFor="video-init-upload">
+                      Upload start frame
+                    </label>
+                    <input
+                      id="video-init-upload"
+                      type="file"
+                      accept="image/*"
+                      className="generator-input"
+                      onChange={handleVideoInitUpload}
+                    />
+                    {videoInitName && (
+                      <p className="generator-help">Using uploaded file: {videoInitName}</p>
+                    )}
+    </>
+  );
 
   return (
     <>
@@ -1896,210 +1995,51 @@ const TestPage: React.FC = () => {
 
       <SiteHeader />
 
-      <main className="jh-page-shell">
-        <CinematicPageHero
-          eyebrow={`${PUBLIC_ALPHA_LABEL} Generator`}
-          title="Create on the grid."
-          description="Write a prompt, route into live network capacity, and generate images, face swaps, or video without leaving the JoinHavn creation stack."
-          mediaVariant="creation"
-          panelEyebrow="Creation Deck"
-          panelTitle={`${totalVisibleModels.toLocaleString()} visible model slots`}
-          panelDescription={`Current mode: ${modeSummary}. Use the generator to render, inspect job status, and push finished outputs into your library or marketplace flow.`}
-          stats={[
-            {
-              label: "Mode",
-              value: modeSummary,
-              detail: "Switch between image, video, and face swap",
-            },
-            {
-              label: "Visible Models",
-              value: totalVisibleModels.toLocaleString(),
-              detail: "Pulled from live capacity",
-            },
-            {
-              label: "Access",
-              value: creditSummary,
-              detail: inviteSaved ? "Saved in this browser" : "Add invite if provided",
-            },
-          ]}
-          actions={
-            <>
-              <Link href="/library" className="jh-btn jh-btn-primary">
-                Open Library
-              </Link>
-              <Link href="/pricing" className="jh-btn jh-btn-secondary">
-                Manage Credits
-              </Link>
-            </>
-          }
-        />
-
-        <section className="page-container" style={{ paddingTop: "1.5rem" }}>
-          <div className="chart-section">
-            <div className="chart-header">
-              <h2 className="chart-title">Where creation goes next</h2>
-            </div>
-            <p style={{ color: "var(--text-muted)", lineHeight: 1.75, marginBottom: "1rem" }}>
-              JoinHavn creation is not meant to end at a single render. Save outputs into your collection, move selected assets into marketplace flow,
-              and connect them back to Astra where the broader world gives them context.
-            </p>
-            <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap" }}>
-              <Link href="/astra" className="jh-btn jh-btn-secondary">See Astra</Link>
-              <Link href="/marketplace" className="jh-btn jh-btn-secondary">Browse Marketplace</Link>
-              <Link href="/run-a-node" className="jh-btn jh-btn-tertiary">Run a Node</Link>
-            </div>
+      <main className="studio-page">
+        <header className="studio-heading">
+          <div>
+            <span className="studio-eyebrow"><Sparkles size={14} aria-hidden="true" /> Your creative studio</span>
+            <h1>Make something <span>only you can.</span></h1>
+            <p>From a spark of an idea to a world of your own.</p>
           </div>
-        </section>
-
+          <Link href="/library" className="studio-library-link">My collection <ArrowUpRight size={16} aria-hidden="true" /></Link>
+        </header>
         <section className="generator-section">
           <div className="generator-card">
             <div className="generator-grid">
               <div className="generator-left">
-                <div className="invite-panel">
-                  <div className={`invite-badge${inviteSaved ? " is-ok" : " is-missing"}`}>
-                    {inviteSaved ? "Access code saved" : "No access code added"}
-                  </div>
-                  {quota && (
-                    <div className="quota-bars">
-                      <div className="quota-bar-group">
-                        <span className="quota-bar-label">Daily jobs</span>
-                        <div className="quota-bar-track">
-                          <div
-                            className={`quota-bar-fill ${
-                              quota.max_daily > 0 && quota.used_today / quota.max_daily > 0.85
-                                ? "is-high"
-                                : ""
-                            }`}
-                            style={{
-                              width: quota.max_daily > 0
-                                ? `${Math.min((quota.used_today / quota.max_daily) * 100, 100)}%`
-                                : "0%",
-                            }}
-                          />
-                        </div>
-                        <span className="quota-bar-value">
-                          {quota.max_daily > 0
-                            ? `${quota.used_today}/${quota.max_daily}`
-                            : `${quota.used_today}`}
-                        </span>
-                      </div>
-                      <div className="quota-bar-group">
-                        <span className="quota-bar-label">Concurrent jobs</span>
-                        <div className="quota-bar-track">
-                          <div
-                            className={`quota-bar-fill ${
-                              quota.max_concurrent > 0 && quota.used_concurrent / quota.max_concurrent > 0.85
-                                ? "is-high"
-                                : ""
-                            }`}
-                            style={{
-                              width: quota.max_concurrent > 0
-                                ? `${Math.min((quota.used_concurrent / quota.max_concurrent) * 100, 100)}%`
-                                : "0%",
-                            }}
-                          />
-                        </div>
-                        <span className="quota-bar-value">
-                          {quota.max_concurrent > 0
-                            ? `${quota.used_concurrent}/${quota.max_concurrent}`
-                            : `${quota.used_concurrent}`}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  {!quota && quotaError && (
-                    <div className="invite-quota invite-error">{quotaError}</div>
-                  )}
-                  {credits && credits.credits_enabled && (
-                    <div className="invite-quota">
-                      Credits: {credits.balance.toFixed(1)}
-                    </div>
-                  )}
-                  <div className="generator-wallet-summary">
-                    <div className="generator-wallet-copy">
-                      <span className={`wallet-status-pill wallet-source-${wallet.source}`}>{walletSourceLabel}</span>
-                      <p className="generator-help" style={{ marginTop: "0.5rem" }}>
-                        Active identity: <strong>{walletIdentityLabel}</strong>
-                      </p>
-                      <p className="generator-help">{walletStatusCopy}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="generator-mini-button"
-                      onClick={() => void wallet.connect()}
-                      disabled={wallet.connecting}
-                    >
-                      {connectLabel}
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    className="invite-toggle"
-                    onClick={() => setInviteOpen((prev) => !prev)}
-                  >
-                    {inviteSaved ? "Edit access code" : "Add access code"}
-                  </button>
-                  <p className="generator-help" style={{ marginTop: "0.75rem" }}>
-                    Add an access code here if your Public Alpha invite included one.
-                  </p>
-                </div>
-                {inviteOpen && (
-                  <div className="invite-form">
-                    <label className="generator-label" htmlFor="invite-code">
-                      Public Alpha access code (if provided)
-                    </label>
-                    <input
-                      id="invite-code"
-                      type="text"
-                      className="generator-input"
-                      placeholder="Enter your access code"
-                      value={inviteCode}
-                      onChange={(e) => setInviteCodeState(e.target.value)}
-                    />
-                    <div className="invite-actions">
-                      <button
-                        type="button"
-                        className="generator-mini-button"
-                        onClick={handleInviteSave}
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        className="generator-mini-button"
-                        onClick={handleInviteClear}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                    <p className="generator-help">Only stored in this browser.</p>
-                  </div>
-                )}
-                <div className="generator-mode-tabs">
+                {router.isReady && typeof router.query.workflow === "string" && router.query.workflow && <WorkflowImport key={router.query.workflow} id={router.query.workflow} disabled={loading || modelsLoading || !!pendingTemplate} onApply={applyTemplate} />}
+                <div className="generator-mode-tabs" role="group" aria-label="Creation type">
                   <button
                     type="button"
                     className={`generator-mode-button${mode === "image" ? " is-active" : ""}`}
+                    aria-pressed={mode === "image"}
+                    disabled={loading}
                     onClick={() => setMode("image")}
                   >
-                    Image
+                    <ImageIcon size={17} aria-hidden="true" /> Image
                   </button>
                   <button
                     type="button"
                     className={`generator-mode-button${mode === "video" ? " is-active" : ""}`}
+                    aria-pressed={mode === "video"}
+                    disabled={loading}
                     onClick={() => setMode("video")}
                   >
-                    Video
+                    <Film size={17} aria-hidden="true" /> Video
                   </button>
                   <button
                     type="button"
                     className={`generator-mode-button${mode === "face_swap" ? " is-active" : ""}`}
+                    aria-pressed={mode === "face_swap"}
+                    disabled={loading}
                     onClick={() => setMode("face_swap")}
                   >
-                    Face swap
+                    <ScanFace size={17} aria-hidden="true" /> Face swap
                   </button>
                 </div>
                 <label className="generator-label" htmlFor="prompt">
-                  {mode === "face_swap" ? "Style prompt (optional)" : "Prompt"}
+                  {mode === "face_swap" ? "Style prompt (optional)" : "What do you imagine?"}
                 </label>
                 <HavnAIPrompt
                   value={prompt}
@@ -2107,11 +2047,10 @@ const TestPage: React.FC = () => {
                   onSubmit={handleSubmit}
                   disabled={loading}
                 />
-                {mode === "image" && (
-                  <p className="generator-help">
-                    Add <code>[IDENTITY ANCHOR: slug]</code> to an image prompt when you want a stable facial identity across multiple renders.
-                  </p>
-                )}
+                <div className="studio-prompt-footer">
+                  <span>{mode === "video" ? "Describe a scene and how it moves." : mode === "face_swap" ? "Add your images below to get started." : "Describe the subject, mood, and light."}</span>
+                </div>
+                {mode === "image" && advancedOpen && <div><label className="generator-label" htmlFor="template-negative">Negative prompt</label><textarea id="template-negative" className="generator-input" rows={2} value={negativePrompt} onChange={event => setNegativePrompt(event.target.value)} placeholder="What should the result avoid?" /></div>}
 
                 {mode === "face_swap" && (
                   <div className="generator-advanced">
@@ -2258,52 +2197,21 @@ const TestPage: React.FC = () => {
                   </div>
                 )}
 
-                <div className="generator-controls">
-                  <HavnAIButton
-                    label={
-                      mode === "face_swap"
-                        ? "Run face swap"
-                        : mode === "video"
-                        ? "Generate video"
-                        : "Generate image"
-                    }
-                    loading={loading}
-                    disabled={mode !== "face_swap" && !prompt.trim()}
-                    onClick={handleSubmit}
-                  />
-                  <label className="generator-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={sfwMode}
-                      onChange={(e) => setSfwMode(e.target.checked)}
-                    />
-                    <span>SFW mode (adds stricter safety negatives)</span>
-                  </label>
-                  {mode !== "face_swap" && (
-                    <button
-                      type="button"
-                      className="generator-advanced-toggle"
-                      onClick={() => setAdvancedOpen((v) => !v)}
-                      aria-expanded={advancedOpen}
-                    >
-                      <svg
-                        className={`toggle-chevron${advancedOpen ? " is-open" : ""}`}
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                      {advancedOpen ? "Hide advanced options" : "Show advanced options"}
-                    </button>
-                  )}
-                </div>
+                {mode === "video" && selectedVideoWorkflow?.requires_init_image && (
+                  <section className="studio-required-reference" aria-label="Required video start frame">
+                    {videoStartFrameInputs}
+                    <p className="generator-help">{selectedVideoWorkflow.label} animates your image. Add a start frame or choose another workflow in settings.</p>
+                  </section>
+                )}
 
+                {mode !== "face_swap" && (
+                  <button type="button" className="studio-settings-toggle" onClick={() => setAdvancedOpen(v => !v)} aria-expanded={advancedOpen} aria-controls="studio-settings">
+                    <SlidersHorizontal size={16} aria-hidden="true" />
+                    <span>{mode === "video" ? "Video settings & reference" : "Model, size & reference"}</span>
+                    <ChevronDown size={16} className={advancedOpen ? "is-open" : ""} aria-hidden="true" />
+                  </button>
+                )}
+                <div id="studio-settings">
                 {advancedOpen && mode === "image" && (
                   <div className="generator-advanced">
                     <div className="adv-group">
@@ -2428,9 +2336,10 @@ const TestPage: React.FC = () => {
                       <select
                         id="image-steps"
                         className="generator-select"
-                        value={imageQualityPreset}
-                        onChange={(e) => setImageQualityPreset(e.target.value as ImageQualityPreset)}
+                        value={imageTemplateSettings?.steps != null ? "template" : imageQualityPreset}
+                        onChange={(e) => { if (e.target.value === "template") return; setImageTemplateSettings(current => current ? { ...current, steps: undefined } : null); setImageQualityPreset(e.target.value as ImageQualityPreset); }}
                       >
+                        {imageTemplateSettings?.steps != null && <option value="template">{imageTemplateSettings.steps} steps · Template</option>}
                         <option value="fastest">{imageStepPresets.fastest} steps · Fastest</option>
                         <option value="balanced">{imageStepPresets.balanced} steps · Balanced</option>
                         <option value="best">{imageStepPresets.best} steps · Best quality</option>
@@ -2438,6 +2347,11 @@ const TestPage: React.FC = () => {
                       <p className="generator-help">
                         Step presets now adapt to the selected model's recommended baseline.
                       </p>
+                      {imageTemplateSettings && <div className="studio-template-overrides">
+                        <label className="generator-label" htmlFor="template-guidance">Template guidance</label>
+                        <input id="template-guidance" type="number" min={0} max={30} step="any" className="generator-input" placeholder="Model default" value={imageTemplateSettings.guidance ?? ""} onChange={event => { const value = event.target.value === "" ? undefined : Number(event.target.value); if (value === undefined || (Number.isFinite(value) && value >= 0 && value <= 30)) setImageTemplateSettings(current => ({ ...current, guidance: value })); }} />
+                        <button type="button" onClick={() => setImageTemplateSettings(null)}>Use model defaults for steps &amp; guidance</button>
+                      </div>}
                       <label className="generator-label" htmlFor="image-size-preset">
                         Image size
                       </label>
@@ -2560,39 +2474,7 @@ const TestPage: React.FC = () => {
                       onChange={(e) => setNegativePrompt(e.target.value)}
                       rows={2}
                     />
-                    <span className="generator-label">
-                      Init image{selectedVideoWorkflow?.requires_init_image ? "" : " (optional)"}
-                    </span>
-                    <label className="generator-label" htmlFor="video-init-url">
-                      Init image URL
-                    </label>
-                    <input
-                      id="video-init-url"
-                      type="text"
-                      className="generator-input"
-                      placeholder="https://... or data:image/..."
-                      value={videoInitUrl}
-                      onChange={(e) => {
-                        setVideoInitUrl(e.target.value);
-                        if (e.target.value.trim()) {
-                          setVideoInitData(undefined);
-                          setVideoInitName(undefined);
-                        }
-                      }}
-                    />
-                    <label className="generator-label" htmlFor="video-init-upload">
-                      Upload init image
-                    </label>
-                    <input
-                      id="video-init-upload"
-                      type="file"
-                      accept="image/*"
-                      className="generator-input"
-                      onChange={handleVideoInitUpload}
-                    />
-                    {videoInitName && (
-                      <p className="generator-help">Using uploaded file: {videoInitName}</p>
-                    )}
+                    {!selectedVideoWorkflow?.requires_init_image && videoStartFrameInputs}
                     {supportsLtxReferenceSheet && (
                       <>
                         <span className="generator-label">Detail reference sheet (optional)</span>
@@ -2809,6 +2691,166 @@ const TestPage: React.FC = () => {
                   </div>
                 )}
 
+                </div>
+                <div className="generator-controls">
+                  <CreateModelStatus
+                    loading={modelsLoading}
+                    error={modelsError}
+                    modelName={mode === "face_swap" ? faceswapModel : selectedModel}
+                    mode={mode}
+                    onRetry={() => setModelsRevision(revision => revision + 1)}
+                  />
+                  <HavnAIButton
+                    label={
+                      mode === "face_swap"
+                        ? "Run face swap"
+                        : mode === "video"
+                        ? "Generate video"
+                        : "Generate image"
+                    }
+                    loading={loading}
+                    disabled={modelsLoading || modelsError || !(mode === "face_swap" ? faceswapModel : selectedModel) || (mode !== "face_swap" && !prompt.trim())}
+                    onClick={handleSubmit}
+                  />
+                  <label className="generator-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={sfwMode}
+                      onChange={(e) => setSfwMode(e.target.checked)}
+                    />
+                    <span>Safe for work</span>
+                  </label>
+
+                </div>
+
+
+                <details className="studio-account">
+                  <summary><Wallet size={15} aria-hidden="true" /><span>Access & credits</span><span className="studio-account-balance">{credits?.credits_enabled ? credits.balance.toFixed(1) + " cr" : inviteSaved ? "Code saved" : "Account"}</span><ChevronDown size={15} aria-hidden="true" /></summary>
+                  <div className="studio-account-content">
+                <div className="invite-panel">
+                  <div className={`invite-badge${inviteSaved ? " is-ok" : " is-missing"}`}>
+                    {inviteSaved ? "Access code saved" : "No access code added"}
+                  </div>
+                  {quota && (
+                    <div className="quota-bars">
+                      <div className="quota-bar-group">
+                        <span className="quota-bar-label">Daily jobs</span>
+                        <div className="quota-bar-track">
+                          <div
+                            className={`quota-bar-fill ${
+                              quota.max_daily > 0 && quota.used_today / quota.max_daily > 0.85
+                                ? "is-high"
+                                : ""
+                            }`}
+                            style={{
+                              width: quota.max_daily > 0
+                                ? `${Math.min((quota.used_today / quota.max_daily) * 100, 100)}%`
+                                : "0%",
+                            }}
+                          />
+                        </div>
+                        <span className="quota-bar-value">
+                          {quota.max_daily > 0
+                            ? `${quota.used_today}/${quota.max_daily}`
+                            : `${quota.used_today}`}
+                        </span>
+                      </div>
+                      <div className="quota-bar-group">
+                        <span className="quota-bar-label">Concurrent jobs</span>
+                        <div className="quota-bar-track">
+                          <div
+                            className={`quota-bar-fill ${
+                              quota.max_concurrent > 0 && quota.used_concurrent / quota.max_concurrent > 0.85
+                                ? "is-high"
+                                : ""
+                            }`}
+                            style={{
+                              width: quota.max_concurrent > 0
+                                ? `${Math.min((quota.used_concurrent / quota.max_concurrent) * 100, 100)}%`
+                                : "0%",
+                            }}
+                          />
+                        </div>
+                        <span className="quota-bar-value">
+                          {quota.max_concurrent > 0
+                            ? `${quota.used_concurrent}/${quota.max_concurrent}`
+                            : `${quota.used_concurrent}`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {!quota && quotaError && (
+                    <div className="invite-quota invite-error">{quotaError}</div>
+                  )}
+                  {credits && credits.credits_enabled && (
+                    <div className="invite-quota">
+                      Credits: {credits.balance.toFixed(1)}
+                    </div>
+                  )}
+                  <div className="generator-wallet-summary">
+                    <div className="generator-wallet-copy">
+                      <span className={`wallet-status-pill wallet-source-${wallet.source}`}>{walletSourceLabel}</span>
+                      <p className="generator-help" style={{ marginTop: "0.5rem" }}>
+                        Active identity: <strong>{walletIdentityLabel}</strong>
+                      </p>
+                      <p className="generator-help">{walletStatusCopy}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="generator-mini-button"
+                      onClick={() => { void wallet.connect().catch(reason => setStatusMessage(reason instanceof Error ? reason.message : "Wallet connection failed. Please try again.")); }}
+                      disabled={wallet.connecting}
+                    >
+                      {connectLabel}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="invite-toggle"
+                    onClick={() => setInviteOpen((prev) => !prev)}
+                  >
+                    {inviteSaved ? "Edit access code" : "Add access code"}
+                  </button>
+                  <p className="generator-help" style={{ marginTop: "0.75rem" }}>
+                    Add an access code here if your Public Alpha invite included one.
+                  </p>
+                </div>
+                {inviteOpen && (
+                  <div className="invite-form">
+                    <label className="generator-label" htmlFor="invite-code">
+                      Public Alpha access code (if provided)
+                    </label>
+                    <input
+                      id="invite-code"
+                      type="text"
+                      className="generator-input"
+                      placeholder="Enter your access code"
+                      value={inviteCode}
+                      onChange={(e) => setInviteCodeState(e.target.value)}
+                    />
+                    <div className="invite-actions">
+                      <button
+                        type="button"
+                        className="generator-mini-button"
+                        onClick={handleInviteSave}
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        className="generator-mini-button"
+                        onClick={handleInviteClear}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <p className="generator-help">Only stored in this browser.</p>
+                  </div>
+                )}
+
+                    <Link href="/pricing" className="studio-library-link">Manage credits <ArrowUpRight size={14} aria-hidden="true" /></Link>
+                  </div>
+                </details>
                 <StatusBox message={statusMessage} />
                 {chainProgress && (
                   <div className="chain-progress" aria-live="polite">
@@ -2856,7 +2898,9 @@ const TestPage: React.FC = () => {
               </div>
 
               <div className="generator-right">
-                <label className="generator-label">Output</label>
+                {imageUrl || videoUrl || jobId || loading ? (
+                <>
+                <div className="studio-section-heading"><h2>Your creation</h2><span className="studio-art-credit">{loading ? "In progress" : "Preview"}</span></div>
                 <OutputCard
                   imageUrl={imageUrl}
                   videoUrl={stitchedVideoUrl || videoUrl}
@@ -2870,6 +2914,14 @@ const TestPage: React.FC = () => {
                   onAnimateImage={handleAnimateImage}
                   onRefineImage={handleRefineImage}
                 />
+                </>
+                ) : (
+                  <CreateInspiration disabled={loading} onChoose={(idea) => {
+                    setPrompt(idea);
+                    if (mode === "face_swap") setMode("image");
+                    document.getElementById("prompt")?.focus();
+                  }} />
+                )}
               </div>
             </div>
 

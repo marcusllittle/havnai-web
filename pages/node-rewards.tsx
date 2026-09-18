@@ -1,7 +1,9 @@
 import type { NextPage } from "next";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWallet } from "../components/WalletProvider";
+import { Coins } from "lucide-react";
+import { NetworkNavigation } from "../components/NetworkNavigation";
 import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import {
@@ -79,27 +81,33 @@ const NodeRewardsPage: NextPage = () => {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [liveTransactions, setLiveTransactions] = useState<Record<string, string>>({});
 
+  const loadVersion = useRef(0);
+  const mounted = useRef(false);
+  const walletIdentity = useRef(wallet.activeWallet);
+  walletIdentity.current = wallet.activeWallet;
+  const [batchError, setBatchError] = useState(false);
+  const [claimsError, setClaimsError] = useState(false);
+  const [loadedWallet, setLoadedWallet] = useState<string | null>(null);
+  const claimsCurrent = loadedWallet === wallet.activeWallet && !claimsError && !loading;
   const load = useCallback(async (quiet = false) => {
-    if (!quiet) setLoading(true);
-    try {
-      const [batchData, claimData] = await Promise.all([
-        fetchNodeRewardBatches(100),
-        wallet.activeWallet
-          ? fetchNodeRewardClaims(wallet.activeWallet)
-          : Promise.resolve({ wallet: "", claims: [] }),
-      ]);
-      setData(batchData);
-      setClaims(claimData.claims);
-      if (!quiet) setNotice(null);
-    } catch (error) {
-      setNotice({ tone: "error", text: errorMessage(error) });
-    } finally {
-      if (!quiet) setLoading(false);
-    }
+    if (!mounted.current || walletIdentity.current !== wallet.activeWallet) return;
+    const version = ++loadVersion.current;
+    if (!quiet) { setLoading(true); setClaims([]); setNotice(null); }
+    const [batchData, claimData] = await Promise.all([
+      fetchNodeRewardBatches(100).catch(() => null),
+      wallet.activeWallet ? fetchNodeRewardClaims(wallet.activeWallet).catch(() => null) : Promise.resolve({ claims: [] }),
+    ]);
+    if (version !== loadVersion.current || walletIdentity.current !== wallet.activeWallet) return;
+    setData(batchData); setClaims(claimData?.claims ?? []);
+    setBatchError(!batchData); setClaimsError(!claimData); setLoadedWallet(wallet.activeWallet);
+    setLoading(false);
   }, [wallet.activeWallet]);
 
   useEffect(() => {
+    mounted.current = true;
+    setLiveTransactions({});
     void load();
+    return () => { mounted.current = false; loadVersion.current += 1; };
   }, [load]);
 
   const pendingBatches = useMemo(
@@ -109,10 +117,16 @@ const NodeRewardsPage: NextPage = () => {
 
   useEffect(() => {
     if (pendingBatches.length === 0) return;
+    let active = true;
+    let checking = false;
     const timer = window.setInterval(() => {
-      void Promise.allSettled(pendingBatches.map(verifyPendingNodeRewardBatch)).then(() => load(true));
+      if (checking) return;
+      checking = true;
+      void Promise.allSettled(pendingBatches.map(verifyPendingNodeRewardBatch))
+        .then(() => { if (active) return load(true); })
+        .finally(() => { checking = false; });
     }, 15000);
-    return () => window.clearInterval(timer);
+    return () => { active = false; window.clearInterval(timer); };
   }, [load, pendingBatches]);
 
   const isTreasury = Boolean(
@@ -270,12 +284,12 @@ const NodeRewardsPage: NextPage = () => {
         noindex
       />
       <SiteHeader />
-      <main className="node-reward-page">
+      <main className="network-page operator-ledger-page">
         <div className="node-reward-shell">
-          <header className="node-reward-titlebar">
+          <header className="network-heading">
             <div>
-              <span className="node-reward-kicker">Network Settlement</span>
-              <h1>Node Rewards</h1>
+              <span className="network-eyebrow"><Coins size={15} aria-hidden="true" /> Node rewards</span>
+              <h1>Your work. Your rewards.</h1><p>Review operator rewards and claim proofs on Sepolia.</p>
             </div>
             <div className="node-reward-title-actions">
               {!wallet.connectedWallet && (
@@ -286,27 +300,22 @@ const NodeRewardsPage: NextPage = () => {
               <button type="button" className="node-reward-button secondary" onClick={() => void load()} disabled={loading || Boolean(busy)}>
                 Refresh
               </button>
-              <button
-                type="button"
-                className="node-reward-button primary"
-                onClick={() => void buildBatch()}
-                disabled={loading || Boolean(busy) || !isTreasury || !data?.unbatched_payout_count}
-              >
-                {busy === "build" ? "Authorizing..." : "Build Reward Batch"}
-              </button>
+
             </div>
           </header>
 
+          <NetworkNavigation active="node-rewards" />
           <section className="node-reward-metrics" aria-label="Node reward summary">
             <div><span>Network</span><strong>Sepolia</strong></div>
             <div><span>Unbatched payouts</span><strong>{data?.unbatched_payout_count ?? "--"}</strong></div>
-            <div><span>Claimable</span><strong>{formatHai(claimableTotal)}</strong></div>
-            <div><span>Claimed</span><strong>{formatHai(claimedTotal)}</strong></div>
-            <div><span>Active wallet</span><strong title={wallet.activeWallet || undefined}>{shortHash(wallet.activeWallet)}</strong></div>
+            <div><span>Claimable</span><strong>{wallet.activeWallet && claimsCurrent ? formatHai(claimableTotal) : "--"}</strong></div>
+            <div><span>Claimed</span><strong>{wallet.activeWallet && claimsCurrent ? formatHai(claimedTotal) : "--"}</strong></div>
+            <div><span>{wallet.source === "env" ? "Site session" : "Active wallet"}</span><strong title={wallet.activeWallet || undefined}>{shortHash(wallet.activeWallet)}</strong></div>
           </section>
 
-          {notice && <div className="node-reward-notice" data-tone={notice.tone}>{notice.text}</div>}
+          {notice && <div className="node-reward-notice" role={notice.tone === "error" ? "alert" : "status"} data-tone={notice.tone}>{notice.text}</div>}
 
+          {!loading && (batchError || claimsError) && <div className="network-notice" role="alert"><p>{batchError && claimsError ? "Reward batches and wallet claims are unavailable." : batchError ? "Reward batches are unavailable." : "Wallet claims are unavailable."} Try refreshing the ledger.</p><button className="network-secondary" onClick={() => void load()} disabled={Boolean(busy)}>Retry rewards</button></div>}
           <section className="node-reward-ledger" aria-label="Operator reward claims">
             <header>
               <div>
@@ -319,6 +328,8 @@ const NodeRewardsPage: NextPage = () => {
               <div className="node-reward-empty">Loading operator rewards...</div>
             ) : !wallet.activeWallet ? (
               <div className="node-reward-empty">Connect the node operator wallet.</div>
+            ) : claimsError || !claimsCurrent ? (
+              <div className="node-reward-empty">Wallet claims are unavailable.</div>
             ) : claims.length === 0 ? (
               <div className="node-reward-empty">No reward claims found for this wallet.</div>
             ) : (
@@ -346,7 +357,7 @@ const NodeRewardsPage: NextPage = () => {
                       </div>
                       <div className="node-reward-row-actions">
                         {status === "claimable" && (
-                          <button type="button" className="node-reward-button primary" disabled={Boolean(busy) || !wallet.connectedWallet} onClick={() => void claimReward(claim)}>
+                          <button type="button" className="node-reward-button primary" disabled={Boolean(busy) || !claimsCurrent || !wallet.connectedWallet || wallet.connectedWallet.toLowerCase() !== claim.wallet.toLowerCase()} onClick={() => void claimReward(claim)}>
                             {isBusy ? "Claiming..." : "Claim HAI"}
                           </button>
                         )}
@@ -368,16 +379,26 @@ const NodeRewardsPage: NextPage = () => {
             )}
           </section>
 
-          <section className="node-reward-ledger treasury" aria-label="Treasury reward batches">
+          <details className="network-disclosure reward-treasury" open={isTreasury}><summary>Network payout batches</summary><section className="node-reward-ledger treasury" aria-label="Treasury reward batches">
             <header>
               <div>
                 <span>Treasury Ledger</span>
-                <h2>Immutable payout roots</h2>
+                <h2>Payout batches</h2>
               </div>
               <strong title={data?.claim_contract || undefined}>{shortHash(data?.claim_contract)}</strong>
             </header>
+            <div className="ledger-treasury-actions"><p>Building and publishing batches requires the configured treasury wallet.</p>              <button
+                type="button"
+                className="node-reward-button primary"
+                onClick={() => void buildBatch()}
+                disabled={loading || Boolean(busy) || !isTreasury || !data?.unbatched_payout_count}
+              >
+                {busy === "build" ? "Authorizing..." : "Build Reward Batch"}
+              </button></div>
             {loading ? (
               <div className="node-reward-empty">Loading payout roots...</div>
+            ) : batchError ? (
+              <div className="node-reward-empty">Payout batches are unavailable.</div>
             ) : !data || data.batches.length === 0 ? (
               <div className="node-reward-empty">No payout batches found.</div>
             ) : (
@@ -423,7 +444,8 @@ const NodeRewardsPage: NextPage = () => {
                 })}
               </div>
             )}
-          </section>
+          </section></details>
+          <p className="network-footnote">Rewards shown here are part of Public Alpha on the Sepolia test network. Claiming requires the operator wallet associated with the proof.</p>
         </div>
       </main>
     </>
