@@ -2019,7 +2019,7 @@ export interface NetworkSummary {
   };
   recovery: {
     lease_seconds: number;
-    max_retries: number;
+    max_retries: number | null;
     jobs_retried: number | null;
     expired_claims: number | null;
   };
@@ -2041,10 +2041,10 @@ export interface NetworkControlPlane {
   queue: { queued: number; running: number; failed: number; oldest_wait_seconds: number };
   latency_24h: {
     sample_size: number;
-    queue_p50_seconds: number;
-    queue_p95_seconds: number;
-    run_p50_seconds: number;
-    run_p95_seconds: number;
+    queue_p50_seconds: number | null;
+    queue_p95_seconds: number | null;
+    run_p50_seconds: number | null;
+    run_p95_seconds: number | null;
   };
   claims: {
     at_risk: number;
@@ -2056,7 +2056,7 @@ export interface NetworkControlPlane {
       assigned_at?: number | null;
       lease_expires_at?: number | null;
       lease_remaining_seconds: number;
-      retry_count: number;
+      retry_count: number | null;
       dispatch_score?: number | null;
       dispatch_reason?: string | null;
       at_risk: boolean;
@@ -2065,8 +2065,8 @@ export interface NetworkControlPlane {
   scheduler_24h: {
     strategy: string;
     decisions: Record<string, number>;
-    preferred: number;
-    fallback: number;
+    preferred: number | null;
+    fallback: number | null;
   };
   receipts: {
     unbatched: number;

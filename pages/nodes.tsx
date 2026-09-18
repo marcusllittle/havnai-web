@@ -395,11 +395,11 @@ const NodesPage: NextPage = () => {
                 </div>
                 <div className="stat-card">
                   <div className="stat-label">Queue P95 (24h)</div>
-                  <div className="stat-value">{controlPlane.latency_24h.queue_p95_seconds.toFixed(1)}s</div>
+                  <div className="stat-value">{controlPlane.latency_24h.queue_p95_seconds == null ? "--" : `${controlPlane.latency_24h.queue_p95_seconds.toFixed(1)}s`}</div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-label">Runtime P95 (24h)</div>
-                  <div className="stat-value">{controlPlane.latency_24h.run_p95_seconds.toFixed(1)}s</div>
+                  <div className="stat-value">{controlPlane.latency_24h.run_p95_seconds == null ? "--" : `${controlPlane.latency_24h.run_p95_seconds.toFixed(1)}s`}</div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-label">Claims at Risk</div>
@@ -442,11 +442,11 @@ const NodesPage: NextPage = () => {
               <div className="stats-grid">
                 <div className="stat-card">
                   <div className="stat-label">Preferred Routes (24h)</div>
-                  <div className="stat-value">{controlPlane.scheduler_24h.preferred}</div>
+                  <div className="stat-value">{controlPlane.scheduler_24h.preferred ?? "--"}</div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-label">Fallback Routes (24h)</div>
-                  <div className="stat-value">{controlPlane.scheduler_24h.fallback}</div>
+                  <div className="stat-value">{controlPlane.scheduler_24h.fallback ?? "--"}</div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-label">Receipts Awaiting Batch</div>
