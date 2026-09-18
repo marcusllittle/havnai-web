@@ -1,3 +1,4 @@
+import { getMusicReadSession, clearMusicReadSession, type MusicReadSession } from "./musicReadSession";
 import { cachedMusicLibrary, clearMusicLibraryCache } from "./musicLibraryCache";
 import type { NextPage } from "next";
 import { getInviteCode } from "./invite";
@@ -576,7 +577,16 @@ async function fetchWithTimeout(
   }
 }
 
+let pendingWalletSignature: Promise<string> | null = null;
+
 async function signMessageWithTimeout(signer: any, message: string): Promise<string> {
+  if (pendingWalletSignature) throw new HavnaiApiError(
+    "A signature request is already open. Finish or cancel it in MetaMask before trying again.", "wallet_request_pending"
+  );
+  const signing = Promise.resolve().then(() => signer.signMessage(message) as Promise<string>);
+  pendingWalletSignature = signing;
+  const clear = () => { if (pendingWalletSignature === signing) pendingWalletSignature = null; };
+  void signing.then(clear, clear);
   let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<string>((_, reject) => {
     timeoutHandle = setTimeout(() => {
@@ -590,7 +600,7 @@ async function signMessageWithTimeout(signer: any, message: string): Promise<str
   });
   try {
     return await Promise.race([
-      signer.signMessage(message) as Promise<string>,
+      signing,
       timeoutPromise,
     ]);
   } catch (error: any) {
@@ -1349,6 +1359,7 @@ type WalletNoncePurpose =
   | "music_publish"
   | "music_unpublish"
   | "music_like"
+  | "music_read_session"
   | "music_library_read"
   | "music_save"
   | "music_unsave"
@@ -2641,6 +2652,25 @@ function normalizeMusicPlaylist(raw: any): MusicPlaylist {
   };
 }
 
+async function musicReadAccess(wallet: string): Promise<{ wallet: string; read_session: string }> {
+  const session = await getMusicReadSession(wallet, async () => {
+    const signed = await signWalletNonce({ wallet, purpose: "music_read_session" });
+    const response = await fetchWithTimeout(apiUrl("/music/session"), {
+      method: "POST", headers: buildHeaders(true), body: JSON.stringify(signed),
+    });
+    if (!response.ok) throw await parseErrorResponse(response);
+    return await response.json() as MusicReadSession;
+  });
+  return { wallet: session.wallet, read_session: session.token };
+}
+
+async function fetchMusicRead(input: string, init: RequestInit): Promise<Response> {
+  const response = await fetchWithTimeout(input, init, MUSIC_READ_TIMEOUT_MS);
+  // Never open another wallet prompt automatically after an expired/revoked session.
+  if (response.status === 401) clearMusicReadSession();
+  return response;
+}
+
 export async function fetchMusicDiscover(
   opts: {
     search?: string;
@@ -2661,18 +2691,12 @@ export async function fetchMusicDiscover(
   if (opts.creator_wallet) params.set("creator_wallet", opts.creator_wallet);
   let res: Response;
   if (opts.wallet) {
-    const signed = await signWalletNonce({
-      wallet: opts.wallet,
-      amount: 1,
-      purpose: "music_library_read",
-    });
-    res = await fetchWithTimeout(apiUrl("/music/discover"), {
+    const signed = await musicReadAccess(opts.wallet);
+    res = await fetchMusicRead(apiUrl("/music/discover"), {
       method: "POST",
       headers: buildHeaders(true),
       body: JSON.stringify({
-        wallet: signed.wallet,
-        nonce: signed.nonce,
-        signature: signed.signature,
+        ...signed,
         search: opts.search,
         style: opts.style,
         sort: opts.sort,
@@ -2680,12 +2704,12 @@ export async function fetchMusicDiscover(
         limit: opts.limit,
         creator_wallet: opts.creator_wallet,
       }),
-    }, MUSIC_READ_TIMEOUT_MS);
+    });
   } else {
     const qs = params.toString();
-    res = await fetchWithTimeout(apiUrl(`/music/discover${qs ? `?${qs}` : ""}`), {
+    res = await fetchMusicRead(apiUrl(`/music/discover${qs ? `?${qs}` : ""}`), {
       headers: buildHeaders(false),
-    }, MUSIC_READ_TIMEOUT_MS);
+    });
   }
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();
@@ -2702,23 +2726,17 @@ export async function fetchMusicLibrary(
   opts: { wallet: string; search?: string; offset?: number; limit?: number }
 ): Promise<MusicLibraryResponse> {
   return cachedMusicLibrary(JSON.stringify([opts.wallet.toLowerCase(), opts.search || "", opts.offset || 0, opts.limit || 0]), async () => {
-    const signed = await signWalletNonce({
-      wallet: opts.wallet,
-      amount: 1,
-      purpose: "music_library_read",
-    });
-    const res = await fetchWithTimeout(apiUrl("/music/library"), {
+    const signed = await musicReadAccess(opts.wallet);
+    const res = await fetchMusicRead(apiUrl("/music/library"), {
       method: "POST",
       headers: buildHeaders(true),
       body: JSON.stringify({
-        wallet: signed.wallet,
-        nonce: signed.nonce,
-        signature: signed.signature,
+        ...signed,
         search: opts.search,
         offset: opts.offset,
         limit: opts.limit,
       }),
-    }, MUSIC_READ_TIMEOUT_MS);
+    });
     if (!res.ok) throw await parseErrorResponse(res);
     const data = await res.json();
     return {
@@ -2733,21 +2751,14 @@ export async function fetchMusicLibrary(
 }
 
 export async function fetchMyMusicPlaylists(wallet: string = WALLET): Promise<MusicPlaylist[]> {
-  const signed = await signWalletNonce({
-    wallet,
-    amount: 1,
-    purpose: "playlist_read",
-    playlist_id: "library",
-  });
-  const res = await fetchWithTimeout(apiUrl("/music/playlists/mine"), {
+  const signed = await musicReadAccess(wallet);
+  const res = await fetchMusicRead(apiUrl("/music/playlists/mine"), {
     method: "POST",
     headers: buildHeaders(true),
     body: JSON.stringify({
-      wallet: signed.wallet,
-      nonce: signed.nonce,
-      signature: signed.signature,
+      ...signed,
     }),
-  }, MUSIC_READ_TIMEOUT_MS);
+  });
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();
   return Array.isArray(data?.playlists) ? data.playlists.map(normalizeMusicPlaylist) : [];
@@ -2849,30 +2860,23 @@ export async function deleteMusicPlaylist(playlistId: string, wallet: string = W
 }
 
 export async function fetchMusicPlaylist(playlistId: string, wallet?: string | null): Promise<MusicPlaylist> {
-  const publicRes = await fetchWithTimeout(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}`), {
+  const publicRes = await fetchMusicRead(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}`), {
     headers: buildHeaders(false),
-  }, MUSIC_READ_TIMEOUT_MS);
+  });
   if (publicRes.ok) {
     const publicPlaylist = normalizeMusicPlaylist(await publicRes.json());
     if (!wallet || publicPlaylist.owner_wallet.toLowerCase() !== wallet.toLowerCase()) {
       return publicPlaylist;
     }
     try {
-      const signed = await signWalletNonce({
-        wallet,
-        amount: 1,
-        purpose: "playlist_read",
-        playlist_id: playlistId,
-      });
-      const privateRes = await fetchWithTimeout(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}/access`), {
+      const signed = await musicReadAccess(wallet);
+      const privateRes = await fetchMusicRead(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}/access`), {
         method: "POST",
         headers: buildHeaders(true),
         body: JSON.stringify({
-          wallet: signed.wallet,
-          nonce: signed.nonce,
-          signature: signed.signature,
+          ...signed,
         }),
-      }, MUSIC_READ_TIMEOUT_MS);
+      });
       if (privateRes.ok) return normalizeMusicPlaylist(await privateRes.json());
     } catch {
       return publicPlaylist;
@@ -2880,21 +2884,14 @@ export async function fetchMusicPlaylist(playlistId: string, wallet?: string | n
     return publicPlaylist;
   }
   if (wallet) {
-    const signed = await signWalletNonce({
-      wallet,
-      amount: 1,
-      purpose: "playlist_read",
-      playlist_id: playlistId,
-    });
-    const privateRes = await fetchWithTimeout(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}/access`), {
+    const signed = await musicReadAccess(wallet);
+    const privateRes = await fetchMusicRead(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}/access`), {
       method: "POST",
       headers: buildHeaders(true),
       body: JSON.stringify({
-        wallet: signed.wallet,
-        nonce: signed.nonce,
-        signature: signed.signature,
+        ...signed,
       }),
-    }, MUSIC_READ_TIMEOUT_MS);
+    });
     if (privateRes.ok) return normalizeMusicPlaylist(await privateRes.json());
     throw await parseErrorResponse(privateRes);
   }
@@ -2988,26 +2985,20 @@ export async function fetchMusicCreator(wallet: string, opts: { sort?: string; v
   if (opts.sort) params.set("sort", opts.sort);
   let res: Response;
   if (opts.viewerWallet) {
-    const signed = await signWalletNonce({
-      wallet: opts.viewerWallet,
-      amount: 1,
-      purpose: "music_library_read",
-    });
-    res = await fetchWithTimeout(apiUrl(`/music/creator/${encodeURIComponent(wallet)}`), {
+    const signed = await musicReadAccess(opts.viewerWallet);
+    res = await fetchMusicRead(apiUrl(`/music/creator/${encodeURIComponent(wallet)}`), {
       method: "POST",
       headers: buildHeaders(true),
       body: JSON.stringify({
-        wallet: signed.wallet,
-        nonce: signed.nonce,
-        signature: signed.signature,
+        ...signed,
         sort: opts.sort,
       }),
-    }, MUSIC_READ_TIMEOUT_MS);
+    });
   } else {
     const qs = params.toString();
-    res = await fetchWithTimeout(apiUrl(`/music/creator/${encodeURIComponent(wallet)}${qs ? `?${qs}` : ""}`), {
+    res = await fetchMusicRead(apiUrl(`/music/creator/${encodeURIComponent(wallet)}${qs ? `?${qs}` : ""}`), {
       headers: buildHeaders(false),
-    }, MUSIC_READ_TIMEOUT_MS);
+    });
   }
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();

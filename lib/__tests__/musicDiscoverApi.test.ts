@@ -1,3 +1,4 @@
+import { clearMusicReadSession } from "../musicReadSession";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearMusicLibraryCache } from "../musicLibraryCache";
 import {
@@ -60,6 +61,7 @@ vi.mock("../wallet", () => {
 describe("music discover API", () => {
   afterEach(() => {
     clearMusicLibraryCache();
+    clearMusicReadSession();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -157,17 +159,19 @@ describe("music discover API", () => {
         offset: 0,
         sort: "popular",
       }), { status: 200, headers: { "Content-Type": "application/json" } }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => url === "/api/music/session"
+      ? Promise.resolve(new Response(JSON.stringify({ wallet: TEST_WALLET, token: "read-token", expires_at: Date.now() / 1000 + 28800 }), { status: 200 }))
+      : fetchMock(url, init));
 
     const response = await fetchMusicDiscover({ sort: "popular", wallet: TEST_WALLET, limit: 48 });
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/wallet/nonce", expect.objectContaining({
       method: "POST",
-      body: expect.stringContaining('"purpose":"music_library_read"'),
+      body: expect.stringContaining('"purpose":"music_read_session"'),
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/music/discover", expect.objectContaining({
       method: "POST",
-      body: expect.stringContaining('"signature":"0xsigned"'),
+      body: expect.stringContaining('"read_session":"read-token"'),
     }));
     expect(response.publications[0].saved_by_me).toBe(true);
     expect(response.publications[0].liked_by_me).toBe(true);
@@ -248,17 +252,19 @@ describe("music discover API", () => {
       limit: 80,
       offset: 0,
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => url === "/api/music/session"
+      ? Promise.resolve(new Response(JSON.stringify({ wallet: TEST_WALLET, token: "read-token", expires_at: Date.now() / 1000 + 28800 }), { status: 200 }))
+      : fetchMock(url, init));
 
     const response = await fetchMusicLibrary({ wallet: TEST_WALLET, search: "saved" });
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/wallet/nonce", expect.objectContaining({
       method: "POST",
-      body: expect.stringContaining('"purpose":"music_library_read"'),
+      body: expect.stringContaining('"purpose":"music_read_session"'),
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/music/library", expect.objectContaining({
       method: "POST",
-      body: expect.stringContaining('"signature":"0xsigned"'),
+      body: expect.stringContaining('"read_session":"read-token"'),
     }));
     expect(response.publications[0].saved_by_me).toBe(true);
     expect(response.publications[0].job_id).toBeUndefined();
@@ -279,17 +285,19 @@ describe("music discover API", () => {
           track_count: 3,
         }],
       }), { status: 200, headers: { "Content-Type": "application/json" } }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => url === "/api/music/session"
+      ? Promise.resolve(new Response(JSON.stringify({ wallet: TEST_WALLET, token: "read-token", expires_at: Date.now() / 1000 + 28800 }), { status: 200 }))
+      : fetchMock(url, init));
 
     const playlists = await fetchMyMusicPlaylists(TEST_WALLET);
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/wallet/nonce", expect.objectContaining({
       method: "POST",
-      body: expect.stringContaining('"purpose":"playlist_read"'),
+      body: expect.stringContaining('"purpose":"music_read_session"'),
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/music/playlists/mine", expect.objectContaining({
       method: "POST",
-      body: expect.stringContaining('"signature":"0xsigned"'),
+      body: expect.stringContaining('"read_session":"read-token"'),
     }));
     expect(playlists[0]).toMatchObject({ id: "playlist-1", title: "Library Mix", track_count: 3 });
   });
@@ -451,7 +459,9 @@ describe("music discover API", () => {
         track_count: 2,
         publications: [{ id: "music-1", title: "First", creator: "0x1111...1111" }],
       }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => url === "/api/music/session"
+      ? Promise.resolve(new Response(JSON.stringify({ wallet: TEST_WALLET, token: "read-token", expires_at: Date.now() / 1000 + 28800 }), { status: 200 }))
+      : fetchMock(url, init));
 
     const playlist = await fetchMusicPlaylist("playlist-1", TEST_WALLET);
 
@@ -460,11 +470,11 @@ describe("music discover API", () => {
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/wallet/nonce", expect.objectContaining({
       method: "POST",
-      body: expect.stringContaining('"purpose":"playlist_read"'),
+      body: expect.stringContaining('"purpose":"music_read_session"'),
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/music/playlists/playlist-1/access", expect.objectContaining({
       method: "POST",
-      body: expect.stringContaining('"signature":"0xsigned"'),
+      body: expect.stringContaining('"read_session":"read-token"'),
     }));
     expect(playlist.is_owner).toBe(true);
     expect(playlist.publications[0].title).toBe("First");
@@ -491,7 +501,9 @@ describe("music discover API", () => {
         track_count: 1,
         publications: [{ id: "music-1", title: "Saved Track", creator: "0x1111...1111" }],
       }), { status: 200, headers: { "Content-Type": "application/json" } }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => url === "/api/music/session"
+      ? Promise.resolve(new Response(JSON.stringify({ wallet: TEST_WALLET, token: "read-token", expires_at: Date.now() / 1000 + 28800 }), { status: 200 }))
+      : fetchMock(url, init));
 
     const playlist = await fetchMusicPlaylist("playlist-private", TEST_WALLET);
 
@@ -500,11 +512,11 @@ describe("music discover API", () => {
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/wallet/nonce", expect.objectContaining({
       method: "POST",
-      body: expect.stringContaining('"purpose":"playlist_read"'),
+      body: expect.stringContaining('"purpose":"music_read_session"'),
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/music/playlists/playlist-private/access", expect.objectContaining({
       method: "POST",
-      body: expect.stringContaining('"signature":"0xsigned"'),
+      body: expect.stringContaining('"read_session":"read-token"'),
     }));
     expect(playlist.is_owner).toBe(true);
     expect(playlist.artwork_tiles).toEqual(["/api/music/publications/music-1/cover.svg"]);
@@ -548,18 +560,38 @@ describe("music discover API", () => {
         publications: [{ id: "music-1", title: "Creator Track", creator: "0x1111...1111", saved_by_me: true }],
         playlists: [],
       }), { status: 200, headers: { "Content-Type": "application/json" } }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => url === "/api/music/session"
+      ? Promise.resolve(new Response(JSON.stringify({ wallet: TEST_WALLET, token: "read-token", expires_at: Date.now() / 1000 + 28800 }), { status: 200 }))
+      : fetchMock(url, init));
 
     const creator = await fetchMusicCreator(TEST_WALLET, { viewerWallet: TEST_WALLET });
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/wallet/nonce", expect.objectContaining({
       method: "POST",
-      body: expect.stringContaining('"purpose":"music_library_read"'),
+      body: expect.stringContaining('"purpose":"music_read_session"'),
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, `/api/music/creator/${TEST_WALLET}`, expect.objectContaining({
       method: "POST",
-      body: expect.stringContaining('"signature":"0xsigned"'),
+      body: expect.stringContaining('"read_session":"read-token"'),
     }));
     expect(creator.publications[0].saved_by_me).toBe(true);
   });
+  it("opens one read session for concurrent library, playlist and creator reads", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/wallet/nonce") return nonceResponse();
+      if (url === "/api/music/session") return new Response(JSON.stringify({ wallet: TEST_WALLET, token: "shared-token", expires_at: Date.now() / 1000 + 28800 }));
+      return new Response(JSON.stringify({ wallet: TEST_WALLET, publications: [], playlists: [], recent_liked: [] }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await Promise.all([
+      fetchMusicLibrary({ wallet: TEST_WALLET }), fetchMyMusicPlaylists(TEST_WALLET),
+      fetchMusicCreator(TEST_WALLET, { viewerWallet: TEST_WALLET }),
+      fetchMusicDiscover({ wallet: TEST_WALLET }),
+    ]);
+    clearMusicLibraryCache();
+    await fetchMusicLibrary({ wallet: TEST_WALLET, search: "another page" });
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/wallet/nonce")).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/music/session")).toHaveLength(1);
+  });
+
 });

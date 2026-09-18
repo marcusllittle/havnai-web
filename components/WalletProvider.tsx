@@ -1,3 +1,4 @@
+import { clearMusicReadSession } from "../lib/musicReadSession";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   ensureInjectedProvider,
@@ -97,10 +98,13 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const selectedRef = useRef<InjectedProviderSelection | null>(null);
   const refreshVersion = useRef(0);
   const explicitlyDisconnected = useRef(false);
+  const previousWallet = useRef<string | null>(null);
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
   useEffect(() => {
     clearMusicLibraryCache();
+    if (previousWallet.current && previousWallet.current !== snapshot.connectedWallet) clearMusicReadSession();
+    previousWallet.current = snapshot.connectedWallet;
     return clearMusicLibraryCache;
   }, [snapshot.connectedWallet]);
 
@@ -226,6 +230,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [envWallet, patchSnapshot]);
 
   const disconnect = useCallback(() => {
+    clearMusicReadSession();
     clearMusicLibraryCache();
     selectedRef.current = null;
     setActiveWalletProvider(null);

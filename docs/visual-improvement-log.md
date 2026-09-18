@@ -830,3 +830,26 @@ from this environment.
   not transfer tokens or deposit credits automatically.
 - Web suite: 43 files / 233 tests pass. Backend targeted suite: 59 tests and 10
   subtests pass. Live chain transactions and token distribution were not performed.
+
+## September 17, 2026 - Wallet functionality audit
+
+- Connect Wallet now sends eth_requestAccounts on the explicit click without
+  waiting for a passive eth_accounts call. EIP-6963 discovery selects MetaMask's
+  announced provider when another extension owns window.ethereum. Startup no
+  longer initializes the SDK or pins an unconnected provider. Chain lookups are
+  bounded and cannot hide an approved connection. Mounted tests use the real
+  WalletButton, WalletProvider and wallet module with simulated extension RPCs.
+- Private music reads share one eight-hour read-only session, including concurrent
+  Library, playlist, creator and publishing-status requests. Tokens stay in this
+  tab's sessionStorage and clear on account change/disconnect. Mutation signatures
+  remain separate; a pending signature cannot queue more wallet popups.
+- Backend c4a8bcf is required for music sessions. Its validation includes actual
+  signature recovery, expiration, replay rejection, wallet mismatch, read-only
+  scope enforcement, marketplace asset binding and non-finite amount rejection.
+  Test HAI submission remains a manual queue; explicit authenticated admin credit
+  grants are atomic/idempotent. API exceptions now return a log reference in JSON.
+- Web: 239 tests passed plus the added cross-page session regression passed;
+  production webpack build passed. Backend: 99 tests and 10 subtests passed.
+- Real MetaMask UI approval and financial transactions are not verified. The live
+  read audit found missing reward claim-contract configuration and absent advanced
+  Network APIs; those are not represented as resolved.
