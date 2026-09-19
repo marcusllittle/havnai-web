@@ -123,6 +123,8 @@ export default function MusicStudioPage() {
   const [publishTags, setPublishTags] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [publishProgress, setPublishProgress] = useState("");
+  const [publishError, setPublishError] = useState("");
+  const publishInFlight = useRef(false);
   const mountedRef = useRef(false);
   const { currentTrack, isPlaying, playTrack, toggle, currentTime, duration, seek } = useMusicPlayer();
   const wallet = useWallet();
@@ -357,23 +359,24 @@ export default function MusicStudioPage() {
     setPublishTitle(musicJobTitle(job));
     setPublishTags(jobStyle(job));
     setPublishProgress("");
+    setPublishError("");
     setError("");
   }
 
   async function submitPublish(event: React.FormEvent) {
     event.preventDefault();
-    if (!publishJob) return;
-    let signerWallet = activeWallet;
-    if (!signerWallet) {
-      signerWallet = await wallet.connect().catch((reason) => {
-        setError(friendlyError(reason));
-        return null;
-      });
-    }
-    if (!signerWallet) return;
+    if (!publishJob || publishInFlight.current) return;
+    publishInFlight.current = true;
     setPublishing(true);
-    setPublishProgress("Preparing signature...");
+    setPublishError("");
     try {
+      // The configured fallback wallet can browse/create, but is not a signer.
+      setPublishProgress(connectedWallet ? "Preparing signature..." : "Connect in MetaMask...");
+      const signerWallet = connectedWallet || await wallet.connect();
+      if (!signerWallet) throw new Error("Wallet connection was not completed. Open MetaMask and try again.");
+      if (publishJob.wallet?.toLowerCase() !== signerWallet.toLowerCase()) {
+        throw new Error("Switch to this song's creator wallet in MetaMask, then try publishing again.");
+      }
       const publication = await publishMusicJob(
         {
           wallet: signerWallet,
@@ -396,8 +399,9 @@ export default function MusicStudioPage() {
       ]);
       setPublishJob(null);
     } catch (reason) {
-      setError(friendlyError(reason));
+      setPublishError(friendlyError(reason));
     } finally {
+      publishInFlight.current = false;
       setPublishing(false);
       setPublishProgress("");
     }
@@ -479,7 +483,8 @@ export default function MusicStudioPage() {
                 const publication = publicationByJobId.get(job.id);
                 const mode = jobMode(job);
                 const track = job.resolved_spec?.parameters?.track_name;
-                const canPublish = Boolean(audio && !active && activeWallet && job.wallet?.toLowerCase() === activeWallet.toLowerCase());
+                const canPublish = Boolean(audio && job.status === "succeeded" && job.wallet &&
+                  (!connectedWallet || job.wallet.toLowerCase() === connectedWallet.toLowerCase()));
                 const progress = isCurrent && duration > 0 ? currentTime / duration : 0;
                 return (
                   <article className={`music-song ${active ? "is-generating" : ""}`} key={job.id}>
@@ -590,7 +595,7 @@ export default function MusicStudioPage() {
                             ) : canPublish ? (
                               <button type="button" role="menuitem" onClick={() => { setOpenMenu(null); beginPublish(job); }}>Publish</button>
                             ) : audio && !active ? (
-                              <span>{activeWallet ? "Connect the creator wallet to publish" : "Connect wallet to publish"}</span>
+                              <span>{!job.wallet ? "This song has no creator wallet assigned" : connectedWallet ? "Connect the creator wallet to publish" : "This song is not ready to publish"}</span>
                             ) : null}
                           </div>
                         )}
@@ -605,13 +610,13 @@ export default function MusicStudioPage() {
         </div>
         {publishJob && (
           <div className="music-publish-backdrop" role="presentation" onMouseDown={() => !publishing && setPublishJob(null)}>
-            <form className="music-publish-modal" onSubmit={submitPublish} onMouseDown={(event) => event.stopPropagation()}>
+            <form className="music-publish-modal" role="dialog" aria-modal="true" aria-labelledby="music-publish-title" onSubmit={submitPublish} onMouseDown={(event) => event.stopPropagation()}>
               <div className="music-publish-cover">
                 <Image src="/music-default-cover.png" alt="" fill sizes="180px" />
               </div>
               <div className="music-publish-fields">
                 <div className="music-publish-heading">
-                  <span>Publish to Discover</span>
+                  <span id="music-publish-title">Publish to Discover</span>
                   <button type="button" aria-label="Close publish dialog" title="Close" onClick={() => setPublishJob(null)} disabled={publishing}><X size={18} /></button>
                 </div>
                 <label>
@@ -628,9 +633,10 @@ export default function MusicStudioPage() {
                   {publishJob.resolved_spec?.parameters?.key && <span>{publishJob.resolved_spec.parameters.key}</span>}
                   {publishJob.resolved_spec?.parameters?.instrumental && <span>Instrumental</span>}
                 </div>
-                {publishProgress && <p className="music-publish-progress">{publishProgress}</p>}
+                {publishError && <p className="music-publish-error" role="alert">{publishError}</p>}
+                {publishProgress && <p className="music-publish-progress" role="status">{publishProgress}</p>}
                 <button className="music-generate" type="submit" disabled={publishing || !publishTitle.trim()}>
-                  {publishing ? "Publishing..." : activeWallet ? "Publish" : "Connect and publish"}
+                  {publishing ? "Publishing..." : connectedWallet ? "Publish" : "Connect and publish"}
                 </button>
               </div>
             </form>
