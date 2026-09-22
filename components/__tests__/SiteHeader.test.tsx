@@ -26,15 +26,40 @@ describe("Site navigation", () => {
     expect(container.querySelector(".brand")?.getAttribute("aria-label")).toBe("HavnAI home");
   });
 
-  it("makes every destination available without a disclosure", () => {
+  it("groups destinations without removing any existing route", () => {
     const links = Array.from(container.querySelectorAll("nav a"));
     expect(links.map(link => link.textContent)).toEqual([
-      "Astra", "Create", "Music", "Discover", "Library", "Video", "Collection",
-      "Marketplace", "Network", "Credits", "Run a Node", "Wallet", "How it works",
+      "Image", "Video", "Music", "Discover", "Astra", "Marketplace", "Network overview",
+      "Run a Node", "How it works", "Library", "Collection", "Wallet", "Credits",
     ]);
     expect(new Set(links.map(link => link.getAttribute("href"))).size).toBe(13);
     expect(container.querySelector("nav button")).toBeNull();
     expect(container.querySelector('a[href="/templates"]')).toBeNull();
     expect(container.querySelectorAll("button")).toHaveLength(1);
+    expect(Array.from(container.querySelectorAll("summary")).map(item => item.textContent)).toEqual(["Create", "Network", "Your Havn"]);
+    expect(links.map(link => link.getAttribute("href"))).toEqual([
+      "/create", "/video-studio", "/music", "/discover", "/astra", "/marketplace", "/nodes",
+      "/run-a-node", "/how-it-works", "/music/library", "/library", "/wallet", "/pricing",
+    ]);
+  });
+
+  it("closes an open group on Escape and returns focus to its summary", () => {
+    const group = container.querySelector("details")!;
+    group.open = true;
+    act(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(group.open).toBe(false);
+    expect(document.activeElement).toBe(group.querySelector("summary"));
+  });
+
+  it("closes navigation on outside interaction and route changes", () => {
+    const group = container.querySelector("details")!;
+    group.open = true;
+    act(() => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+    expect(group.open).toBe(false);
+    group.open = true;
+    route.asPath = "/music/library?tab=saved";
+    act(() => root.render(<SiteHeader />));
+    expect(group.open).toBe(false);
+    route.asPath = "/music/library";
   });
 });
