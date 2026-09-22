@@ -1,7 +1,6 @@
 .havn-home, .havn-home-footer { --home-accent: var(--brand-accent); --home-muted: #adb6bf; --home-line: #ffffff18; color: #edf1f4; background: #050b14; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .havn-home { padding: 42px max(24px, calc((100vw - 1280px) / 2)) 0; overflow: hidden; }
 .havn-home :is(h1, h2, h3), .havn-home-footer h2 { margin: 0; font-family: inherit; text-transform: none; letter-spacing: -.04em; }
-.havn-eyebrow { display: flex; align-items: center; gap: 8px; color: var(--home-accent); font-size: 10px; font-weight: 600; letter-spacing: .11em; text-transform: uppercase; }
 .havn-home-hero { display: grid; grid-template-columns: .9fr 1.1fr; align-items: center; gap: 40px; min-height: 540px; }
 .havn-hero-copy { padding: 28px 0; min-width: 0; }
 .havn-hero-copy h1 { margin: 22px 0; font-size: clamp(43px, 4.8vw, 68px); font-weight: 500; line-height: 1.035; letter-spacing: -.055em; }
@@ -13,15 +12,11 @@
 .havn-button-primary:hover { background: var(--brand-accent-hover); }
 .havn-button-secondary { border-color: #606e7c88; color: #d8e2eb; background: #151d25; }
 .havn-button-secondary:hover { background: #222f3b; }
-.havn-hero-note { display: flex; align-items: center; gap: 8px; margin-top: 26px; color: #919ca6; font-size: 11px; }
-.havn-hero-note > span { width: 5px; height: 5px; border-radius: 50%; background: #839ab1; }
 .havn-hero-scene { position: relative; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 22px; border: 1px solid #0080ff26; isolation: isolate; background: #0c101b; }
 .havn-hero-scene > img { object-fit: contain; object-position: center; z-index: -2; }
-.havn-scene-label { position: absolute; top: 22px; left: 24px; display: flex; align-items: center; gap: 12px; color: #e4ecf4; font-size: 12px; font-weight: 550; }
-.havn-scene-label > span { border-left: 1px solid #c4d3e266; padding-left: 12px; color: #b8c3ce; font-size: 10px; font-weight: 400; }
 .havn-scene-caption { position: absolute; bottom: 24px; left: 24px; right: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .havn-scene-caption > div { display: grid; gap: 8px; }
-.havn-scene-caption span { color: #adbac7; font-size: 10px; }
+.havn-scene-caption span { color: #adbac7; font-size: 12px; }
 .havn-scene-caption strong { font-size: 27px; font-weight: 500; letter-spacing: -.025em; }
 .havn-scene-caption a { display: grid; place-items: center; width: 48px; height: 48px; border: 1px solid #c8def466; border-radius: 50%; background: #13202cb3; color: #d6e7f8; }
 .havn-tools { margin-top: 86px; }
@@ -29,26 +24,19 @@
 .havn-section-heading h2 { margin-top: 12px; font-size: clamp(32px, 3.4vw, 44px); line-height: 1.15; font-weight: 500; }
 .havn-section-heading > p { color: var(--home-muted); font-size: 13px; line-height: 1.8; margin: 0; }
 .havn-tool-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
-.havn-tool-card { overflow: hidden; border: 1px solid var(--home-line); border-radius: 17px; background: #111820; color: #ecf0f3; text-decoration: none; transition: border-color .18s ease; }
+.havn-tool-card { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--home-line); border-radius: 17px; background: #111820; color: #ecf0f3; text-decoration: none; transition: border-color .18s ease; }
 .havn-tool-card:hover { border-color: #788999; }
-.havn-tool-art { position: relative; aspect-ratio: 1.25; overflow: hidden; }
+.havn-tool-art { position: relative; aspect-ratio: 4 / 5; overflow: hidden; }
 .havn-tool-art > img { object-fit: cover; transition: transform .35s ease; }
 .havn-tool-card:hover .havn-tool-art > img { transform: scale(1.025); }
 .havn-tool-art > span { position: absolute; left: 16px; top: 16px; display: grid; place-items: center; width: 37px; height: 37px; border: 1px solid #dae2ea33; border-radius: 10px; background: #070f17c9; color: #e1eaf3; backdrop-filter: blur(8px); }
-.havn-tool-art > small { position: absolute; bottom: 13px; left: 16px; padding: 6px 8px; border-radius: 6px; background: #060d13dd; color: #dbe3ec; font-size: 10px; }
-.havn-tool-copy { padding: 23px; }
+.havn-tool-copy { padding: 23px; display: flex; flex-direction: column; flex: 1; }
 .havn-tool-copy h3 { color: #ecf0f3; font-size: 24px; line-height: 1.2; font-weight: 500; }
-.havn-tool-copy p { min-height: 48px; margin: 12px 0 22px; color: var(--home-muted); font-size: 13px; line-height: 1.75; }
-.havn-tool-copy > span { display: flex; align-items: center; justify-content: space-between; padding-top: 17px; border-top: 1px solid var(--home-line); font-size: 12px; color: #c6d7e7; }
-.havn-tools-footnote { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 24px; margin-top: 18px; color: #929da8; font-size: 10px; line-height: 1.7; }
+.havn-tool-copy p { min-height: 48px; margin: 12px 0 22px; color: var(--home-muted); font-size: 14px; line-height: 1.75; }
+.havn-tool-copy > a { text-decoration: none; margin-top: auto; min-height: 44px; display: flex; align-items: center; justify-content: space-between; padding-top: 17px; border-top: 1px solid var(--home-line); font-size: 14px; color: #c6d7e7; }
+.havn-tools-footnote { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 24px; margin-top: 18px; color: #929da8; font-size: 12px; line-height: 1.7; }
 .havn-tools-footnote > a { display: flex; align-items: center; gap: 7px; min-height: 44px; font-size: 12px; color: #c0cfdd; text-decoration: none; }
-.havn-collection-story { display: grid; grid-template-columns: 1fr 1fr; gap: 70px; align-items: center; margin-top: 76px; padding: 34px 36px; border: 1px solid var(--home-line); border-radius: 22px; background: radial-gradient(ellipse at 20% 50%, #2d3b484a, transparent 60%), #10161d; }
-.havn-collection-art { min-width: 0; position: relative; height: 350px; }
-.havn-print { position: absolute; overflow: hidden; border: 6px solid #3c4751; border-radius: 12px; box-shadow: 0 15px 45px #0007; }
-.havn-print > img { object-fit: cover; }
-.havn-print-back { top: 12px; left: 2%; width: 50%; height: 80%; transform: rotate(-9deg); }
-.havn-print-front { top: 39px; left: 40%; width: 57%; height: 82%; transform: rotate(9deg); }
-.havn-art-caption { position: absolute; bottom: -8px; left: 0; right: 0; color: #a0aab4; font-size: 9px; text-align: center; }
+.havn-collection-story { display: grid; grid-template-columns: 1.2fr 1fr; gap: 40px; align-items: center; margin-top: 76px; padding: 34px 36px; border: 1px solid var(--home-line); border-radius: 22px; background: radial-gradient(ellipse at 20% 50%, #2d3b484a, transparent 60%), #10161d; }
 .havn-collection-copy h2 { margin: 16px 0 21px; font-size: clamp(31px, 3.2vw, 43px); line-height: 1.14; font-weight: 500; }
 .havn-collection-copy > p { max-width: 390px; margin: 0 0 24px; color: var(--home-muted); font-size: 14px; line-height: 1.8; }
 .havn-text-link { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; color: #b0bdc9; font-size: 12px; text-decoration: none; }
@@ -58,7 +46,7 @@
 .havn-network-copy h2 { margin: 12px 0 15px; font-size: clamp(29px, 3vw, 38px); font-weight: 500; line-height: 1.17; }
 .havn-network-copy > p { max-width: 470px; color: var(--home-muted); font-size: 13px; line-height: 1.8; margin: 0; }
 .havn-network-stats { display: flex; gap: 25px; margin-top: 23px; flex-wrap: wrap; }
-.havn-network-stats > span { color: var(--home-muted); font-size: 11px; }
+.havn-network-stats > span { color: var(--home-muted); font-size: 13px; }
 .havn-network-stats strong { font-size: 17px; font-weight: 500; color: #e2eaf2; margin-right: 4px; }
 .havn-network-links { display: grid; gap: 7px; min-width: 180px; }
 .havn-home-footer { padding: 42px max(24px, calc((100vw - 1280px) / 2)) 0; border-top: 1px solid var(--home-line); background: #080d12; }
@@ -71,7 +59,7 @@
 .havn-footer-group ul { list-style: none; padding: 0; margin: 0; }
 .havn-footer-group a { display: inline-flex; align-items: center; min-height: 36px; color: #99a4b0; font-size: 12px; text-decoration: none; }
 .havn-footer-group a:hover { color: var(--home-accent); }
-.havn-footer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 74px; border-top: 1px solid var(--home-line); color: #919ca6; font-size: 11px; }
+.havn-footer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 74px; border-top: 1px solid var(--home-line); color: #919ca6; font-size: 13px; }
 .havn-footer-bottom > div { display: flex; gap: 22px; }
 .havn-footer-bottom a { display: inline-flex; align-items: center; gap: 5px; min-height: 44px; color: #a9b3be; text-decoration: none; }
 .havn-home a:focus-visible, .havn-home-footer a:focus-visible { outline: 2px solid var(--home-accent); outline-offset: 4px; }
@@ -83,7 +71,6 @@
   .havn-tool-copy h3 { font-size: 22px; }
   .havn-tool-copy p { min-height: 69px; }
   .havn-collection-story { gap: 35px; padding: 26px; }
-  .havn-collection-art { height: 300px; }
   .havn-network-story { gap: 25px; }
   .havn-network-icon { width: 70px; height: 70px; border-radius: 18px; }
 }
@@ -91,15 +78,11 @@
   .havn-home { padding: 26px 16px 0; }
   .havn-home-hero { grid-template-columns: minmax(0, 1fr); gap: 27px; min-height: 0; }
   .havn-hero-copy { padding: 0; }
-  .havn-eyebrow { font-size: 9px; }
   .havn-hero-copy h1 { font-size: clamp(39px, 9.8vw, 55px); margin: 18px 0; }
   .havn-hero-copy > p { max-width: 430px; margin-bottom: 22px; font-size: 13px; line-height: 1.8; }
   .havn-home-actions { gap: 10px; }
   .havn-button { min-height: 46px; padding: 11px 14px; font-size: 12px; gap: 8px; }
-  .havn-hero-note { margin-top: 18px; font-size: 10px; }
   .havn-hero-scene { border-radius: 16px; }
-  .havn-scene-label { top: 16px; left: 18px; font-size: 11px; }
-  .havn-scene-label > span { font-size: 9px; }
   .havn-scene-caption { left: 18px; right: 18px; bottom: 18px; }
   .havn-scene-caption strong { font-size: 25px; }
   .havn-tools { margin-top: 52px; }
@@ -108,13 +91,12 @@
   .havn-section-heading > p { font-size: 12px; margin-top: 12px; }
   .havn-desktop-break { display: none; }
   .havn-tool-grid { gap: 14px; }
-  .havn-tools-footnote { margin-top: 15px; font-size: 9px; gap: 3px; }
-  .havn-tools-footnote > a { font-size: 11px; }
+  .havn-tools-footnote { margin-top: 15px; font-size: 12px; gap: 3px; }
+  .havn-tools-footnote > a { font-size: 13px; }
   .havn-collection-story { grid-template-columns: minmax(0, 1fr); gap: 26px; padding: 24px 22px; margin-top: 42px; border-radius: 17px; }
-  .havn-collection-art { width: min(100%, 340px); height: 240px; margin: 0 auto; }
   .havn-collection-copy h2 { font-size: 31px; margin: 13px 0 18px; }
   .havn-collection-copy > p { font-size: 13px; }
-  .havn-text-link { font-size: 11px; }
+  .havn-text-link { font-size: 13px; }
   .havn-network-story { grid-template-columns: minmax(0, 1fr); gap: 28px; padding: 45px 6px; margin-top: 13px; }
   .havn-network-copy h2 { font-size: 31px; }
   .havn-network-icon { width: 60px; height: 60px; margin: 0 0 0 8px; border-radius: 15px; }
@@ -125,31 +107,42 @@
   .havn-footer-top { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
   .havn-footer-brand { grid-column: 1 / -1; }
   .havn-footer-brand > a:first-child { font-size: 23px; }
-  .havn-footer-group a { min-height: 44px; font-size: 11px; }
+  .havn-footer-group a { min-height: 44px; font-size: 13px; }
   .havn-footer-group h2 { margin: 0 0 9px; }
-  .havn-footer-bottom { align-items: flex-start; flex-direction: column; gap: 4px; padding-top: 20px; font-size: 10px; }
+  .havn-footer-bottom { align-items: flex-start; flex-direction: column; gap: 4px; padding-top: 20px; font-size: 12px; }
 }
 @media (max-width: 600px) {
-  .havn-tool-grid { grid-template-columns: minmax(0, 1fr); }
-  .havn-tool-card { display: grid; grid-template-columns: 115px minmax(0, 1fr); min-height: 195px; }
-  .havn-tool-art { aspect-ratio: auto; min-height: 195px; }
-  .havn-tool-art > span { top: 12px; left: 12px; width: 32px; height: 32px; border-radius: 8px; }
-  .havn-tool-art > small { left: 8px; bottom: 10px; right: 8px; padding: 5px 6px; font-size: 10px; line-height: 1.5; text-align: center; }
-  .havn-tool-copy { padding: 17px 15px; }
-  .havn-tool-copy h3 { font-size: 22px; }
-  .havn-tool-copy p { min-height: 0; margin: 10px 0 16px; font-size: 13px; line-height: 1.7; }
-  .havn-tool-copy > span { padding-top: 12px; font-size: 11px; gap: 5px; }
-  .havn-tool-copy > span svg { flex-shrink: 0; }
+  .havn-tool-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .havn-tool-art { aspect-ratio: 4 / 3; }
+  .havn-tool-art.havn-portrait-art { aspect-ratio: 4 / 5; }
+  .havn-tool-copy { padding: 22px; }
+  .havn-tool-copy p { min-height: 0; font-size: 14px; }
 }
 @media (max-width: 359px) {
   .havn-hero-copy h1 { font-size: 36px; }
-  .havn-home-actions { gap: 8px; }
-  .havn-home-actions .havn-button { padding: 10px; font-size: 11px; }
-  .havn-tool-card { grid-template-columns: 90px minmax(0, 1fr); }
-  .havn-tool-copy { padding: 16px 12px; }
-  .havn-tool-copy h3 { font-size: 20px; }
+  .havn-home-actions .havn-button { padding: 10px; font-size: 12px; }
   .havn-collection-story { padding: 20px 17px; }
-  .havn-collection-art { height: 200px; }
   .havn-collection-copy h2 { font-size: 28px; }
 }
 @media (prefers-reduced-motion: reduce) { .havn-home *, .havn-home-footer * { transition: none !important; } }
+
+.havn-tool-copy > small { color: var(--home-muted); font-size: 12px; margin: -8px 0 16px; }
+.havn-tool-art.havn-portrait-art > img { object-position: center 38%; }
+.havn-video-preview { position: absolute; inset: 0; }
+.havn-video-preview > img, .havn-video-preview > video { object-fit: cover; width: 100%; height: 100%; }
+.havn-video-preview > video { position: absolute; inset: 0; opacity: 0; }
+.havn-video-preview > video.is-playing { opacity: 1; }
+.havn-preview-control { position: absolute; bottom: 16px; right: 16px; min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 24px; border: 1px solid #ffffff55; color: #fff; background: #071422e8; cursor: pointer; font: inherit; font-size: 13px; }
+.havn-preview-control:focus-visible { outline: 2px solid var(--home-accent); outline-offset: 3px; }
+.havn-portfolio { display: grid; grid-template-columns: 1.15fr 1fr 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 10px; height: 360px; min-width: 0; }
+.havn-portfolio-item { position: relative; overflow: hidden; margin: 0; border-radius: 10px; background: #0a1523; border: 1px solid #ffffff18; }
+.havn-portfolio-item > img { object-fit: cover; }
+.havn-portfolio-portrait { grid-row: span 2; }
+.havn-portfolio-portrait > img { object-position: center; }
+.havn-portfolio-item figcaption { position: absolute; inset: auto 0 0; padding: 25px 10px 10px; background: linear-gradient(transparent, #040c16ed); color: #eff7ff; font-size: 12px; line-height: 1.5; }
+@media (max-width: 1000px) { .havn-portfolio { height: 300px; gap: 7px; } }
+@media (max-width: 760px) { .havn-portfolio { height: 310px; } }
+@media (max-width: 400px) { .havn-portfolio { height: 260px; gap: 6px; } .havn-portfolio-item figcaption { padding-inline: 6px; font-size: 13px; } }
+
+.havn-music-art { background: #0b2038; }
+.havn-music-art > img { object-fit: contain; }
