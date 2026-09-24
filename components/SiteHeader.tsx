@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { ChevronDown } from "lucide-react";
 import { WalletButton } from "./WalletButton";
+import { useAccount } from "./AccountProvider";
 
 const GROUPS = {
   Create: [{ href: "/create", label: "Image" }, { href: "/video-studio", label: "Video" }, { href: "/music", label: "Music" }],
@@ -16,6 +17,7 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 export function SiteHeader() {
+  const account = useAccount();
   const router = useRouter();
   const nav = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -61,7 +63,9 @@ export function SiteHeader() {
           {group("Network")}
           {group("Your Havn")}
         </nav>
-        <div className="nav-wallet"><WalletButton /></div>
+        <div className="nav-wallet">{account.configured
+          ? <Link className="account-nav-link" href={account.signedIn ? "/account" : "/sign-in"}>{account.signedIn ? "Your account" : "Sign in"}</Link>
+          : <WalletButton />}</div>
       </div>
     </header>
   );

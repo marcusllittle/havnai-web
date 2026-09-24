@@ -3,6 +3,7 @@ import Head from "next/head";
 import React from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { WalletProvider } from "../components/WalletProvider";
+import { AccountProvider } from "../components/AccountProvider";
 import { MusicPlayerProvider } from "../components/MusicPlayer";
 import "../style.css";
 import "../styles/music.css";
@@ -97,12 +98,12 @@ export default function HavnAIApp({ Component, pageProps }: AppProps) {
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
-      <WalletProvider>
+      <AccountProvider><WalletProvider>
         <MusicPlayerProvider>
           <Component {...pageProps} />
           <Analytics />
         </MusicPlayerProvider>
-      </WalletProvider>
+      </WalletProvider></AccountProvider>
     </ErrorBoundary>
   );
 }

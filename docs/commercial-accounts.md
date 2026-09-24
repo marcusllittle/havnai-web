@@ -4,8 +4,9 @@ The authoritative v1 ownership, identity, migration, payment and threat-model
 contract is `havnai-core/docs/commercial-accounts.md` on branch
 `feat/havn-11-commercial-accounts` (HAVN-18).
 
-This branch begins the account-first work. Account registration, commercial
-checkout, and wallet-free creation are not enabled by this documentation change.
+This branch now includes Clerk provider integration, sign-in/sign-up/account pages,
+account-scoped authenticated requests and logout/account-switch isolation. Clerk
+application configuration, commercial checkout and studio integration remain work.
 Keep HAVN-11 open until the complete acceptance flow has been exercised.
 
 ## Required web changes in HAVN-19/21/22
@@ -15,7 +16,7 @@ Keep HAVN-11 open until the complete acceptance flow has been exercised.
   A wallet address, environment wallet, email, or client-supplied ID is never
   an account session. No fake wallets for account users.
 * Configure a managed sign-in provider in the existing Pages Router. Provider
-  choice/configuration remains pending. Keep public browse and music playback
+  is Clerk; application configuration remains pending. Keep public browse and music playback
   anonymous. Show Sign in for private account operations, not Connect Wallet.
 * Forward short-lived verified-provider session tokens on account API requests.
   Never attach `HAVNAI_OWNER_TOKEN` or the shared studio key to these requests.

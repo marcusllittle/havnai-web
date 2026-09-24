@@ -19,6 +19,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@clerk/nextjs": "^7.9.5",
     "@metamask/sdk": "^0.34.0",
     "@vercel/analytics": "^2.0.1",
     "ethers": "^6.17.0",

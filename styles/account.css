@@ -120,3 +120,12 @@
  .account-page .stats-grid { grid-template-columns: minmax(0,1fr); }
  .credit-rate-grid { grid-template-columns: minmax(0,1fr); }
 }
+/* Standard account pages keep wallet controls separate from sign-in. */
+.account-auth-page { width: min(100% - 2rem, 760px); margin: 3rem auto; color: var(--text-primary, #edf5ff); }
+.account-auth-page h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1; }
+.account-auth-page > p { color: #a8bbce; line-height: 1.6; margin-bottom: 2rem; }
+.account-summary-card { border: 1px solid #233b52; background: #0d1725; border-radius: 1.2rem; padding: 1.5rem; margin: 1.5rem 0; }
+.account-summary-card code { overflow-wrap: anywhere; }
+.account-credit-total { font-size: 2rem; color: #61cfff; }
+.account-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1.5rem; }
+.account-nav-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .7rem 1.2rem; border: 1px solid #36acd4; border-radius: 999px; white-space: nowrap; color: #d8f6ff; background: #102536; }
