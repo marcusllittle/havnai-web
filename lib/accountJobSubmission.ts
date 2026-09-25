@@ -51,6 +51,8 @@ export async function submitAccountJob<T extends { id: string; owner_account_id?
       "owned_image_asset_required", "invalid_face_conditioning", "invalid_image_strength",
       "face_swap_images_required", "invalid_face_swap_settings",
       "identity_anchor_not_found", "invalid_identity_anchor_tag",
+      "invalid_preset", "invalid_aspect_ratio", "invalid_video_dimensions", "invalid_video_width", "invalid_video_height",
+      "invalid_video_fps", "invalid_video_frames", "invalid_video_steps", "invalid_video_guidance", "invalid_video_motion_strength", "invalid_video_strength",
       "mode_unsupported_by_model", "invalid_repaint_range", "invalid_track_classes"].includes(code)) {
       storage.removeItem(storageKey(account, kind));
     }
