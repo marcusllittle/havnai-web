@@ -110,3 +110,21 @@ it("rejects unexpected workflows in an otherwise valid empty-selection proof", a
   await expect(run()).rejects.toThrow("changed your selected content");
   expect(rpc.mock.calls.some(([args]) => args.method === "personal_sign")).toBe(false);
 });
+
+it.each(["likes", "saves"] as const)("binds selected %s to both signature and receipt", async kind => {
+  const field = kind === "likes" ? "like_ids" : "save_ids";
+  snapshot[kind] = [{ id: "song-one", title: "My song", already_in_account: true }];
+  for (const value of ["", `${field}: []`, `${field}: ["other-song"]`]) {
+    request.mockResolvedValueOnce({ ...challenge(), message: challenge().message + "\n" + value });
+    await expect(run()).rejects.toThrow("changed your selected content");
+  }
+  expect(rpc.mock.calls.some(([args]) => args.method === "personal_sign")).toBe(false);
+  request.mockResolvedValueOnce({ ...challenge(), message: challenge().message + `\n${field}: ["song-one"]` });
+  const proof = await run();
+  request.mockReset().mockResolvedValue(receipt());
+  await expect(submitImport(request, snapshot, proof, controller.signal)).rejects.toThrow("does not match");
+  const result = { ...receipt(), receipt: { ...receipt().receipt, [field]: ["song-one"] } };
+  request.mockReset().mockResolvedValue(result);
+  await expect(submitImport(request, snapshot, proof, controller.signal)).resolves.toEqual(result);
+  expect(request).toHaveBeenCalledTimes(1);
+});

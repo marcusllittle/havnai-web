@@ -82,7 +82,7 @@ it("only reads inventory until explicit selection and review", async () => {
     credits: { available_units: 2125, scale: 1000 }, expires_at: Date.now() / 1000 + 300 });
   await act(async () => { input("ready").click(); input("2.125").click(); });
   await act(async () => button("Review selection").click());
-  expect(JSON.parse(review.mock.calls[0][1].body)).toEqual({ job_ids: ["ready"], publication_ids: [], playlist_ids: [], workflow_ids: [], include_credits: true });
+  expect(JSON.parse(review.mock.calls[0][1].body)).toEqual({ job_ids: ["ready"], publication_ids: [], playlist_ids: [], workflow_ids: [], like_ids: [], save_ids: [], include_credits: true });
   expect(host.textContent).toContain("2.125 credits selected");
   expect(host.textContent).toContain("No content or credits have moved");
   expect(review.mock.calls.every(([path]) => path.endsWith("/import-snapshots"))).toBe(true);
@@ -141,8 +141,23 @@ it("reviews workflow-only selections and paginates the workflow inventory", asyn
   await act(async () => button("Next page").click());
   expect(input("Portrait setup").checked).toBe(true);
   await act(async () => button("Review selection").click());
-  expect(JSON.parse(review.mock.calls[0][1].body)).toEqual({ job_ids: [], publication_ids: [], playlist_ids: [], workflow_ids: ["12"], include_credits: false });
+  expect(JSON.parse(review.mock.calls[0][1].body)).toEqual({ job_ids: [], publication_ids: [], playlist_ids: [], workflow_ids: ["12"], like_ids: [], save_ids: [], include_credits: false });
   expect(host.textContent).toContain("1 workflows");
   expect(host.textContent).toContain("Portrait setup — Published");
+  expect(state.sign).not.toHaveBeenCalled();
+});
+
+it("allows a saved-song-only import and explains merging existing preferences", async () => {
+  state.request.mockResolvedValue({ ...inventory, jobs: [], total: 0, playlists: [], playlist_total: 0,
+    saves: [{ id: "song", title: "A saved track", eligible: true, already_in_account: true }], save_total: 60 });
+  review.mockResolvedValue({ id: "snapshot", jobs: [], publications: [], playlists: [], credits: null,
+    saves: [{ id: "song", title: "A saved track", already_in_account: true }], expires_at: Date.now() / 1000 + 300 });
+  await act(async () => render());
+  expect(button("Next page").disabled).toBe(false);
+  expect(host.textContent).toContain("duplicates will be merged");
+  await act(async () => input("A saved track").click());
+  await act(async () => button("Review selection").click());
+  expect(JSON.parse(review.mock.calls[0][1].body)).toEqual({ job_ids: [], publication_ids: [], playlist_ids: [], workflow_ids: [], like_ids: [], save_ids: ["song"], include_credits: false });
+  expect(host.textContent).toContain("Saved song: A saved track — Merge with existing account preference");
   expect(state.sign).not.toHaveBeenCalled();
 });

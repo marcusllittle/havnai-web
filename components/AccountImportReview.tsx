@@ -5,13 +5,15 @@ import { ensureInjectedProvider } from "../lib/wallet";
 import { recoverImport, signImport, submitImport, type ImportSnapshot, type ImportProof, type ImportReceipt } from "../lib/accountImport";
 
 type Request = <T>(path: string, init?: RequestInit) => Promise<T>;
-type Item = { id: string; eligible: boolean; title?: string | null; type?: string; exclusion?: string | null };
+type Item = { id: string; eligible: boolean; title?: string | null; type?: string; exclusion?: string | null; already_in_account?: boolean };
 interface Preview {
   jobs: Item[]; publications: Array<Item & { job_id: string }>; playlists: Item[]; workflows?: Item[]; workflow_total?: number;
+  likes?: Item[]; saves?: Item[]; like_total?: number; save_total?: number;
   total: number; playlist_total: number; eligible_count: number; publication_selection_limit_exceeded: boolean;
   credits: { available_units: number | null; scale: number; exclusion: string | null };
 }
-interface Selection { job_ids: string[]; publication_ids: string[]; playlist_ids: string[]; workflow_ids: string[]; include_credits: boolean }
+interface Selection { job_ids: string[]; publication_ids: string[]; playlist_ids: string[]; workflow_ids: string[]; like_ids: string[]; save_ids: string[]; include_credits: boolean }
+type SelectionField = Exclude<keyof Selection, "include_credits">;
 interface Snapshot extends ImportSnapshot {
   id: string; jobs: Array<{ id: string }>; publications: Array<{ id: string; title: string }>;
   playlists: Array<{ id: string; title: string }>; credits: { available_units: number; scale: number } | null;
@@ -37,7 +39,7 @@ export function AccountImportReview({ link, request, onClose }: {
   const [page, setPage] = useState(0);
   const [revision, setRevision] = useState(0);
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [selection, setSelection] = useState<Selection>({ job_ids: [], publication_ids: [], playlist_ids: [], workflow_ids: [], include_credits: false });
+  const [selection, setSelection] = useState<Selection>({ job_ids: [], publication_ids: [], playlist_ids: [], workflow_ids: [], like_ids: [], save_ids: [], include_credits: false });
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -96,7 +98,7 @@ export function AccountImportReview({ link, request, onClose }: {
       if (active.current === controller) active.current = null;
     }
   }
-  function toggle(field: "job_ids" | "publication_ids" | "playlist_ids" | "workflow_ids", id: string) {
+  function toggle(field: SelectionField, id: string) {
     setSelection(value => ({ ...value, [field]: value[field].includes(id) ? value[field].filter(item => item !== id) : [...value[field], id] }));
   }
   async function prepare() {
@@ -122,16 +124,17 @@ export function AccountImportReview({ link, request, onClose }: {
   function startOver() {
     proof.current = null; setSigned(false); setReceipt(null);
     pending.current = null; setHasPending(false); setSnapshot(null); setError("");
-    setSelection({ job_ids: [], publication_ids: [], playlist_ids: [], workflow_ids: [], include_credits: false });
+    setSelection({ job_ids: [], publication_ids: [], playlist_ids: [], workflow_ids: [], like_ids: [], save_ids: [], include_credits: false });
     setRevision(value => value + 1);
   }
   const locked = busy || hasPending;
-  const hasSelection = selection.job_ids.length + selection.playlist_ids.length + selection.workflow_ids.length > 0 || selection.include_credits;
-  function list(label: string, items: Item[], field: "job_ids" | "publication_ids" | "playlist_ids" | "workflow_ids") {
+  const hasSelection = selection.job_ids.length + selection.playlist_ids.length + selection.workflow_ids.length + selection.like_ids.length + selection.save_ids.length > 0 || selection.include_credits;
+  function list(label: string, items: Item[], field: SelectionField) {
     return <fieldset disabled={locked} style={{ minWidth: 0 }}><legend>{label}</legend>
       {items.length ? items.map(item => <label key={item.id} style={{ display: "block", overflowWrap: "anywhere", padding: "0.5rem 0" }}>
         <input type="checkbox" checked={selection[field].includes(item.id)} disabled={!item.eligible}
           onChange={() => toggle(field, item.id)} />{" "}{item.title || item.id}
+        {item.already_in_account && <span> — Already in your account; duplicates will be merged</span>}
         {!item.eligible && <span> — {explanation[item.exclusion || ""] || "Not eligible for this wallet"}</span>}
       </label>) : <p>None on this page.</p>}
     </fieldset>;
@@ -147,11 +150,15 @@ export function AccountImportReview({ link, request, onClose }: {
       {snapshot.publications.map(pub => <p key={pub.id}>{pub.title}</p>)}
       {snapshot.playlists.map(playlist => <p key={playlist.id}>{playlist.title}</p>)}
       {(snapshot.workflows || []).map(workflow => <p key={`workflow:${workflow.id}`}>{workflow.title} — {workflow.published ? "Published" : "Private"}</p>)}
+      <p>{snapshot.likes?.length || 0} liked songs, {snapshot.saves?.length || 0} saved songs.</p>
+      {(["likes", "saves"] as const).map(kind => (snapshot[kind] || []).map(item => <p key={`${kind}:${item.id}`}>
+        {kind === "likes" ? "Liked song" : "Saved song"}: {item.title}{item.already_in_account ? " — Merge with existing account preference" : ""}
+      </p>))}
       <p>{snapshot.credits ? `${credits(snapshot.credits.available_units, snapshot.credits.scale)} credits selected.` : "No credits selected."}</p>
       <p>Review expires at {new Date(snapshot.expires_at * 1000).toLocaleTimeString()}.</p>
       {receipt ? <>
         <h4>Import complete</h4>
-        <p>Your selected content and credits now belong to this account. Unlinking the wallet will not move them back.</p>
+        <p>Your selected items have been imported into this account. Liked and saved songs do not change ownership. Unlinking the wallet will not undo the import.</p>
         <p style={{ overflowWrap: "anywhere" }}>Receipt: {receipt.receipt.id}</p>
       </> : <>
         {enabled ? <>
@@ -172,6 +179,9 @@ export function AccountImportReview({ link, request, onClose }: {
         {preview.publication_selection_limit_exceeded && <p role="alert">There are too many publications on this page for one review. Select fewer creations.</p>}
         {list("Playlists", preview.playlists, "playlist_ids")}
         {list("Workflow templates", preview.workflows || [], "workflow_ids")}
+        {list("Liked songs", preview.likes || [], "like_ids")}
+        {list("Saved songs", preview.saves || [], "save_ids")}
+        <p>Selected likes and saves move to your account. Existing account preferences are kept. This does not transfer ownership of the songs.</p>
         <p>Imported workflows keep their existing publication status and settings.</p>
         <label style={{ display: "block", padding: "1rem 0" }}><input type="checkbox" checked={selection.include_credits}
           disabled={locked || preview.credits.available_units === null || preview.credits.available_units === 0}
@@ -179,9 +189,10 @@ export function AccountImportReview({ link, request, onClose }: {
           {preview.credits.available_units === null ? "Credit balance requires review" : `${credits(preview.credits.available_units, preview.credits.scale)} available credits`}
         </label>
         <p>Selected: {selection.job_ids.length} creations, {selection.publication_ids.length} publications, {selection.playlist_ids.length} playlists, {selection.workflow_ids.length} workflows.</p>
+        <p>{selection.like_ids.length} liked songs and {selection.save_ids.length} saved songs selected.</p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
           <button type="button" disabled={locked || page === 0} onClick={() => setPage(value => value - 1)}>Previous page</button>
-          <button type="button" disabled={locked || (page + 1) * 50 >= Math.max(preview.total, preview.playlist_total, preview.workflow_total || 0)} onClick={() => setPage(value => value + 1)}>Next page</button>
+          <button type="button" disabled={locked || (page + 1) * 50 >= Math.max(preview.total, preview.playlist_total, preview.workflow_total || 0, preview.like_total || 0, preview.save_total || 0)} onClick={() => setPage(value => value + 1)}>Next page</button>
           <button type="button" disabled={busy || !hasSelection} onClick={() => void prepare()}>{busy ? "Preparing review…" : hasPending ? "Retry same review" : "Review selection"}</button>
           {hasPending && <button type="button" disabled={busy} onClick={startOver}>Start over</button>}
         </div>

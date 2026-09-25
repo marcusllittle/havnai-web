@@ -8,11 +8,13 @@ export interface ImportSnapshot {
   jobs: Array<{ id: string }>; publications?: Array<{ id: string; title: string }>;
   playlists?: Array<{ id: string; title: string }>;
   workflows?: Array<{ id: string; title: string; published: boolean }>;
+  likes?: Array<{ id: string; title: string; already_in_account: boolean }>;
+  saves?: Array<{ id: string; title: string; already_in_account: boolean }>;
   credits: { available_units: number; scale: number } | null;
 }
 export interface ImportProof { challenge_id: string; signature: string; chain_id: number; snapshot_id: string; digest: string }
 export interface ImportReceipt { scale: number; receipt: { id: string; account_id: string; digest: string; credit_units: number;
-  jobs: Array<{ id: string }>; publication_ids?: string[]; playlist_ids?: string[]; workflow_ids?: string[]; created_at: number } }
+  jobs: Array<{ id: string }>; publication_ids?: string[]; playlist_ids?: string[]; workflow_ids?: string[]; like_ids?: string[]; save_ids?: string[]; created_at: number } }
 const ids = (items?: Array<{ id: string }>) => (items || []).map(item => item.id);
 const same = (left: string[], right: string[]) => JSON.stringify(left) === JSON.stringify(right);
 
@@ -58,7 +60,9 @@ export async function signImport({ provider, snapshot, accountId, origin, reques
       if (!same(JSON.parse(fields.get("job_ids") || "null"), ids(snapshot.jobs))
           || !same(JSON.parse(fields.get("publication_ids") || "null"), ids(snapshot.publications))
           || !same(JSON.parse(fields.get("playlist_ids") || "null"), ids(snapshot.playlists))
-          || !same(JSON.parse(fields.get("workflow_ids") || "[]"), ids(snapshot.workflows))) throw new Error();
+          || !same(JSON.parse(fields.get("workflow_ids") || "[]"), ids(snapshot.workflows))
+          || !same(JSON.parse(fields.get("like_ids") || "[]"), ids(snapshot.likes))
+          || !same(JSON.parse(fields.get("save_ids") || "[]"), ids(snapshot.saves))) throw new Error();
     } catch { throw new Error("The wallet confirmation changed your selected content."); }
     const signature = await signAccountProof(provider, challenge.message, snapshot.wallet.toLowerCase(), operation.signal);
     operation.signal.throwIfAborted();
@@ -77,7 +81,8 @@ function verifiedReceipt(result: ImportReceipt, snapshot: ImportSnapshot): Impor
   if (!row || result.scale !== 1000 || row.id !== snapshot.id || row.account_id !== snapshot.account_id || row.digest !== snapshot.digest
       || row.credit_units !== (snapshot.credits?.available_units || 0) || !same(ids(row.jobs), ids(snapshot.jobs))
       || !same(row.publication_ids || [], ids(snapshot.publications)) || !same(row.playlist_ids || [], ids(snapshot.playlists))
-      || !same(row.workflow_ids || [], ids(snapshot.workflows))) {
+      || !same(row.workflow_ids || [], ids(snapshot.workflows)) || !same(row.like_ids || [], ids(snapshot.likes))
+      || !same(row.save_ids || [], ids(snapshot.saves))) {
     throw new Error("The receipt does not match this import. Check your account's import history before trying again.");
   }
   return result;

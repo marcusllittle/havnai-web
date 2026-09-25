@@ -56,3 +56,12 @@ exactly, including when the reviewed list is empty. Older snapshots and receipts
 without workflow fields remain compatible as empty selections. History summaries
 and receipt details include completed workflow transfers. This requires the core
 version-4 snapshot implementation; the production import switch remains off.
+
+Version-5 core snapshots add explicit liked-song and saved-song selections.
+Preference-only reviews work without selecting jobs or credits. The panel explains
+that existing account preferences are merged and song ownership does not change.
+Each reviewed song is listed by title with its merge status. Both signature and
+receipt validation require exactly the selected `like_ids` and `save_ids`; older
+snapshots without these fields mean empty selections. History summaries and detail
+rows include the transferred preferences. No wallet request occurs during review
+or receipt browsing; confirmation remains explicit and disabled by default.

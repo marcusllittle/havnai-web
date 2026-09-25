@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useAccount } from "./AccountProvider";
 
-interface Summary { id: string; created_at: number; job_count: number; publication_count: number; playlist_count: number; workflow_count?: number; credit_units: number }
+interface Summary { id: string; created_at: number; job_count: number; publication_count: number; playlist_count: number; workflow_count?: number; like_count?: number; save_count?: number; credit_units: number }
 interface Page { receipts: Summary[]; total: number; scale: number }
 interface Detail { scale: number; receipt: { id: string; created_at: number; wallet: string; credit_units: number;
-  jobs: Array<{ id: string }>; publication_ids?: string[]; playlist_ids?: string[]; workflow_ids?: string[] } }
+  jobs: Array<{ id: string }>; publication_ids?: string[]; playlist_ids?: string[]; workflow_ids?: string[]; like_ids?: string[]; save_ids?: string[] } }
 const amount = (units: number, scale: number) => (units / scale).toLocaleString(undefined, { maximumFractionDigits: 3 });
 
 /** Account-id keyed by the account page; uses no wallet provider or signing API. */
@@ -43,7 +43,7 @@ export function AccountImportReceipts() {
       {error ? <p role="alert">{error}</p> : !list ? <p role="status">Loading import history…</p> : !list.total ? <p>No completed imports yet.</p> : <>
         <ul>{list.receipts.map(receipt => <li key={receipt.id} style={{ padding: "0.75rem 0", overflowWrap: "anywhere" }}>
           <p>{new Date(receipt.created_at * 1000).toLocaleString()} · Completed</p>
-          <p>{receipt.job_count} creations · {receipt.publication_count} publications · {receipt.playlist_count} playlists · {receipt.workflow_count || 0} workflows · {amount(receipt.credit_units, list.scale)} credits</p>
+          <p>{receipt.job_count} creations · {receipt.publication_count} publications · {receipt.playlist_count} playlists · {receipt.workflow_count || 0} workflows · {receipt.like_count || 0} liked songs · {receipt.save_count || 0} saved songs · {amount(receipt.credit_units, list.scale)} credits</p>
           <button type="button" aria-label={`View import ${receipt.id}`} onClick={() => setSelected(receipt.id)}>View receipt</button>
         </li>)}</ul>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
@@ -59,7 +59,7 @@ export function AccountImportReceipts() {
           <ul>{detail.receipt.jobs.map(job => <li key={`job:${job.id}`}>Creation: {job.id}</li>)}
             {(detail.receipt.publication_ids || []).map(id => <li key={`publication:${id}`}>Publication: {id}</li>)}
             {(detail.receipt.playlist_ids || []).map(id => <li key={`playlist:${id}`}>Playlist: {id}</li>)}
-            {(detail.receipt.workflow_ids || []).map(id => <li key={`workflow:${id}`}>Workflow: {id}</li>)}</ul>
+            {(detail.receipt.workflow_ids || []).map(id => <li key={`workflow:${id}`}>Workflow: {id}</li>)}{(detail.receipt.like_ids || []).map(id => <li key={`like:${id}`}>Liked song: {id}</li>)}{(detail.receipt.save_ids || []).map(id => <li key={`save:${id}`}>Saved song: {id}</li>)}</ul>
         </>}
       </section>}
       <button type="button" onClick={() => setRevision(value => value + 1)}>Refresh import receipts</button>
