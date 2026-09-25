@@ -6,6 +6,7 @@ import { SiteHeader } from "../components/SiteHeader";
 import { useAccount } from "../components/AccountProvider";
 import { AccountPurchases } from "../components/AccountPurchases";
 import { AccountWallets } from "../components/AccountWallets";
+import { AccountImportReceipts } from "../components/AccountImportReceipts";
 
 interface CreditBalance {
   scale: number;
@@ -48,6 +49,7 @@ export default function AccountPage() {
           </section>
           <AccountPurchases key={account.id} />
           <AccountWallets key={account.id} />
+          <AccountImportReceipts key={account.id} />
           <SignOutButton redirectUrl="/"><button type="button">Sign out</button></SignOutButton>
         </>}
     </main></>;

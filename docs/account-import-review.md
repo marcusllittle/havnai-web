@@ -16,8 +16,16 @@ unlinking that wallet, or switching accounts unmounts it and aborts pending work
 Review state is not shared between accounts or persisted in browser storage.
 
 This is a review interface, not an enabled transfer flow. It explicitly states
-that no content or credits have moved. Signature confirmation, execution recovery,
-durable import receipts and rollout verification still need UI integration.
+that no content or credits have moved. Signature confirmation, execution recovery
+and rollout verification still need UI integration.
 The core signed execution implementation remains internal pending the remaining
 migration and launch requirements. Tests cover passive browsing, explicit
 selection, pagination, exact retry, duplicate-click suppression and aborts.
+
+The account page also offers **Import receipts** independently of linked-wallet
+state. History loads on demand with ten entries per page. Completed records show
+resource counts and exact credit units; opening a receipt shows the transferred
+creation, publication and playlist IDs. Pending snapshots never appear as
+completed imports. Reads require only account authentication, and no wallet
+provider is used. Closing history or switching accounts cancels pending reads.
+Errors remain distinct from empty history and can be refreshed explicitly.
