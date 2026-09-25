@@ -41,20 +41,20 @@ export function AccountWorkflowLibrary({ onEdit }: { onEdit: (workflow: Workflow
     <h2>Your saved templates</h2>
     <p>Private templates belong to your account. Publishing shares the entire prompt and settings with everyone.</p>
     {error && <p role="alert">{error}</p>}
-    <button type="button" disabled={busy || loading} onClick={() => setRevision(value => value + 1)}>Refresh templates</button>
+    <button className="product-secondary" type="button" disabled={busy || loading} onClick={() => setRevision(value => value + 1)}>Refresh templates</button>
     {loading ? <p role="status">Loading templates…</p> : !error && items.length === 0 ? <p>No saved templates on this page.</p> : <div className="templates-grid">
       {items.map(item => <article className="template-card" key={item.id}>
         <h3>{item.name}</h3><p>{item.description}</p><p>{item.published ? "Published" : "Private"}</p>
         <Link href={`/create?workflow=${encodeURIComponent(`account:${item.id}`)}`}>Review in Create</Link>{" "}
-        <button type="button" disabled={busy} onClick={() => onEdit(item)}>Edit</button>{" "}
-        <button type="button" disabled={busy} onClick={() => void change(item)}>{item.published ? "Unpublish" : "Publish template"}</button>{" "}
+        <button className="product-secondary" type="button" disabled={busy} onClick={() => onEdit(item)}>Edit</button>{" "}
+        <button className="product-secondary" type="button" disabled={busy} onClick={() => void change(item)}>{item.published ? "Unpublish" : "Publish template"}</button>{" "}
         {remove === item.id ? <><p>Delete this template? Your generated creations stay in your account.</p>
-          <button type="button" disabled={busy} onClick={() => void change(item, true)}>Confirm delete</button>
-          <button type="button" disabled={busy} onClick={() => setRemove(null)}>Keep template</button></>
-          : <button type="button" disabled={busy} onClick={() => setRemove(item.id)}>Delete</button>}
+          <button className="product-secondary" type="button" disabled={busy} onClick={() => void change(item, true)}>Confirm delete</button>
+          <button className="product-secondary" type="button" disabled={busy} onClick={() => setRemove(null)}>Keep template</button></>
+          : <button className="product-secondary" type="button" disabled={busy} onClick={() => setRemove(item.id)}>Delete</button>}
       </article>)}
     </div>}
-    <button type="button" disabled={loading || busy || page === 0} onClick={() => setPage(value => value - 1)}>Previous templates</button>
-    <button type="button" disabled={loading || busy || (page + 1) * 12 >= total} onClick={() => setPage(value => value + 1)}>Next templates</button>
+    <button className="product-secondary" type="button" disabled={loading || busy || page === 0} onClick={() => setPage(value => value - 1)}>Previous templates</button>
+    <button className="product-secondary" type="button" disabled={loading || busy || (page + 1) * 12 >= total} onClick={() => setPage(value => value + 1)}>Next templates</button>
   </section>;
 }

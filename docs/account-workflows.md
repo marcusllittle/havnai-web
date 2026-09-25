@@ -22,3 +22,13 @@ Tests cover passive account reads, explicit publication and delete confirmation,
 lost-response creation retry, account-switch isolation, private template loading,
 explicit application and guest sign-in. Real signed-in browser acceptance and
 legacy workflow migration remain rollout work.
+
+Local browser check, 2026-09-25: web `c03147d` against the isolated preview
+coordinator at core `85335cc` returned HTTP 200 with an empty catalog and
+`private, no-store` through `localhost:3100/api/v2/workflows`. Guest Explore and
+Your draft loaded without browser errors. At a 390 by 844 viewport, the document
+width was exactly 390 pixels; the draft offered Sign in and stated that no wallet
+is required. Visual inspection found unstyled new action buttons, now using the
+existing secondary-button style. The automation browser was signed out, so this
+check does not establish signed-in CRUD or production acceptance. Only the
+isolated preview coordinator was restarted; imports and payments stayed disabled.
