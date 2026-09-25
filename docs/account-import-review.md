@@ -65,3 +65,11 @@ receipt validation require exactly the selected `like_ids` and `save_ids`; older
 snapshots without these fields mean empty selections. History summaries and detail
 rows include the transferred preferences. No wallet request occurs during review
 or receipt browsing; confirmation remains explicit and disabled by default.
+
+The panel explicitly excludes source uploads and saved face references. Legacy
+upload owner labels were client-supplied, so a label matching a linked wallet is
+not evidence that its private image belongs to that wallet. Users can upload
+their source images again through Create under their account and save new face
+references there. Importing a finished job does not transfer its input assets;
+the backend regression checks that those private input URLs and anchor operations
+remain inaccessible to the importer.

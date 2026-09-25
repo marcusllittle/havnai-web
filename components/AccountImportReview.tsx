@@ -143,6 +143,7 @@ export function AccountImportReview({ link, request, onClose }: {
     <h3 tabIndex={-1} ref={heading}>Review existing wallet content</h3>
     <p style={{ overflowWrap: "anywhere" }}>{link.wallet}</p>
     <p>Choose what you want to bring into your account. Reviewing does not open your wallet or move anything.</p>
+    <p>Source uploads and saved face references are not included. Add those images again in Create to save them to this account.</p>
     {snapshot ? <div role="status">
       <h4>Your selection is ready for review</h4>
       <p>{snapshot.jobs.length} creations, {snapshot.publications.length} publications, {snapshot.playlists.length} playlists, {snapshot.workflows?.length || 0} workflows.</p>
