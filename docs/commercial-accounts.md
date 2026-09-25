@@ -7,12 +7,16 @@ contract is `havnai-core/docs/commercial-accounts.md` on branch
 This branch now includes Clerk provider integration, sign-in/sign-up/account pages,
 account-scoped authenticated requests and logout/account-switch isolation. Clerk
 development sign-in is configured and verified. Account checkout and Music Studio
-creation/recovery/publication, music library/playlist management, and account Video
-Studio are implemented; live paid generation acceptance, image creation and its
-library, marketplace/workflow ownership, and explicit
-migration remain. Optional wallet link/unlink UI is implemented; live wallet and
+creation/recovery/publication, music library/playlist management, account Video
+Studio, image creation/collection, account marketplace/workflows, and explicit
+signed migration are implemented. Live paid generation acceptance remains open;
+migration execution is disabled by default. Optional wallet link/unlink UI is implemented; live wallet and
 provider reverification acceptance remains pending.
 Keep HAVN-11 open until the complete acceptance flow has been exercised.
+
+The optional-wallet boundary and follow-up verification belong in the
+[HAVN-13 handoff](havn-13-wallet-handoff.md). That follow-up must preserve ordinary
+account use without wallet prompts.
 
 Configured deployments now use account authorization for saves, likes, private
 music libraries, playlist creation/editing/sharing/reordering, and adding songs
