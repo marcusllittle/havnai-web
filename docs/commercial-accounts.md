@@ -8,8 +8,9 @@ This branch now includes Clerk provider integration, sign-in/sign-up/account pag
 account-scoped authenticated requests and logout/account-switch isolation. Clerk
 development sign-in is configured and verified. Account checkout and Music Studio
 creation/recovery/publication and music library/playlist management are implemented;
-live paid generation acceptance, other studios and their libraries, wallet-link UI,
-and explicit migration remain.
+live paid generation acceptance, other studios and their libraries, and explicit
+migration remain. Optional wallet link/unlink UI is implemented; live wallet and
+provider reverification acceptance remains pending.
 Keep HAVN-11 open until the complete acceptance flow has been exercised.
 
 Configured deployments now use account authorization for saves, likes, private
@@ -27,6 +28,31 @@ isolation with mocked account transport. Core tests independently exercise actua
 SQLite ownership checks and signed-session validation. A mobile guest browser
 check confirms the sign-in UI renders without errors. These are not evidence of
 a live paid generation or production-provider acceptance run.
+
+## Optional wallet settings
+
+The account page requests a wallet only after **Link wallet** or an explicit
+unlink confirmation. It signs the exact core-issued EIP-191 message, validates
+the recovered address, and submits only the challenge ID and signature. It does
+not send transactions, fund credits, import content, or alter reward destinations.
+Account/wallet/network changes cancel pending authorization. A still-open wallet
+signature blocks additional prompts even after cancellation in the page.
+
+When core returns `reauthentication_required`, Clerk's `useReverification` opens
+its first-factor verification UI. Privileged requests fetch a fresh signed token
+after verification; core still enforces the five-minute factor age, session-bound
+proof, expiry, and one-time consumption. Implementation follows the installed
+Clerk SDK and [Clerk reverification documentation](https://clerk.com/docs/guides/secure/reverification).
+The development application was checked via Clerk CLI: email is required and
+`email_code` is enabled as a sign-in strategy. Completing the live email-code
+reverification and MetaMask signature still requires a user acceptance run.
+
+Unlinking retains account content, credits, receipts, and login. The UI asks for
+the linked address's proof and refreshes durable server state after ambiguous
+errors; it does not automatically retry a signature or move assets. Tests use
+real EIP-191 signatures with local test keys plus mocked provider transport, and
+exercise wrong-account proofs, cancellation, wallet changes, duplicate clicks,
+exact-message signing, and explicit unlink confirmation.
 
 ## Required web changes in HAVN-19/21/22
 

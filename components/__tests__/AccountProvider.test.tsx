@@ -50,6 +50,16 @@ describe("Standard account sessions", () => {
     await expect(accountContext.request("/v2/account/credits")).rejects.toThrow("Sign in");
   });
 
+  it("refreshes the signed token for privileged wallet proof requests", async () => {
+    await render();
+    fetcher.mockResolvedValue(new Response(JSON.stringify({ challenge_id: "proof" })));
+    await accountContext.request("/v2/account/wallet-challenges", { method: "POST", body: "{}" });
+    expect(auth.getToken).toHaveBeenLastCalledWith({ skipCache: true });
+    fetcher.mockResolvedValue(new Response(JSON.stringify({ available_units: 0 })));
+    await accountContext.request("/v2/account/credits");
+    expect(auth.getToken).toHaveBeenLastCalledWith(undefined);
+  });
+
   it("discards a previous account response after an account switch", async () => {
     let finishAlice!: (response: Response) => void;
     fetcher.mockImplementationOnce(() => new Promise<Response>(resolve => { finishAlice = resolve; }));

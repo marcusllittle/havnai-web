@@ -51,7 +51,9 @@ function AuthenticatedAccountProvider({ children }: { children: React.ReactNode 
     if (init.signal?.aborted) controller.abort();
     pending.current.add(controller);
     try {
-      const token = await getToken();
+      // Privileged wallet proofs must observe newly completed factor verification.
+      const privileged = path.startsWith("/v2/account/wallet-");
+      const token = await getToken(privileged ? { skipCache: true } : undefined);
       if (!token || identity !== identityRef.current) throw new Error("Your account session changed. Please try again.");
       const headers = new Headers(init.headers);
       headers.set("Authorization", `Bearer ${token}`);
