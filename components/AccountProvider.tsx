@@ -3,6 +3,10 @@ import { ClerkProvider, useAuth } from "@clerk/nextjs";
 
 export const accountsConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 
+export class AccountRequestError extends Error {
+  constructor(message: string, public readonly code: string = "request_failed") { super(message); }
+}
+
 export interface HavnAccount {
   id: string;
   status: "active";
@@ -55,7 +59,7 @@ function AuthenticatedAccountProvider({ children }: { children: React.ReactNode 
       const response = await fetch(`/api${path}`, { ...init, headers, signal: controller.signal, credentials: "omit", cache: "no-store" });
       const body = await response.json().catch(() => null);
       if (identity !== identityRef.current) throw new Error("Your account session changed. Please try again.");
-      if (!response.ok) throw new Error(body?.error?.message || body?.message || `Request failed (${response.status}).`);
+      if (!response.ok) throw new AccountRequestError(body?.error?.message || body?.message || `Request failed (${response.status}).`, body?.error?.code);
       if (body == null) throw new Error("The account service returned an invalid response.");
       return body as T;
     } finally {

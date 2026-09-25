@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useAccount } from "./AccountProvider";
+import { publicPolicyUrl } from "../lib/accountCheckout";
 
 interface Purchase {
   id: string;
@@ -15,7 +16,7 @@ interface Receipt {
   purchase_id: string;
   state: string;
   scale: number;
-  receipt: { id: number; price_cents: number; currency: string; units: number; terms_version: string; created_at: number } | null;
+  receipt: { id: number; price_cents: number; currency: string; units: number; terms_version: string; created_at: number; terms_url?: string; refund_url?: string } | null;
   adjustments: Array<{ refunded_cents: number; disputed_cents: number; retained_units: number; settled_delta: number; created_at: number }>;
 }
 
@@ -77,6 +78,10 @@ export function AccountPurchases() {
           <p>Receipt #{receipt.receipt.id} · {new Date(receipt.receipt.created_at * 1000).toLocaleString()}</p>
           <p>{money(receipt.receipt.price_cents, receipt.receipt.currency)} for {receipt.receipt.units / receipt.scale} credits</p>
           <p>Purchase terms: {receipt.receipt.terms_version}</p>
+          <div className="account-actions">
+            {publicPolicyUrl(receipt.receipt.terms_url) && <a href={receipt.receipt.terms_url} target="_blank" rel="noopener noreferrer">Purchase terms</a>}
+            {publicPolicyUrl(receipt.receipt.refund_url) && <a href={receipt.receipt.refund_url} target="_blank" rel="noopener noreferrer">Refund policy</a>}
+          </div>
           {receipt.adjustments.filter(item => item.settled_delta !== 0).map((item, index) => <p key={index}>
             {new Date(item.created_at * 1000).toLocaleString()}: {item.settled_delta > 0 ? "+" : ""}{item.settled_delta / receipt.scale} credits adjusted;
             {" "}{money(item.refunded_cents, receipt.receipt!.currency)} refunded,

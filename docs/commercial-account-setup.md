@@ -12,7 +12,12 @@ replacement Stripe account or move existing payment credentials.
    the provider's default subject, session, expiry and factor-verification claims.
    Core accepts short-lived session tokens, not custom machine tokens or wallet
    signatures as account authentication.
-3. Put these values in the ignored `havnai-web/.env.local` (and corresponding
+3. Use the authenticated Clerk CLI to pull development keys into a temporary
+   environment file (`clerk env pull --app <application-id> --instance dev
+   --file <temporary-file>`). Merge only the two Clerk entries below into the
+   existing ignored `.env.local`, preserving every other setting, then delete
+   the temporary file. Do not run scaffolding commands on this existing app.
+   The values belong in `havnai-web/.env.local` (and the corresponding
    deployment environment when ready), never in a commit or chat message:
 
    ```dotenv
@@ -51,5 +56,35 @@ The account page now reads authenticated purchase history and durable receipts
 from core's `/v2/account/purchases` routes. Refund/dispute adjustments are shown
 from the stored receipt history. Account changes unmount the old receipt view
 and abort its requests. A checkout return URL never marks a purchase paid.
-Account pricing/checkout controls and published commercial policies remain to be
-integrated; the existing `/pricing` page still uses the legacy wallet flow.
+When Clerk is configured, `/pricing` uses the public account catalog and
+authenticated account checkout. It requires published terms/refund links and
+explicit agreement before purchase. A durable per-account checkout attempt in
+session storage preserves the idempotency key after a lost response. Catalog
+versions prevent stale prices from creating a new purchase. Without Clerk
+configuration, the legacy wallet pricing route remains available.
+
+## Isolated local account preview
+
+From the core feature worktree, using its installed Python environment:
+
+```bash
+python -B scripts/account_preview.py --web-env /path/to/havnai-web/.env.local
+```
+
+This reads development keys without printing or copying them, derives the
+Clerk issuer, and runs a loopback API on port 5101. A dedicated marked storage
+directory keeps its database and assets separate from the coordinator. Payments,
+HAI funding, and node enrollment credentials are disabled or isolated. Override
+`--data-dir` only with an empty directory or an existing marked preview directory.
+
+In a separate PowerShell terminal in `havnai-web`:
+
+```powershell
+$env:HAVNAI_API_BASE_URL = 'http://127.0.0.1:5101'
+npm run dev -- -p 3100
+```
+
+This overrides the API for that process without replacing the saved coordinator
+URL. Visit `http://localhost:3100/sign-up` and complete email/social verification.
+The website account is separate from the Clerk dashboard operator login.
+Checkout is deliberately unavailable in this preview; it cannot charge a card.

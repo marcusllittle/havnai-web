@@ -5,6 +5,8 @@ import { ArrowUpRight, Coins } from "lucide-react";
 import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
+import { accountsConfigured, useAccount } from "../components/AccountProvider";
+import { AccountPricing } from "../components/AccountPricing";
 import {
   fetchPackages,
   fetchCredits,
@@ -65,7 +67,7 @@ function formatOutputCount(referenceId: string, credits: number, cost: number): 
   }
 }
 
-const PricingPage: NextPage = () => {
+const LegacyPricingPage: NextPage = () => {
   const wallet = useWallet();
   const [packages, setPackages] = useState<CreditPackage[]>([]);
   const [stripeEnabled, setStripeEnabled] = useState(false);
@@ -792,4 +794,7 @@ const PricingPage: NextPage = () => {
   );
 };
 
-export default PricingPage;
+export default function PricingPage() {
+  const { account, signedIn } = useAccount();
+  return accountsConfigured ? <AccountPricing key={account?.id || (signedIn ? "loading-account" : "guest")} /> : <LegacyPricingPage />;
+}

@@ -4,6 +4,7 @@
 .account-page :is(h1,h2,h3) { font-weight: 500; letter-spacing: -.035em; }
 .account-page :is(a,button,input,textarea,summary,[tabindex]):focus-visible { outline: 2px solid var(--brand-accent); outline-offset: 3px; }
 .account-page button:disabled { opacity: .45; cursor: not-allowed; }
+.account-page a:not([class]) { color: #a8d9ff; text-underline-offset: .2em; }
 .account-heading { display: flex; align-items: center; justify-content: space-between; gap: 30px; margin-bottom: 34px; }
 .account-eyebrow { display: flex; align-items: center; gap: 8px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #b3c3d2; }
 .account-heading h1 { margin: 16px 0; font-size: clamp(34px,4vw,49px); line-height: 1.1; letter-spacing: -.045em; }
@@ -138,3 +139,7 @@
 .account-summary-card button:focus-visible { outline: 2px solid #61cfff; outline-offset: 3px; }
 .account-receipt { margin-top: 1.5rem; border-top: 1px solid #375a78; padding-top: 1.5rem; }
 .account-purchase-id { overflow-wrap: anywhere; color: #a8bbce; font-size: .85rem; }
+.account-checkout-terms { max-width: 760px; margin: 1rem 0 2rem; line-height: 1.7; }
+.account-checkout-terms label { display: flex; align-items: flex-start; gap: .8rem; cursor: pointer; }
+.account-checkout-terms input { width: 20px; height: 20px; margin-top: .3rem; flex-shrink: 0; accent-color: var(--brand-accent); }
+.account-checkout-terms p { margin-left: 2rem; color: #a8bbce; font-size: .85rem; }
