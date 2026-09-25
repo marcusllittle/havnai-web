@@ -27,6 +27,7 @@ export interface SubmitJobResponse {
 export interface JobDetail {
   id: string;
   status: string;
+  collection_hidden?: boolean;
   model: string;
   wallet?: string;
   task_type?: string;

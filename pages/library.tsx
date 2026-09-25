@@ -1,10 +1,13 @@
-import type { NextPage } from "next";
 import Link from "next/link";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import Image from "next/image";
 import { ArrowUpRight, ChevronDown, Download, FolderOpen, Images, LoaderCircle, MoreHorizontal, Plus, RefreshCw, Search, SlidersHorizontal, Wallet, X } from "lucide-react";
 import { CollectionPreview } from "../components/CollectionPreview";
 import { SeoHead } from "../components/SeoHead";
+import { useAccount } from "../components/AccountProvider";
+import type { AccountStudioAccess } from "../lib/musicStudioApi";
+import type { V1Job } from "../lib/videoStudioApi";
+import { accountJobView } from "../lib/accountImageStudio";
 import { useWallet } from "../components/WalletProvider";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
 import { SiteHeader } from "../components/SiteHeader";
@@ -50,7 +53,7 @@ type LibraryViewItem = {
 
 const CONCURRENCY_LIMIT = 5;
 
-async function buildViewItem(entry: LibraryEntry, signal?: AbortSignal): Promise<LibraryViewItem> {
+async function buildViewItem(entry: LibraryEntry, signal?: AbortSignal, owned?: ReturnType<typeof accountJobView>): Promise<LibraryViewItem> {
   let job: JobDetailResponse | null = null;
   let result: ResultResponse | null = null;
   let available = false;
@@ -60,8 +63,8 @@ async function buildViewItem(entry: LibraryEntry, signal?: AbortSignal): Promise
   let prompt: string | undefined;
 
   const [jobResponse, resultResponse] = await Promise.allSettled([
-    fetchJob(entry.job_id, { signal }),
-    fetchResult(entry.job_id, { signal }),
+    owned ? Promise.resolve(owned.job) : fetchJob(entry.job_id, { signal }),
+    owned ? Promise.resolve(owned.result) : fetchResult(entry.job_id, { signal }),
   ]);
 
   try {
@@ -152,7 +155,19 @@ async function fetchLibraryDetails(
   await Promise.all(workers);
 }
 
-const LibraryPage: NextPage = () => {
+type CollectionAccount = { id: string; request: AccountStudioAccess["request"] };
+const LibraryPage: React.FC<{ accountAuth?: CollectionAccount }> = ({ accountAuth }) => {
+  const accountItems = useRef<LibraryViewItem[]>([]);
+  const mutation = useRef(false);
+  const lifetime = useRef(new AbortController());
+  useEffect(() => {
+    if (lifetime.current.signal.aborted) lifetime.current = new AbortController();
+    return () => lifetime.current.abort();
+  }, []);
+  const [accountTotal, setAccountTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [paging, setPaging] = useState({ query: "", offset: 0 });
+  const [collectionBusy, setCollectionBusy] = useState(false);
   const wallet = useWallet();
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
   const [items, setItems] = useState<LibraryViewItem[]>([]);
@@ -247,11 +262,12 @@ const LibraryPage: NextPage = () => {
   // private window, or a second device showed nothing, and generation 201
   // silently evicted the oldest entry.
   useEffect(() => {
-    setEntries(loadLibrary());
+    if (!accountAuth) setEntries(loadLibrary());
   }, []);
 
   const activeWallet = wallet.activeWallet;
   useEffect(() => {
+    if (accountAuth) return;
     if (!activeWallet) {
       setSyncing(false);
       setSyncError(false);
@@ -285,6 +301,7 @@ const LibraryPage: NextPage = () => {
   }, [activeWallet, refreshRevision]);
 
   useEffect(() => {
+    if (accountAuth) return;
     let active = true;
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 15000);
@@ -315,6 +332,51 @@ const LibraryPage: NextPage = () => {
       controller.abort();
     };
   }, [entries, refreshRevision]);
+
+  const accountQuery = JSON.stringify([searchQuery.trim(), statusFilter, typeFilter, sortOption, refreshRevision]);
+  const accountOffset = paging.query === accountQuery ? paging.offset : 0;
+  useEffect(() => {
+    if (!accountAuth) return;
+    const controller = new AbortController();
+    setLoading(true); setSyncing(true); setSyncError(false);
+    const params = new URLSearchParams({ collection: "1", limit: "50", offset: String(accountOffset),
+      type: typeFilter === "image" ? "visual_image" : typeFilter === "video" ? "image_to_video" : "visual",
+      sort: sortOption, search: searchQuery.trim() });
+    if (statusFilter !== "all") params.set("status", statusFilter === "ready" ? "succeeded" : statusFilter === "running" ? "active" : "failed");
+    void accountAuth.request<{ jobs: V1Job[]; total: number }>(`/v2/jobs?${params}`, { signal: controller.signal, cache: "no-store" })
+      .then(async response => {
+        const page = await Promise.all(response.jobs.map(job => buildViewItem({ job_id: job.id,
+          created_at: new Date((job.created_at || 0) * 1000).toISOString(),
+          type: job.type === "image_to_video" || /video|animatediff/i.test(job.type || "") ? "video" : "image",
+        }, controller.signal, accountJobView(job, accountAuth.id))));
+        if (controller.signal.aborted) return;
+        const next = [...new Map([...(accountOffset ? accountItems.current : []), ...page].map(item => [item.entry.job_id, item])).values()];
+        accountItems.current = next;
+        setItems(next); setEntries(next.map(item => item.entry));
+        setAccountTotal(response.total); setHasMore(accountOffset + response.jobs.length < response.total);
+      }).catch(() => { if (!controller.signal.aborted) setSyncError(true); })
+      .finally(() => { if (!controller.signal.aborted) { setLoading(false); setSyncing(false); } });
+    return () => controller.abort();
+  }, [accountAuth?.id, accountAuth?.request, accountQuery, accountOffset]);
+
+  const changeAccountCollection = async (ids: string[], hidden: boolean) => {
+    if (!accountAuth) return;
+    const signal = lifetime.current.signal;
+    await accountAuth.request("/v2/account/collection", { method: "PUT", signal,
+      body: JSON.stringify({ job_ids: ids, hidden }) });
+    signal.throwIfAborted();
+    setRefreshRevision(value => value + 1);
+  };
+  const removeAccountItems = async (ids: string[]) => {
+    if (mutation.current) return;
+    mutation.current = true; setCollectionBusy(true); setConnectionError("");
+    try {
+      await changeAccountCollection(ids, true);
+      setSelectedIds(new Set()); setBulkMode(false); setConfirmBulkDelete(false);
+    } catch (reason) {
+      if (!lifetime.current.signal.aborted) setConnectionError(reason instanceof Error ? reason.message : "Could not update your collection.");
+    } finally { mutation.current = false; setCollectionBusy(false); }
+  };
 
   // Filter + sort logic
   const filteredItems = useMemo(() => {
@@ -351,8 +413,9 @@ const LibraryPage: NextPage = () => {
     return result;
   }, [items, searchQuery, statusFilter, typeFilter, sortOption]);
 
-  const emptyState = !loading && !syncing && entries.length === 0;
-  const noResults = !loading && entries.length > 0 && filteredItems.length === 0;
+  const hasFilters = Boolean(searchQuery.trim() || statusFilter !== "all" || typeFilter !== "all");
+  const emptyState = !loading && !syncing && entries.length === 0 && (!accountAuth || (!hasFilters && !syncError));
+  const noResults = !loading && !syncing && !syncError && filteredItems.length === 0 && (entries.length > 0 || Boolean(accountAuth && hasFilters));
 
   const toggleSelect = useCallback((jobId: string) => {
     setSelectedIds((prev) => {
@@ -380,12 +443,13 @@ const LibraryPage: NextPage = () => {
       setTimeout(() => setConfirmBulkDelete(false), 3000);
       return;
     }
+    if (accountAuth) { void removeAccountItems([...selectedIds]); return; }
     const next = bulkRemoveFromLibrary(selectedIds);
     setEntries(next);
     setSelectedIds(new Set());
     setBulkMode(false);
     setConfirmBulkDelete(false);
-  }, [selectedIds, confirmBulkDelete]);
+  }, [selectedIds, confirmBulkDelete, accountAuth?.id, accountAuth?.request]);
 
   const exitBulkMode = useCallback(() => {
     setBulkMode(false);
@@ -418,6 +482,7 @@ const LibraryPage: NextPage = () => {
   };
 
   const handleRemove = (jobId: string) => {
+    if (accountAuth) { void removeAccountItems([jobId]); return; }
     const next = removeFromLibrary(jobId);
     setEntries(next);
     setSelectedIds((prev) => {
@@ -450,7 +515,7 @@ const LibraryPage: NextPage = () => {
         <header className="collection-heading">
           <div>
             <span className="collection-eyebrow"><Images size={14} aria-hidden="true" /> Your creative archive</span>
-            <h1>Collection<span>{entries.length}</span></h1>
+            <h1>Collection<span>{accountAuth ? accountTotal : entries.length}</span></h1>
             <p>A home for the things you make.</p>
           </div>
           <div className="collection-heading-actions">
@@ -459,7 +524,7 @@ const LibraryPage: NextPage = () => {
           </div>
         </header>
         <div className="collection-context">
-          <details className="collection-account">
+          {accountAuth ? <Link href="/account">Your account</Link> : <details className="collection-account">
             <summary><Wallet size={14} aria-hidden="true" />{walletSourceLabel}<ChevronDown size={14} aria-hidden="true" /></summary>
           <div className="wallet-status-card wallet-status-card-inline">
             <div className="wallet-status-copy-block">
@@ -483,13 +548,13 @@ const LibraryPage: NextPage = () => {
               </button>
             </div>
           </div>
-          </details>
+          </details>}
           {connectionError && <p className="collection-sync-note" role="alert">{connectionError}</p>}
           <Link href="/marketplace?tab=gallery&galleryView=my-listings" className="collection-storefront">My storefront <ArrowUpRight size={14} aria-hidden="true" /></Link>
         </div>
         {syncError && <p className="collection-sync-note" role="status">Couldn’t refresh your history. {entries.length ? "Your saved previews are still here." : "You can try again using Refresh collection."}</p>}
 
-        {entries.length > 0 && (
+        {(accountAuth || entries.length > 0) && (
           <section className="library-toolbar">
             <div className="library-toolbar-inner">
               {/* Search */}
@@ -518,7 +583,7 @@ const LibraryPage: NextPage = () => {
               <div className="collection-filter-row">
                 <div className="collection-type-tabs" role="group" aria-label="Media type">
                   {([["all", "All work"], ["image", "Images"], ["video", "Videos"]] as [TypeFilter, string][]).map(([value, label]) => (
-                    <button key={value} type="button" className={typeFilter === value ? "is-active" : ""} aria-pressed={typeFilter === value} onClick={() => setTypeFilter(value)}>{label}<span>{typeCounts[value]}</span></button>
+                    <button key={value} type="button" className={typeFilter === value ? "is-active" : ""} aria-pressed={typeFilter === value} onClick={() => setTypeFilter(value)}>{label}{!accountAuth && <span>{typeCounts[value]}</span>}</button>
                   ))}
                 </div>
                 <div className="collection-filter-options">
@@ -560,7 +625,7 @@ const LibraryPage: NextPage = () => {
                         className={`library-chip library-chip-danger ${
                           confirmBulkDelete ? "is-confirm" : ""
                         }`}
-                        disabled={selectedIds.size === 0}
+                        disabled={collectionBusy || selectedIds.size === 0}
                         onClick={handleBulkDelete}
                       >
                         {confirmBulkDelete
@@ -581,7 +646,7 @@ const LibraryPage: NextPage = () => {
 
               {/* Results count */}
               <div className="library-results-count">
-                {filteredItems.length} of {items.length} items
+                {filteredItems.length} of {accountAuth ? accountTotal : items.length} items
                 {searchQuery && ` matching "${searchQuery}"`}
               </div>
             </div>
@@ -651,8 +716,8 @@ const LibraryPage: NextPage = () => {
                           <summary aria-label={`More actions for ${title}`}><MoreHorizontal size={19} aria-hidden="true" /></summary>
                           <div>
                             <button type="button" onClick={() => openDrawer(item)}>View details</button>
-                            {item.available && <button type="button" onClick={() => openSellForm(item)}>List for sale</button>}
-                            <button type="button" onClick={() => handleRemove(item.entry.job_id)}>Remove from collection</button>
+                            {item.available && !accountAuth && <button type="button" onClick={() => openSellForm(item)}>List for sale</button>}
+                            <button type="button" disabled={collectionBusy} onClick={() => handleRemove(item.entry.job_id)}>Remove from collection</button>
                           </div>
                         </details>
                       </div>}
@@ -663,6 +728,7 @@ const LibraryPage: NextPage = () => {
             </div>
           )}
         </section>
+        {accountAuth && hasMore && <button type="button" className="collection-refresh" disabled={loading || syncing || collectionBusy} onClick={() => setPaging({ query: accountQuery, offset: accountOffset + 50 })}>Load more creations</button>}
       </main>
 
       <JobDetailsDrawer
@@ -673,7 +739,9 @@ const LibraryPage: NextPage = () => {
         result={drawerResult}
         loading={drawerLoading}
         error={drawerError}
-        marketplace={{
+        accountId={accountAuth?.id}
+        onCollectionChange={accountAuth ? changeAccountCollection : undefined}
+        marketplace={accountAuth ? undefined : {
           wallet: wallet.activeWallet,
           canSign: Boolean(wallet.connectedWallet),
           source: wallet.source,
@@ -746,4 +814,11 @@ const LibraryPage: NextPage = () => {
   );
 };
 
-export default LibraryPage;
+export default function AccountCollectionPage() {
+  const account = useAccount();
+  if (!account.configured) return <LibraryPage />;
+  if (!account.signedIn || !account.account) return <><SeoHead title="Collection" noindex /><SiteHeader />
+    <main className="collection-page"><h1>Your collection</h1><p>{account.error || (account.loading ? "Loading your account..." : "Sign in to find your images and videos on any device.")}</p>
+    {!account.loading && <><Link href="/sign-in">Sign in</Link> | <Link href="/sign-up">Create account</Link></>}</main></>;
+  return <LibraryPage key={account.account.id} accountAuth={{ id: account.account.id, request: account.request }} />;
+}

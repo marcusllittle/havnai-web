@@ -34,14 +34,26 @@ describe("Result review", () => {
   });
 
   it("saves private account media only to its account cache and avoids legacy telemetry", async () => {
-    await act(async () => root.render(<JobDetailsDrawer open accountId="acct_alice" job={job}
+    const change = vi.fn().mockResolvedValue(undefined);
+    await act(async () => root.render(<JobDetailsDrawer open accountId="acct_alice" job={job} onCollectionChange={change}
       result={{ job_id: job.id, image_url: "/api/account-media/private" }} onClose={onClose} />));
     await act(async () => button("Save to Collection").click());
     expect(loadLibrary("acct_alice")[0].job_id).toBe(job.id);
+    expect(change).toHaveBeenCalledWith([job.id], false);
     expect(loadLibrary()).toEqual([]);
     expect(loadLibrary("acct_bob")).toEqual([]);
     expect(fetchJobTimeline).not.toHaveBeenCalled();
     expect(fetchProofReceipt).not.toHaveBeenCalled();
+  });
+
+  it("does not claim an account save succeeded after a server rejection", async () => {
+    const change = vi.fn().mockRejectedValue(new Error("Unable to save collection"));
+    await act(async () => root.render(<JobDetailsDrawer open accountId="acct_alice" job={{ ...job, collection_hidden: true }} onCollectionChange={change}
+      result={{ job_id: job.id, image_url: "/api/account-media/private" }} onClose={onClose} />));
+    await act(async () => button("Save to Collection").click());
+    expect(container.textContent).toContain("Unable to save collection");
+    expect(loadLibrary("acct_alice")).toEqual([]);
+    expect(button("Save to Collection").disabled).toBe(false);
   });
 
   it("names the dialog, closes with Escape, and returns focus", async () => {

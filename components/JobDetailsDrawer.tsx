@@ -48,6 +48,7 @@ interface JobDetailsDrawerProps {
   loading?: boolean;
   error?: string;
   accountId?: string;
+  onCollectionChange?: (ids: string[], hidden: boolean) => Promise<void>;
   marketplace?: {
     wallet?: string | null;
     canSign?: boolean;
@@ -171,6 +172,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
   error,
   marketplace,
   accountId,
+  onCollectionChange,
   onClose,
 }) => {
   const resolvedId = job?.id || summary?.job_id || summary?.id || jobId;
@@ -186,6 +188,8 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     resolveAssetUrl(result?.video_url) ||
     resolveAssetUrl(summary?.video_url);
   const [isSaved, setIsSaved] = useState(false);
+  const [collectionBusy, setCollectionBusy] = useState(false);
+  const collectionAction = useRef(false);
   const [listingOpen, setListingOpen] = useState(false);
   const [listingTitle, setListingTitle] = useState("");
   const [listingDescription, setListingDescription] = useState("");
@@ -241,8 +245,8 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
       setIsSaved(false);
       return;
     }
-    setIsSaved(isInLibrary(resolvedId, accountId));
-  }, [resolvedId, open]);
+    setIsSaved(accountId && job?.collection_hidden !== undefined ? !job.collection_hidden : isInLibrary(resolvedId, accountId));
+  }, [resolvedId, open, accountId, job?.collection_hidden]);
 
   useEffect(() => {
     if (!open) {
@@ -418,27 +422,33 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     finally { if (version === actionVersion.current) setDownloadBusy(false); }
   };
 
-  const handleSave = () => {
-    if (!resolvedId) return;
-    const createdAtIso = resolveCreatedAtIso(job?.timestamp, summary?.submitted_at);
-    let type: LibraryItemType = "unknown";
-    if (result?.video_url || previewVideo) type = "video";
-    else if (result?.image_url || previewImage) type = "image";
-    const previewHint = result?.video_url || result?.image_url || summary?.video_url || summary?.image_url;
-    addToLibrary({
-      job_id: resolvedId,
-      created_at: createdAtIso,
-      type,
-      preview_hint: previewHint || undefined,
-    }, accountId);
-    setIsSaved(true);
+  const updateCollection = async (saved: boolean) => {
+    if (!resolvedId || collectionAction.current) return;
+    collectionAction.current = true; setCollectionBusy(true); setActionNotice("");
+    const version = actionVersion.current;
+    try {
+      if (accountId) {
+        if (!onCollectionChange) throw new Error("Collection updates are unavailable. Please reopen your collection.");
+        await onCollectionChange([resolvedId], !saved);
+      }
+      if (version !== actionVersion.current) return;
+      try {
+        if (saved) {
+          addToLibrary({ job_id: resolvedId, created_at: resolveCreatedAtIso(job?.timestamp, summary?.submitted_at),
+            type: previewVideo ? "video" : previewImage ? "image" : "unknown",
+            preview_hint: previewVideo || previewImage || undefined }, accountId);
+        } else removeFromLibrary(resolvedId, accountId);
+      } catch (reason) { if (!accountId) throw reason; }
+      setIsSaved(saved);
+    } catch (reason) {
+      if (version === actionVersion.current) setActionNotice(reason instanceof Error ? reason.message : "Could not update your collection.");
+    } finally {
+      collectionAction.current = false;
+      setCollectionBusy(false);
+    }
   };
-
-  const handleRemove = () => {
-    if (!resolvedId) return;
-    removeFromLibrary(resolvedId, accountId);
-    setIsSaved(false);
-  };
+  const handleSave = () => { void updateCollection(true); };
+  const handleRemove = () => { void updateCollection(false); };
 
   const canListInMarketplace = Boolean(
     resolvedId &&
@@ -582,14 +592,14 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   type="button"
                   className="job-action-button secondary"
                   onClick={handleSave}
-                  disabled={!resolvedId}
+                  disabled={collectionBusy || !resolvedId}
                 >
                   Save to Collection
                 </button>
               ) : (
                 <div className="job-saved">
                   <span>Saved ✓</span>
-                  <button type="button" className="job-inline-button" onClick={handleRemove}>
+                  <button type="button" className="job-inline-button" disabled={collectionBusy} onClick={handleRemove}>
                     Remove
                   </button>
                 </div>

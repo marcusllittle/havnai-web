@@ -3035,6 +3035,11 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
         loading={drawerLoading}
         error={drawerError}
         accountId={accountAuth?.id}
+        onCollectionChange={accountAuth && accountAccess ? async (ids, hidden) => {
+          const signal = accountAccess.signal;
+          await accountAccess.request("/v2/account/collection", { method: "PUT", signal, body: JSON.stringify({ job_ids: ids, hidden }) });
+          signal.throwIfAborted();
+        } : undefined}
         marketplace={accountAuth ? undefined : {
           wallet: wallet.activeWallet,
           canSign: Boolean(wallet.connectedWallet),

@@ -22,6 +22,7 @@ export interface V1Artifact {
 export interface V1Job {
   id: string;
   owner_account_id?: string;
+  collection_hidden?: boolean;
   type?: string;
   status: string;
   stage: string;
