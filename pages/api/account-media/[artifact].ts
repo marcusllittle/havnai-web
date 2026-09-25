@@ -36,7 +36,7 @@ export default async function accountMedia(req: NextApiRequest, res: NextApiResp
     });
     if (![200, 206, 416].includes(upstream.status)) {
       await upstream.body?.cancel();
-      res.status([401, 403, 404, 410].includes(upstream.status) ? upstream.status : 502).json({ error: "audio_unavailable" }); return;
+      res.status([401, 403, 404, 410].includes(upstream.status) ? upstream.status : 502).json({ error: "media_unavailable" }); return;
     }
     res.statusCode = upstream.status;
     if (upstream.status === 416) {
@@ -44,9 +44,11 @@ export default async function accountMedia(req: NextApiRequest, res: NextApiResp
       if (range) res.setHeader("Content-Range", range);
       await upstream.body?.cancel(); res.end(); return;
     }
-    const contentType = upstream.headers.get("content-type") || "";
-    if (!contentType.startsWith("audio/") && !contentType.startsWith("application/ogg")) {
-      await upstream.body?.cancel(); res.status(415).json({ error: "unsupported_audio_type" }); return;
+    const contentType = (upstream.headers.get("content-type") || "").split(";", 1)[0].trim().toLowerCase();
+    const safeMedia = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif",
+      "video/mp4", "video/webm", "video/quicktime", "video/ogg", "application/ogg"]);
+    if (!contentType.startsWith("audio/") && !safeMedia.has(contentType)) {
+      await upstream.body?.cancel(); res.status(415).json({ error: "unsupported_media_type" }); return;
     }
     for (const name of ["content-type", "content-length", "content-range", "accept-ranges", "content-disposition"]) {
       const value = upstream.headers.get(name);
@@ -55,7 +57,7 @@ export default async function accountMedia(req: NextApiRequest, res: NextApiResp
     if (req.method === "HEAD" || !upstream.body) { res.end(); return; }
     await pipeline(Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0]), res);
   } catch {
-    if (!res.headersSent && !res.destroyed) res.status(503).json({ error: "audio_unavailable" });
+    if (!res.headersSent && !res.destroyed) res.status(503).json({ error: "media_unavailable" });
     else if (!res.writableEnded) res.end();
   } finally {
     clearTimeout(timer); res.off("close", disconnect);

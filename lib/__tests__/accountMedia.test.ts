@@ -65,3 +65,18 @@ it("does not serve HTML as private media or leak HTML range errors", async () =>
   expect(res.statusCode).toBe(416); expect(res.body).toBe("");
   expect(res.headers.get("content-range")).toBe("bytes */100");
 });
+
+it.each(["image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"])("streams private %s without relaxing cache or token boundaries", async contentType => {
+  vi.mocked(fetch).mockResolvedValue(new Response("private-media", { headers: { "content-type": contentType } }));
+  const res = await call();
+  expect(res.statusCode).toBe(200); expect(res.body).toBe("private-media");
+  expect(res.headers.get("cache-control")).toBe("private, no-store");
+  expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+});
+
+it.each(["image/svg+xml", "application/xhtml+xml", "application/octet-stream", "application/ogg+html"])("rejects active or unrecognized media type %s", async contentType => {
+  vi.mocked(fetch).mockResolvedValue(new Response("private-active-document", { headers: { "content-type": contentType } }));
+  const res = await call();
+  expect(res.statusCode).toBe(415);
+  expect(res.body).not.toContain("private-active-document");
+});

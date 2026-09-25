@@ -7,8 +7,9 @@ contract is `havnai-core/docs/commercial-accounts.md` on branch
 This branch now includes Clerk provider integration, sign-in/sign-up/account pages,
 account-scoped authenticated requests and logout/account-switch isolation. Clerk
 development sign-in is configured and verified. Account checkout and Music Studio
-creation/recovery/publication and music library/playlist management are implemented;
-live paid generation acceptance, other studios and their libraries, and explicit
+creation/recovery/publication, music library/playlist management, and account Video
+Studio are implemented; live paid generation acceptance, image creation and its
+library, marketplace/workflow ownership, and explicit
 migration remain. Optional wallet link/unlink UI is implemented; live wallet and
 provider reverification acceptance remains pending.
 Keep HAVN-11 open until the complete acceptance flow has been exercised.
@@ -28,6 +29,29 @@ isolation with mocked account transport. Core tests independently exercise actua
 SQLite ownership checks and signed-session validation. A mobile guest browser
 check confirms the sign-in UI renders without errors. These are not evidence of
 a live paid generation or production-provider acceptance run.
+
+## Account Video Studio
+
+Configured Video Studio uses account `/v2/capabilities`, `/v2/assets`, and `/v2/jobs`
+for uploads, submission, history, polling, and cancellation. It does not read the
+legacy studio key or legacy active-render cache. The active render is account
+scoped and restored after refresh. Guests see sign-in instead of a studio-key gate.
+An account switch unmounts the workspace and aborts its pending requests.
+
+Before the billable POST, the original payload, uploaded asset IDs, and request
+key are persisted in an account/video-scoped session intent. An ambiguous response
+offers **Resume video request**, which sends the same payload/key without uploading
+another image or creating a second reservation. Definitive pre-enqueue errors
+allow correction. Music uses the same intent implementation with a separate key.
+
+The authenticated media proxy now permits common raster image and video formats
+as well as audio, with range support and `private, no-store`. It rejects HTML,
+SVG, XHTML, and unknown active formats rather than serving them on the app origin.
+Core continues to authorize each artifact against its source job owner. The UI
+uses cookie-authenticated media URLs; bearer tokens never appear in those URLs.
+Tests cover duplicate submission, lost-response recovery, account-switch cleanup,
+private playback URLs, and legacy compatibility. They use fixture media and
+mocked account transport; live video generation is still an acceptance requirement.
 
 ## Optional wallet settings
 

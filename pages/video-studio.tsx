@@ -5,6 +5,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, Film, ImagePlus, SlidersHorizontal } from "lucide-react";
 import { SiteHeader } from "../components/SiteHeader";
 import { StudioAccessGate } from "../components/StudioAccessGate";
+import { useAccount } from "../components/AccountProvider";
+import type { AccountStudioAccess, StudioAccess } from "../lib/musicStudioApi";
+import { pendingAccountJob, submitAccountJob } from "../lib/accountJobSubmission";
 import {
   cancelV1Job,
   createVideoJob,
@@ -23,7 +26,7 @@ import {
 
 const finalStates = new Set(["succeeded", "failed", "cancelled", "expired"]);
 const phases = ["queued", "loading", "encoding", "generation", "decoding", "finalizing", "uploading"];
-const activeJobStorageKey = "havnai_video_studio_job_id";
+const legacyJobStorageKey = "havnai_video_studio_job_id";
 
 function mergeJobs(jobs: V1Job[], next: V1Job): V1Job[] {
   return [next, ...jobs.filter((item) => item.id !== next.id)]
@@ -45,6 +48,15 @@ function normalizeStage(value?: string): string {
 }
 
 export default function VideoStudioPage() {
+  const account = useAccount();
+  if (!account.configured) return <VideoWorkspace />;
+  if (!account.account) return <><Head><title>Video Studio | HavnAI</title></Head><SiteHeader />
+    <main className="account-auth-page"><h1>Make your image move.</h1><p>{account.loading ? "Loading your account…" : account.error || "Sign in to create videos and keep your renders in your account."}</p>
+      <Link className="btn" href="/sign-in">Sign in</Link>{" "}<Link href="/sign-up">Create account</Link></main></>;
+  return <VideoWorkspace key={account.account.id} accountId={account.account.id} request={account.request} />;
+}
+
+function VideoWorkspace({ accountId, request }: { accountId?: string; request?: AccountStudioAccess["request"] }) {
   const [capabilities, setCapabilities] = useState<V1Capabilities | null>(null);
   const [source, setSource] = useState<File | null>(null);
   const [sourceUrl, setSourceUrl] = useState("");
@@ -64,22 +76,38 @@ export default function VideoStudioPage() {
   const [studioUnlocked, setStudioUnlocked] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const operationRef = useRef(false);
+  const lifetime = useRef(new AbortController());
+  const [pendingSubmission, setPendingSubmission] = useState(false);
+  const activeJobStorageKey = accountId ? `${legacyJobStorageKey}:${accountId}` : legacyJobStorageKey;
+  const access: StudioAccess = useMemo(() => accountId && request ? {
+    request, get signal() { return lifetime.current.signal; },
+  } : studioKey, [accountId, request, studioKey]);
 
   const sourcePreview = useMemo(() => (source ? URL.createObjectURL(source) : ""), [source]);
   useEffect(() => () => sourcePreview && URL.revokeObjectURL(sourcePreview), [sourcePreview]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    lifetime.current = controller;
+    if (accountId) {
+      try { setPendingSubmission(Boolean(pendingAccountJob(window.sessionStorage, accountId, "image_to_video"))); }
+      catch (reason) { setError(reason instanceof Error ? reason.message : "Pending video needs review."); setPendingSubmission(true); }
+      void connectStudio(access);
+      return () => controller.abort();
+    }
     const savedKey = window.sessionStorage.getItem("havnai_studio_key");
     if (savedKey) {
       setStudioKey(savedKey);
       void connectStudio(savedKey);
     }
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
     if (!job || finalStates.has(job.status)) return;
     pollRef.current = setTimeout(() => {
-      fetchV1Job(job.id, studioKey)
+      fetchV1Job(job.id, access)
         .then((next) => {
           setJob(next);
           setRecentJobs((current) => mergeJobs(current, next));
@@ -89,12 +117,12 @@ export default function VideoStudioPage() {
     return () => {
       if (pollRef.current) clearTimeout(pollRef.current);
     };
-  }, [job, studioKey]);
+  }, [job, access]);
 
   useEffect(() => {
-    if (!studioUnlocked || !studioKey) return;
+    if (!studioUnlocked || (!accountId && !studioKey)) return;
     const refresh = () => {
-      void fetchV1Jobs(studioKey).then((jobs) => {
+      void fetchV1Jobs(access).then((jobs) => {
         setRecentJobs(jobs);
         setJob((current) => {
           const active = jobs.find((item) => !finalStates.has(item.status));
@@ -106,7 +134,7 @@ export default function VideoStudioPage() {
     };
     const interval = window.setInterval(refresh, 5000);
     return () => window.clearInterval(interval);
-  }, [studioKey, studioUnlocked]);
+  }, [access, studioUnlocked, accountId, studioKey]);
 
   useEffect(() => {
     if (!job) return;
@@ -127,8 +155,9 @@ export default function VideoStudioPage() {
   const resolvedAspect = job?.resolved_spec?.aspect_ratio;
   const frameAspect = resolvedAspect === "9:16" || resolvedAspect === "16:9" ? resolvedAspect : aspect;
 
-  async function connectStudio(key: string) {
-    const normalizedKey = key.trim();
+  async function connectStudio(key: StudioAccess) {
+    const signal = typeof key === "string" ? undefined : key.signal;
+    const normalizedKey = typeof key === "string" ? key.trim() : key;
     if (!normalizedKey) return;
     setCheckingAccess(true);
     setError("");
@@ -137,15 +166,16 @@ export default function VideoStudioPage() {
         fetchVideoCapabilities(normalizedKey),
         fetchV1Jobs(normalizedKey),
       ]);
+      if (signal?.aborted) return;
       setCapabilities(value);
       setRecentJobs(jobs);
       const available = value.models.find((item) =>
         item.available && item.capabilities?.includes("image_to_video")
       );
       if (available) setModel(available.id);
-      setStudioKey(normalizedKey);
+      if (typeof normalizedKey === "string") setStudioKey(normalizedKey);
       setStudioUnlocked(true);
-      window.sessionStorage.setItem("havnai_studio_key", normalizedKey);
+      if (typeof normalizedKey === "string") window.sessionStorage.setItem("havnai_studio_key", normalizedKey);
 
       const urlJobId = new URLSearchParams(window.location.search).get("job");
       const savedJobId = window.localStorage.getItem(activeJobStorageKey);
@@ -153,16 +183,18 @@ export default function VideoStudioPage() {
       let selected = jobs.find((item) => item.id === preferredJobId);
       if (!selected && preferredJobId) {
         selected = await fetchV1Job(preferredJobId, normalizedKey).catch(() => undefined);
+        if (signal?.aborted) return;
         if (selected) setRecentJobs((current) => mergeJobs(current, selected));
       }
       const active = jobs.find((item) => !finalStates.has(item.status));
       setJob(urlJobId ? selected || active || jobs[0] || null : active || selected || jobs[0] || null);
     } catch (reason) {
-      window.sessionStorage.removeItem("havnai_studio_key");
+      if (signal?.aborted) return;
+      if (!accountId) window.sessionStorage.removeItem("havnai_studio_key");
       setStudioUnlocked(false);
       setError(reason instanceof Error ? reason.message : "Studio access failed");
     } finally {
-      setCheckingAccess(false);
+      if (!signal?.aborted) setCheckingAccess(false);
     }
   }
 
@@ -184,20 +216,38 @@ export default function VideoStudioPage() {
   async function resolveSource(): Promise<File> {
     if (source) return source;
     if (!sourceUrl.trim()) throw new Error("Source image is required");
-    const response = await fetch(sourceUrl.trim());
+    const response = await fetch(sourceUrl.trim(), { signal: lifetime.current.signal });
     if (!response.ok) throw new Error("Source result could not be loaded");
     const blob = await response.blob();
     return new File([blob], "havnai-source.png", { type: blob.type || "image/png" });
   }
 
+  function updatePendingSubmission() {
+    if (!accountId || lifetime.current.signal.aborted) return;
+    try { setPendingSubmission(Boolean(pendingAccountJob(window.sessionStorage, accountId, "image_to_video"))); }
+    catch { setPendingSubmission(true); }
+  }
+
+  async function resumeSubmission() {
+    if (!accountId || typeof access === "string" || operationRef.current) return;
+    operationRef.current = true; setBusy(true); setError("");
+    try {
+      const recovered = await submitAccountJob<V1Job>(window.sessionStorage, accountId, access, "image_to_video");
+      setJob(recovered); setRecentJobs(current => mergeJobs(current, recovered));
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not recover the video request."); }
+    finally { operationRef.current = false; setBusy(false); updatePendingSubmission(); }
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (operationRef.current || pendingSubmission) return;
+    operationRef.current = true;
     setError("");
     setBusy(true);
     try {
-      const sourceAsset = await uploadStudioAsset(await resolveSource(), "image", studioKey);
-      const audioAsset = audio ? await uploadStudioAsset(audio, "audio", studioKey) : undefined;
-      const created = await createVideoJob({
+      const sourceAsset = await uploadStudioAsset(await resolveSource(), "image", access);
+      const audioAsset = audio ? await uploadStudioAsset(audio, "audio", access) : undefined;
+      const input = {
         model,
         prompt: prompt.trim(),
         sourceAssetId: sourceAsset.id,
@@ -207,27 +257,36 @@ export default function VideoStudioPage() {
         durationSeconds: duration,
         seed: seed.trim() ? Number(seed) : undefined,
         motionStrength: motion,
-      }, studioKey);
+      };
+      const created = accountId && typeof access !== "string" ? await submitAccountJob<V1Job>(window.sessionStorage, accountId, access, "image_to_video", {
+        type: "image_to_video", model: input.model, prompt: input.prompt, source_asset_id: input.sourceAssetId,
+        audio_asset_id: input.audioAssetId, preset: input.preset, aspect_ratio: input.aspectRatio,
+        duration_seconds: input.durationSeconds, seed: input.seed, motion_strength: input.motionStrength,
+      }) : await createVideoJob(input, access);
       setJob(created);
       setRecentJobs((current) => mergeJobs(current, created));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Job submission failed");
     } finally {
+      operationRef.current = false;
       setBusy(false);
+      updatePendingSubmission();
     }
   }
 
   async function cancel() {
-    if (!job) return;
+    if (!job || operationRef.current) return;
+    operationRef.current = true;
     setBusy(true);
     try {
-      await cancelV1Job(job.id, studioKey);
-      const cancelled = await fetchV1Job(job.id, studioKey);
+      await cancelV1Job(job.id, access);
+      const cancelled = await fetchV1Job(job.id, access);
       setJob(cancelled);
       setRecentJobs((current) => mergeJobs(current, cancelled));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Cancellation failed");
     } finally {
+      operationRef.current = false;
       setBusy(false);
     }
   }
@@ -237,7 +296,9 @@ export default function VideoStudioPage() {
       <>
         <Head><title>Video Studio | HavnAI</title></Head>
         <SiteHeader />
-        <StudioAccessGate kind="video" accessKey={studioKey} onChange={setStudioKey} onSubmit={unlockStudio} checking={checkingAccess} error={error} />
+        {accountId ? <main className="account-auth-page"><h1>Video Studio</h1><p role={error ? "alert" : "status"}>{error || "Loading your video studio…"}</p>
+          {error && <button onClick={() => void connectStudio(access)}>Try again</button>}</main>
+          : <StudioAccessGate kind="video" accessKey={studioKey} onChange={setStudioKey} onSubmit={unlockStudio} checking={checkingAccess} error={error} />}
       </>
     );
   }
@@ -263,9 +324,9 @@ export default function VideoStudioPage() {
                     ? "No video node available"
                     : "Video unavailable"}
             </span>
-            <button className="video-studio-lock-button" type="button" onClick={lockStudio}>
+            {accountId ? <Link href="/account">Your account</Link> : <button className="video-studio-lock-button" type="button" onClick={lockStudio}>
               Lock studio
-            </button>
+            </button>}
           </div>
         </header>
 
@@ -305,8 +366,9 @@ export default function VideoStudioPage() {
             </details>
 
             {error && <p className="video-error" role="alert">{error}</p>}
+            {pendingSubmission && <p className="video-error" role="status">A video request needs confirmation. <button type="button" disabled={busy} onClick={() => void resumeSubmission()}>Resume video request</button></p>}
             <div className="video-actions">
-              <button className="video-submit" type="submit" disabled={busy || !model || !capabilities?.video_v2_available || !prompt.trim() || (!source && !sourceUrl.trim())}>{busy ? "Submitting..." : "Generate clip"}</button>
+              <button className="video-submit" type="submit" disabled={busy || pendingSubmission || !model || !capabilities?.video_v2_available || !prompt.trim() || (!source && !sourceUrl.trim())}>{busy ? "Submitting..." : "Generate clip"}</button>
               {job && !finalStates.has(job.status) && <button className="video-cancel" type="button" onClick={cancel} disabled={busy} aria-label="Cancel active job">Cancel</button>}
             </div>
           </form>

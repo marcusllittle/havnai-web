@@ -1,3 +1,5 @@
+import type { StudioAccess } from "./musicStudioApi";
+
 export type VideoPreset = "fast_upscaled" | "native_quality";
 export type VideoAspect = "9:16" | "16:9";
 export type VideoDuration = 3 | 5 | 8;
@@ -19,6 +21,7 @@ export interface V1Artifact {
 
 export interface V1Job {
   id: string;
+  owner_account_id?: string;
   type?: string;
   status: string;
   stage: string;
@@ -63,29 +66,32 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-function studioFetch(path: string, accessKey: string, init: RequestInit = {}): Promise<Response> {
+async function studioRequest<T>(path: string, accessKey: StudioAccess, init: RequestInit = {}): Promise<T> {
+  if (typeof accessKey !== "string") {
+    const signal = accessKey.signal;
+    signal.throwIfAborted();
+    const result = await accessKey.request<T>(`/v2${path}`, { ...init, signal });
+    signal.throwIfAborted();
+    return result;
+  }
   const headers = new Headers(init.headers);
   headers.set("X-HavnAI-Studio-Key", accessKey);
-  return fetch(path, { ...init, headers });
+  return parseResponse<T>(await fetch(`/api/owner/v1${path}`, { ...init, headers }));
 }
 
-export async function fetchVideoCapabilities(accessKey: string): Promise<V1Capabilities> {
-  return parseResponse(
-    await studioFetch("/api/owner/v1/capabilities", accessKey, { cache: "no-store" })
-  );
+export async function fetchVideoCapabilities(accessKey: StudioAccess): Promise<V1Capabilities> {
+  return studioRequest("/capabilities", accessKey, { cache: "no-store" });
 }
 
 export async function uploadStudioAsset(
   file: File,
   kind: "image" | "audio",
-  accessKey: string
+  accessKey: StudioAccess
 ): Promise<V1Asset> {
   const form = new FormData();
   form.append("kind", kind);
   form.append("file", file, file.name);
-  return parseResponse(
-    await studioFetch("/api/owner/v1/assets", accessKey, { method: "POST", body: form })
-  );
+  return studioRequest("/assets", accessKey, { method: "POST", body: form });
 }
 
 export async function createVideoJob(input: {
@@ -98,11 +104,10 @@ export async function createVideoJob(input: {
   durationSeconds: VideoDuration;
   seed?: number;
   motionStrength: number;
-}, accessKey: string): Promise<V1Job> {
-  return parseResponse(
-    await studioFetch("/api/owner/v1/jobs", accessKey, {
+}, accessKey: StudioAccess, requestKey?: string): Promise<V1Job> {
+  return studioRequest("/jobs", accessKey, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(requestKey ? { "Idempotency-Key": requestKey } : {}) },
       body: JSON.stringify({
         type: "image_to_video",
         model: input.model,
@@ -115,39 +120,34 @@ export async function createVideoJob(input: {
         seed: input.seed,
         motion_strength: input.motionStrength,
       }),
-    })
-  );
+    });
 }
 
-export async function fetchV1Job(jobId: string, accessKey: string): Promise<V1Job> {
-  return parseResponse(
-    await studioFetch(`/api/owner/v1/jobs/${encodeURIComponent(jobId)}`, accessKey, {
+export async function fetchV1Job(jobId: string, accessKey: StudioAccess): Promise<V1Job> {
+  return studioRequest(`/jobs/${encodeURIComponent(jobId)}`, accessKey, {
       cache: "no-store",
-    })
-  );
+    });
 }
 
-export async function fetchV1Jobs(accessKey: string): Promise<V1Job[]> {
-  const payload = await parseResponse<{ jobs?: V1Job[] }>(
-    await studioFetch("/api/owner/v1/jobs?type=image_to_video&limit=10", accessKey, {
+export async function fetchV1Jobs(accessKey: StudioAccess): Promise<V1Job[]> {
+  const payload = await studioRequest<{ jobs?: V1Job[] }>("/jobs?type=image_to_video&limit=10", accessKey, {
       cache: "no-store",
-    })
-  );
+    });
   return payload.jobs || [];
 }
 
 export async function cancelV1Job(
   jobId: string,
-  accessKey: string
+  accessKey: StudioAccess
 ): Promise<{ id: string; status: string }> {
-  return parseResponse(
-    await studioFetch(`/api/owner/v1/jobs/${encodeURIComponent(jobId)}/cancel`, accessKey, {
+  return studioRequest(`/jobs/${encodeURIComponent(jobId)}/cancel`, accessKey, {
       method: "POST",
-    })
-  );
+    });
 }
 
 export function mediaUrl(url?: string): string | undefined {
   if (!url) return undefined;
+  const accountArtifact = /^\/v2\/artifacts\/([a-zA-Z0-9_-]+)\/content$/.exec(url);
+  if (accountArtifact) return `/api/account-media/${accountArtifact[1]}`;
   return url.startsWith("/") ? `/api${url}` : url;
 }
