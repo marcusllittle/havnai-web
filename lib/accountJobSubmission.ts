@@ -48,6 +48,7 @@ export async function submitAccountJob<T extends { id: string; owner_account_id?
     if (!access.signal.aborted && ["insufficient_credits", "invalid_payload", "invalid_asset", "asset_not_found",
       "unsupported_type", "unknown_model", "model_task_mismatch", "invalid_duration", "invalid_bpm", "invalid_seed",
       "source_audio_required", "source_image_required", "missing_prompt", "invalid_job_type", "feature_disabled",
+      "owned_image_asset_required", "invalid_face_conditioning", "invalid_image_strength",
       "mode_unsupported_by_model", "invalid_repaint_range", "invalid_track_classes"].includes(code)) {
       storage.removeItem(storageKey(account, kind));
     }
