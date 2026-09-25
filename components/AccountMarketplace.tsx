@@ -3,16 +3,17 @@ import { useEffect, useRef, useState } from "react";
 import { useAccount } from "./AccountProvider";
 import { SiteHeader } from "./SiteHeader";
 import { SeoHead } from "./SeoHead";
+import { AccountListingForm } from "./AccountListingForm";
 import { browseAccountMarket, marketCredits, marketPreview, pendingMarketIntent, submitMarketIntent,
   type AccountMarketListing, type MarketPage, type MarketReceipt } from "../lib/accountMarketplace";
 
 type View = "browse" | "owned" | "receipts";
-export function AccountMarketplace() {
+export function AccountMarketplace({ listJob }: { listJob?: string }) {
   const account = useAccount();
-  return <AccountMarketplaceWorkspace key={account.account?.id || (account.signedIn ? "loading-account" : "guest")} />;
+  return <AccountMarketplaceWorkspace key={account.account?.id || (account.signedIn ? "loading-account" : "guest")} listJob={listJob} />;
 }
 
-function AccountMarketplaceWorkspace() {
+function AccountMarketplaceWorkspace({ listJob }: { listJob?: string }) {
   const auth = useAccount(); const account = auth.account?.id;
   const [view, setView] = useState<View>("browse");
   const [draft, setDraft] = useState(""); const [search, setSearch] = useState(""); const [sort, setSort] = useState("newest");
@@ -23,6 +24,13 @@ function AccountMarketplaceWorkspace() {
   const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
   const [recoveryError, setRecoveryError] = useState("");
   const [pending, setPending] = useState<ReturnType<typeof pendingMarketIntent>>(null);
+  const [listingDraft, setListingDraft] = useState<{ jobId: string; title?: string; price?: string } | null>(null);
+  useEffect(() => { setListingDraft(listJob && /^[a-zA-Z0-9_-]{1,128}$/.test(listJob) ? { jobId: listJob } : null); }, [listJob]);
+  const refreshPending = () => {
+    if (!account) return;
+    try { setPending(pendingMarketIntent(sessionStorage, account)); }
+    catch (reason) { setRecoveryError(reason instanceof Error ? reason.message : "Could not recover your request."); }
+  };
   const mutating = useRef(false); const lifetime = useRef<AbortController | null>(null);
   useEffect(() => {
     const controller = new AbortController(); lifetime.current = controller;
@@ -68,7 +76,7 @@ function AccountMarketplaceWorkspace() {
       }
       signal.throwIfAborted();
       setMessage(kind === "delist" ? "Listing removed from the marketplace." : "Request completed. Your creations and receipts are updated.");
-      setSelected(null); setPage(0); setRevision(value => value + 1);
+      setSelected(null); setListingDraft(null); setPage(0); setRevision(value => value + 1);
     } catch (reason) {
       if (!signal.aborted) setError(reason instanceof Error ? reason.message : "Could not complete this request.");
     } finally {
@@ -95,6 +103,11 @@ function AccountMarketplaceWorkspace() {
         </nav>
         {auth.error && <p role="alert">{auth.error} <Link href="/account">Open account</Link></p>}
         {recoveryError && <p role="alert">{recoveryError}</p>}
+        {listingDraft && (account ? <AccountListingForm key={`${account}:${listingDraft.jobId}`} account={account} jobId={listingDraft.jobId}
+          request={auth.request} initialTitle={listingDraft.title} initialPrice={listingDraft.price}
+          onPendingChange={refreshPending} onClose={() => { setListingDraft(null); refreshPending(); }}
+          onComplete={() => { setListingDraft(null); refreshPending(); setMessage("Your listing is published."); setPage(0); setRevision(value => value + 1); }} />
+          : <p>Sign in to publish your creation. <Link href={`/sign-in?redirect_url=${encodeURIComponent(`/marketplace?listJob=${listingDraft.jobId}`)}`}>Sign in</Link></p>)}
         {pending && <aside className="market-account"><p>A marketplace request is waiting for confirmation.</p><button type="button" disabled={busy} onClick={() => void act("resume")}>{pending.kind === "purchase" ? `Retry purchase for ${marketCredits(pending.units)} credits` : "Retry listing request"}</button></aside>}
         {view === "browse" && <form className="marketplace-toolbar" onSubmit={event => { event.preventDefault(); setSearch(draft.trim()); setPage(0); }}>
           <input className="library-search" aria-label="Search marketplace" placeholder="Search creations" value={draft} onChange={event => setDraft(event.target.value)} maxLength={200} />
@@ -111,7 +124,8 @@ function AccountMarketplaceWorkspace() {
         </button>)}</div>
         {receipts.length > 0 && <ul>{receipts.map(receipt => <li key={receipt.id}><h2>{receipt.title}</h2><p>{receipt.direction === "purchase" ? "Paid" : "Received"} {marketCredits(receipt.price_units)} credits · {new Date(receipt.created_at * 1000).toLocaleString()}</p><p>Receipt: {receipt.id}</p></li>)}</ul>}
         {selected && <section className="market-account" aria-label="Selected creation"><button type="button" onClick={() => setSelected(null)}>Close details</button><h2>{selected.title}</h2><p>{selected.description}</p><p>{marketCredits(selected.price_units)} credits</p>
-          {original(selected) ? <><a href={original(selected)} download>Download original</a>{selected.status === "active" && <button type="button" disabled={busy} onClick={() => void act("delist")}>Remove listing</button>}</>
+          {original(selected) ? <><a href={original(selected)} download>Download original</a>{selected.status === "active" ? <button type="button" disabled={busy} onClick={() => void act("delist")}>Remove listing</button>
+            : selected.job_id && <button type="button" disabled={busy || Boolean(pending)} onClick={() => setListingDraft({ jobId: selected.job_id!, title: selected.title, price: String(selected.price_units / 1000) })}>Relist creation</button>}</>
             : account ? <><p>This purchase pays the seller and moves the creation to your Collection.</p><button type="button" disabled={busy || Boolean(pending) || Boolean(recoveryError)} onClick={() => void act("purchase")}>Buy for {marketCredits(selected.price_units)} credits</button><Link href="/pricing">Get credits</Link></>
             : <Link href="/sign-in?redirect_url=%2Fmarketplace">Sign in to buy</Link>}
         </section>}

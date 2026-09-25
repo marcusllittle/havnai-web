@@ -86,3 +86,18 @@ it("keeps malformed request recovery visible and blocks another purchase", async
   await act(async () => host.querySelector<HTMLButtonElement>(".marketplace-gallery-card")!.click());
   expect(button("Buy for 1.25 credits").disabled).toBe(true);
 });
+
+it("opens a relisting form for owned creations and confirms publishing", async () => {
+  auth.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.startsWith("/v2/jobs/")) return { id: "job-image", owner_account_id: "alice", type: "image", status: "succeeded", artifacts: [{ id: "art-one", kind: "image" }] };
+    if (init?.method === "POST") return { listing_id: 8, job_id: "job-image", price_units: 1250 };
+    return { listings: [{ ...item, status: "sold", owner_account_id: "alice", artifact_id: "art-one", job_id: "job-image" }], total: 1 };
+  });
+  await render(); await act(async () => button("Your listings & purchases").click());
+  await act(async () => host.querySelector<HTMLButtonElement>(".marketplace-gallery-card")!.click());
+  await act(async () => button("Relist creation").click());
+  expect(host.querySelector<HTMLInputElement>('.account-listing-form input')?.value).toBe("Quiet coast");
+  await act(async () => host.querySelector('.account-listing-form form')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  expect(host.textContent).toContain("Your listing is published.");
+  expect(host.querySelector(".account-listing-form")).toBeNull();
+});

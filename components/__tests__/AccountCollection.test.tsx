@@ -43,6 +43,7 @@ it("loads beyond the first page using private account media without legacy or wa
   await act(async () => root.render(<StrictMode><Collection /></StrictMode>));
   expect(host.querySelectorAll(".library-card")).toHaveLength(50);
   expect(host.querySelector('img[src="/api/account-media/art-0"]')).not.toBeNull();
+  expect(host.querySelector('a[href="/marketplace?listJob=job-0"]')?.textContent).toBe("List for sale");
   await act(async () => button("Load more creations").click());
   expect(host.querySelectorAll(".library-card")).toHaveLength(51);
   expect(button("Load more creations")).toBeUndefined();

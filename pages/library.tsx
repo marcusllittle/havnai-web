@@ -717,6 +717,7 @@ const LibraryPage: React.FC<{ accountAuth?: CollectionAccount }> = ({ accountAut
                           <div>
                             <button type="button" onClick={() => openDrawer(item)}>View details</button>
                             {item.available && !accountAuth && <button type="button" onClick={() => openSellForm(item)}>List for sale</button>}
+                            {item.available && accountAuth && item.job?.task_type === "IMAGE_GEN" && item.statusClass === "ready" && <Link href={`/marketplace?listJob=${encodeURIComponent(item.entry.job_id)}`}>List for sale</Link>}
                             <button type="button" disabled={collectionBusy} onClick={() => handleRemove(item.entry.job_id)}>Remove from collection</button>
                           </div>
                         </details>

@@ -1463,5 +1463,5 @@ const MarketplacePage: NextPage = () => {
 export default function Marketplace() {
   const account = useAccount();
   const router = useRouter();
-  return account.configured && router.query.tab !== "workflows" ? <AccountMarketplace /> : <MarketplacePage />;
+  return account.configured && router.query.tab !== "workflows" ? <AccountMarketplace listJob={typeof router.query.listJob === "string" ? router.query.listJob : undefined} /> : <MarketplacePage />;
 }

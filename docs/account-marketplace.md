@@ -20,8 +20,15 @@ unconfirmed receipts retain it. Storage failure prevents submission. Prices reta
 all three decimal places supported by the ledger. Successful DELETE responses can
 return HTTP 204 without a JSON body.
 
-Publishing a new listing from Collection and relisting controls are not connected
-yet. The listing request helper and backend already support these operations.
+Completed image generations in Collection and the result drawer now link to the
+account listing form. The form loads the authoritative owned job, offers a preview
+image choice for multiple outputs, and requires a public title and exact credit
+price. It never copies the private generation prompt into the public title. It
+explains public-preview visibility and transfer of the creation's outputs before
+publishing. The server enforces final ownership and settlement eligibility.
+Purchased or delisted creations can be relisted from the account marketplace.
+Pending listing requests survive navigation and retry their original details.
+Collection recognizes the account API's `succeeded` status as Ready.
 
 Validation: marketplace transport/component tests cover guest access, duplicate
 clicks, lost-response retries, account changes, private media, delisting, receipts,

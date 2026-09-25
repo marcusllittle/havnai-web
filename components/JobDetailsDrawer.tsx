@@ -613,6 +613,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                   {listingOpen ? "Close listing form" : "Publish to Marketplace"}
                 </button>
               )}
+              {accountId && resolvedId && normalized.pill === "Ready" && job?.task_type === "IMAGE_GEN" && previewImage && <a className="job-action-button secondary" href={`/marketplace?listJob=${encodeURIComponent(resolvedId)}`}>Publish to Marketplace</a>}
             </div>
             {actionNotice && <p className="result-action-notice" role="status">{actionNotice}</p>}
             {loading && <p className="job-hint">Loading job details...</p>}
@@ -623,7 +624,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                 <a href="/marketplace?tab=gallery&galleryView=my-listings">View My Listings</a>
               </p>
             )}
-            {canListInMarketplace && !showListingAction && listingBlockedReason && (
+            {!accountId && canListInMarketplace && !showListingAction && listingBlockedReason && (
               <details className="result-publishing"><summary>Marketplace publishing</summary><p className="job-hint">{listingBlockedReason}</p></details>
             )}
             {showListingAction && listingOpen && (

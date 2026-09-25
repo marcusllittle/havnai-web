@@ -38,7 +38,7 @@ export function normalizeJobStatus(rawStatus?: string | null): NormalizedStatus 
     };
   }
 
-  if (["success", "completed", "ready"].includes(status)) {
+  if (["success", "succeeded", "completed", "ready"].includes(status)) {
     return {
       phase: "ready",
       label: "Ready",
