@@ -1,7 +1,8 @@
 import type { AccountStudioAccess, MusicJob } from "./musicStudioApi";
 
 interface PendingJob { key: string; body: Record<string, unknown> }
-type JobKind = "text_to_music" | "image_to_video" | "image" | "face_swap";
+type JobKind = "text_to_music" | "image_to_video" | "image" | "face_swap" | "create_video";
+const matchesKind = (type: unknown, kind: JobKind) => kind === "create_video" ? type === "image_to_video" || type === "text_to_video" : type === kind;
 const storageKey = (account: string, kind: JobKind) => `havnai.account-${kind === "text_to_music" ? "music" : kind === "image_to_video" ? "video" : kind}-request.v1:${account}`;
 
 export function pendingAccountMusicJob(storage: Storage, account: string): PendingJob | null {
@@ -14,7 +15,7 @@ export function pendingAccountJob(storage: Storage, account: string, kind: JobKi
   try {
     const pending = JSON.parse(raw) as PendingJob;
     if (typeof pending.key !== "string" || pending.key.length < 16 || pending.key.length > 128 ||
-        !pending.body || pending.body.type !== kind || "wallet" in pending.body) throw new Error();
+        !pending.body || !matchesKind(pending.body.type, kind) || "wallet" in pending.body) throw new Error();
     return pending;
   } catch { throw new Error("The saved generation request needs review before another request can be submitted."); }
 }
@@ -30,7 +31,7 @@ export async function submitAccountJob<T extends { id: string; owner_account_id?
   let pending = pendingAccountJob(storage, account, kind);
   if (pending && body) throw new Error("Resume your pending generation request before starting another.");
   if (!pending) {
-    if (!body || body.type !== kind) throw new Error("There is no valid pending generation request.");
+    if (!body || !matchesKind(body.type, kind)) throw new Error("There is no valid pending generation request.");
     pending = { key: crypto.randomUUID(), body };
     storage.setItem(storageKey(account, kind), JSON.stringify(pending));
   }
@@ -53,6 +54,7 @@ export async function submitAccountJob<T extends { id: string; owner_account_id?
       "identity_anchor_not_found", "invalid_identity_anchor_tag",
       "invalid_preset", "invalid_aspect_ratio", "invalid_video_dimensions", "invalid_video_width", "invalid_video_height",
       "invalid_video_fps", "invalid_video_frames", "invalid_video_steps", "invalid_video_guidance", "invalid_video_motion_strength", "invalid_video_strength",
+      "invalid_video_source", "owned_video_asset_required",
       "mode_unsupported_by_model", "invalid_repaint_range", "invalid_track_classes"].includes(code)) {
       storage.removeItem(storageKey(account, kind));
     }

@@ -70,6 +70,33 @@ it("passes account identity tags to the server without a wallet signature", asyn
   } finally { state.router.query = { prompt: "A blue coast" }; }
 });
 
+it("generates and recovers a single account video without legacy or wallet calls", async () => {
+  const publicRead = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/models/list")) return { ok: true, json: async () => ({ models: [{ name: "ltx_video_dev", tier: "A", available: true,
+      pipeline: "ltx_video", task_type: "LTX_VIDEO_GEN", capabilities: ["text_to_video"], video_defaults: { width: 640, height: 384, frames: 49, fps: 16 } }] }) };
+    return publicRead(url, init);
+  }));
+  let submissions = 0;
+  state.request.mockImplementation(async (path: string) => {
+    if (path === "/v2/account/credits") return { available_units: 10000, scale: 1000 };
+    if (path === "/v2/jobs" && ++submissions === 1) throw new Error("Connection lost");
+    return { ...job, type: "text_to_video", artifacts: [{ id: "art-video", kind: "video", url: "/v2/artifacts/art-video/content" }] };
+  });
+  await act(async () => root.render(<CreatePage />));
+  await act(async () => button("Video").click());
+  await act(async () => button("Generate video").click());
+  expect(button("Generate video").disabled).toBe(true);
+  await act(async () => button("Resume video request").click());
+  const posts = state.request.mock.calls.filter(([path]) => path === "/v2/jobs");
+  expect(posts).toHaveLength(2);
+  expect(posts[1][1].body).toEqual(posts[0][1].body);
+  expect(JSON.parse(posts[0][1].body)).toMatchObject({ type: "text_to_video", model: "ltx_video_dev", width: 640, height: 384 });
+  expect(JSON.parse(posts[0][1].body)).not.toHaveProperty("wallet");
+  expect(state.connect).not.toHaveBeenCalled(); expect(state.sse).not.toHaveBeenCalled();
+  expect(loadLibrary("acct_alice")[0].type).toBe("video");
+});
+
 it("resumes an ambiguous image request with its original idempotency key", async () => {
   const implementation = state.request.getMockImplementation()!;
   let submissions = 0;

@@ -13,6 +13,7 @@ import { AccountIdentityAnchors } from "../components/AccountIdentityAnchors";
 import type { AccountStudioAccess } from "../lib/musicStudioApi";
 import { submitAccountImage, submitAccountFaceSwap, fetchAccountJobView } from "../lib/accountImageStudio";
 import { pendingAccountJob } from "../lib/accountJobSubmission";
+import { submitAccountCreateVideo } from "../lib/accountVideoCreate";
 import { useWallet } from "../components/WalletProvider";
 import { HavnAIPrompt } from "../components/HavnAIPrompt";
 import { HavnAIButton } from "../components/HavnAIButton";
@@ -350,6 +351,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
   const clearActiveCreateJob = (id?: string) => clearStoredCreateJob(id, accountAuth?.id);
   const [pendingImage, setPendingImage] = useState(false);
   const [pendingFaceSwap, setPendingFaceSwap] = useState(false);
+  const [pendingVideo, setPendingVideo] = useState(false);
   const operation = useRef(false);
   const syncPendingImage = () => {
     if (!accountAuth) return;
@@ -357,13 +359,15 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     catch { setPendingImage(true); }
     try { setPendingFaceSwap(Boolean(pendingAccountJob(sessionStorage, accountAuth.id, "face_swap"))); }
     catch { setPendingFaceSwap(true); }
+    try { setPendingVideo(Boolean(pendingAccountJob(sessionStorage, accountAuth.id, "create_video"))); }
+    catch { setPendingVideo(true); }
   };
   useEffect(syncPendingImage, [accountAuth?.id]);
   const router = useRouter();
   const entryApplied = useRef(false);
   const wallet = useWallet();
   const [mode, setMode] = useState<GeneratorMode>("image");
-  const pendingGeneration = mode === "face_swap" ? pendingFaceSwap : pendingImage;
+  const pendingGeneration = mode === "video" ? pendingVideo : mode === "face_swap" ? pendingFaceSwap : pendingImage;
   const [prompt, setPrompt] = useState("");
   useEffect(() => {
     if (!router.isReady || entryApplied.current) return;
@@ -1157,7 +1161,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     initOverride?: string | null
   ) => {
     const request: Record<string, any> = { prompt: promptText };
-    if (activeWallet) request.wallet = activeWallet;
+    if (!accountAuth && activeWallet) request.wallet = activeWallet;
     const trimmedNegative = negativePrompt.trim();
     if (trimmedNegative) request.negativePrompt = trimmedNegative;
     const seedValue = parseOptionalInt(seed);
@@ -1497,8 +1501,8 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
       setStatusMessage("No face swap model is currently selectable.");
       return;
     }
-    if (accountAuth && mode === "video") {
-      setStatusMessage("Use Video Studio for account video generation while this workflow is being connected.");
+    if (accountAuth && mode === "video" && (parseOptionalInt(extendChunks) ?? 1) > 1) {
+      setStatusMessage("Account clip chaining is being connected. Set Total clips to 1 to render a single clip.");
       return;
     }
     if (accountAuth && pendingGeneration) { setStatusMessage("Resume your pending generation request first."); return; }
@@ -1570,7 +1574,9 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
           await runVideoChain(effectivePrompt, totalVideoClips - 1);
         } else {
           const request = buildVideoRequest(effectivePrompt);
-          const id = await submitVideoJob(request);
+          const id = accountAuth && accountAccess
+            ? (await submitAccountCreateVideo(sessionStorage, accountAuth.id, accountAccess, request)).id
+            : await submitVideoJob(request);
           setJobId(id);
           saveActiveCreateJob({ id, prompt: effectivePrompt, mode: "video", startedAt: Date.now() });
           setStatusMessage("Waiting for available GPU capacity...");
@@ -1868,17 +1874,18 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     return null;
   };
 
-  const handleResumeImage = async (kind: "image" | "face_swap") => {
+  const handleResumeImage = async (kind: "image" | "face_swap" | "create_video") => {
     if (!accountAuth || !accountAccess || operation.current) return;
     operation.current = true; setLoading(true);
     try {
       const pending = pendingAccountJob(sessionStorage, accountAuth.id, kind);
-      const usedPrompt = String(pending?.body.prompt || (kind === "face_swap" ? "Face swap" : "Image"));
-      const job = await (kind === "face_swap" ? submitAccountFaceSwap : submitAccountImage)(sessionStorage, accountAuth.id, accountAccess);
-      setMode(kind); setJobId(job.id); setLastUsedPrompt(usedPrompt);
+      const usedPrompt = String(pending?.body.prompt || (kind === "create_video" ? "Video" : kind === "face_swap" ? "Face swap" : "Image"));
+      const job = await (kind === "create_video" ? submitAccountCreateVideo : kind === "face_swap" ? submitAccountFaceSwap : submitAccountImage)(sessionStorage, accountAuth.id, accountAccess);
+      const resumedMode = kind === "create_video" ? "video" : kind;
+      setMode(resumedMode); setJobId(job.id); setLastUsedPrompt(usedPrompt);
       syncPendingImage();
-      saveActiveCreateJob({ id: job.id, prompt: usedPrompt, mode: kind, startedAt: Date.now() });
-      await pollJob(job.id, usedPrompt, 1800);
+      saveActiveCreateJob({ id: job.id, prompt: usedPrompt, mode: resumedMode, startedAt: Date.now() });
+      await pollJob(job.id, usedPrompt, resumedMode === "video" ? 2400 : 1800);
     } catch (reason) {
       if (!accountAccess.signal.aborted) setStatusMessage(reason instanceof Error ? reason.message : "Could not resume this generation request.");
     } finally { operation.current = false; syncPendingImage(); setLoading(false); }
@@ -2814,6 +2821,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                   <Link href="/account">Manage credits</Link>
                   {pendingImage && <p role="status">An image request needs confirmation. <button type="button" className="generator-mini-button" disabled={loading} onClick={() => void handleResumeImage("image")}>Resume image request</button></p>}
                   {pendingFaceSwap && <p role="status">A face-swap request needs confirmation. <button type="button" className="generator-mini-button" disabled={loading} onClick={() => void handleResumeImage("face_swap")}>Resume face swap</button></p>}
+                  {pendingVideo && <p role="status">A video request needs confirmation. <button type="button" className="generator-mini-button" disabled={loading} onClick={() => void handleResumeImage("create_video")}>Resume video request</button></p>}
                   <p><Link href="/video-studio">Open account Video Studio</Link></p>
                 </section> : <details className="studio-account">
                   <summary><Wallet size={15} aria-hidden="true" /><span>Access & credits</span><span className="studio-account-balance">{credits?.credits_enabled ? credits.balance.toFixed(1) + " cr" : inviteSaved ? "Code saved" : "Account"}</span><ChevronDown size={15} aria-hidden="true" /></summary>
