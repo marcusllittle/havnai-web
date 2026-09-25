@@ -3295,7 +3295,7 @@ export async function relistGalleryAsset(
 }
 
 export async function fetchMarketplace(
-  opts: { search?: string; category?: string; offset?: number; limit?: number; signal?: AbortSignal } = {}
+  opts: { search?: string; category?: string; offset?: number; limit?: number; signal?: AbortSignal; accountCatalog?: boolean } = {}
 ): Promise<WorkflowListResponse> {
   const params = new URLSearchParams();
   if (opts.search) params.set("search", opts.search);
@@ -3303,16 +3303,19 @@ export async function fetchMarketplace(
   if (opts.offset) params.set("offset", String(opts.offset));
   if (opts.limit) params.set("limit", String(opts.limit));
   const qs = params.toString();
-  const res = await fetchWithTimeout(apiUrl(`/marketplace/browse${qs ? `?${qs}` : ""}`), {
+  const res = await fetchWithTimeout(apiUrl(`${opts.accountCatalog ? "/v2/workflows" : "/marketplace/browse"}${qs ? `?${qs}` : ""}`), {
     headers: buildHeaders(false),
     signal: opts.signal,
   });
   if (!res.ok) throw await parseErrorResponse(res);
-  return (await res.json()) as WorkflowListResponse;
+  const result = (await res.json()) as WorkflowListResponse;
+  if (opts.accountCatalog) result.workflows = result.workflows.map(item => ({ ...item, id: `public:${item.id}` }));
+  return result;
 }
 
 export async function fetchWorkflow(id: string, opts: { signal?: AbortSignal } = {}): Promise<Workflow> {
-  const res = await fetchWithTimeout(apiUrl(`/workflows/${encodeURIComponent(id)}`), {
+  const path = id.startsWith("public:") ? `/v2/workflows/${encodeURIComponent(id.slice(7))}` : `/workflows/${encodeURIComponent(id)}`;
+  const res = await fetchWithTimeout(apiUrl(path), {
     headers: buildHeaders(false),
     signal: opts.signal,
   });

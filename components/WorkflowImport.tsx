@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import { fetchWorkflow } from "../lib/havnai";
 import { readWorkflowTemplate, type WorkflowTemplate } from "../lib/workflowTemplate";
+import { useAccount } from "./AccountProvider";
+import type { Workflow } from "../lib/havnai";
 
-export function WorkflowImport({ id, disabled, onApply }: { id: string; disabled: boolean; onApply: (template: WorkflowTemplate) => string | undefined }) {
+type Props = { id: string; disabled: boolean; onApply: (template: WorkflowTemplate) => string | undefined };
+export function WorkflowImport(props: Props) {
+  const account = useAccount();
+  return <WorkflowImportContent key={`${account.account?.id || "guest"}:${props.id}`} {...props} />;
+}
+function WorkflowImportContent({ id, disabled, onApply }: Props) {
+  const account = useAccount();
   const [template, setTemplate] = useState<WorkflowTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -15,12 +23,15 @@ export function WorkflowImport({ id, disabled, onApply }: { id: string; disabled
     const controller = new AbortController();
     setLoading(true); setError(""); setTemplate(null); setApplied(false); setApplyError(""); setDismissed(false);
     const timeout = setTimeout(() => controller.abort(), 12000);
-    fetchWorkflow(id, { signal: controller.signal }).then(readWorkflowTemplate)
+    const loadingTemplate = id.startsWith("account:")
+      ? account.request<Workflow>(`/v2/account/workflows/${encodeURIComponent(id.slice(8))}`, { signal: controller.signal })
+      : fetchWorkflow(id, { signal: controller.signal });
+    loadingTemplate.then(readWorkflowTemplate)
       .then(value => { if (active) setTemplate(value); })
       .catch(reason => { if (active) setError(reason instanceof Error && !controller.signal.aborted ? reason.message : "The template couldn’t load. Try again."); })
       .finally(() => { clearTimeout(timeout); if (active) setLoading(false); });
     return () => { active = false; clearTimeout(timeout); controller.abort(); };
-  }, [id, revision]);
+  }, [id, revision, account.request, account.account?.id]);
   if (dismissed) return null;
   return <aside className="studio-template" aria-label="Selected workflow template">
     <div className="studio-template-heading"><span>Workflow template</span><button type="button" onClick={() => setDismissed(true)}>Dismiss</button></div>

@@ -1,0 +1,50 @@
+import React, { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { beforeEach, afterEach, expect, it, vi } from "vitest";
+import TemplatesPage from "../../pages/templates";
+const state = vi.hoisted(() => ({ account: { id: "alice" } as { id: string } | null, request: vi.fn(), catalog: vi.fn() }));
+vi.mock("../AccountProvider", () => ({ useAccount: () => state }));
+vi.mock("../SiteHeader", () => ({ SiteHeader: () => null }));
+vi.mock("../SeoHead", () => ({ SeoHead: () => null }));
+vi.mock("../AccountWorkflowLibrary", () => ({ AccountWorkflowLibrary: () => null }));
+vi.mock("../../lib/havnai", () => ({ fetchMarketplace: state.catalog }));
+vi.mock("next/link", () => ({ default: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} /> }));
+let host: HTMLDivElement, root: Root;
+const button = (label: string) => [...host.querySelectorAll("button")].find(node => node.textContent?.trim() === label)!;
+beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); state.account = { id: "alice" };
+  state.request.mockReset(); state.catalog.mockReset().mockResolvedValue({ workflows: [], total: 0 });
+  host = document.createElement("div"); document.body.appendChild(host); root = createRoot(host);
+});
+afterEach(() => { act(() => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
+it("saves without a wallet and retries a lost response with the same operation key", async () => {
+  await act(async () => root.render(<TemplatesPage />));
+  await act(async () => button("Your draft").click());
+  const name = host.querySelector<HTMLInputElement>('input[placeholder="Golden-hour portraits"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(name, "My setup");
+    name.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  state.request.mockRejectedValueOnce(new Error("Lost response")).mockResolvedValue({ id: 1, name: "My setup", updated_at: 1 });
+  const submit = () => host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  await act(async () => { submit(); });
+  await act(async () => { submit(); });
+  const [path, first] = state.request.mock.calls[0];
+  expect(path).toBe("/v2/account/workflows");
+  expect(JSON.parse(first.body)).not.toHaveProperty("wallet");
+  expect(state.request.mock.calls[1][1].headers).toEqual(first.headers);
+  expect(state.request.mock.calls[1][1].body).toBe(first.body);
+  expect(host.textContent).toContain("is saved");
+  expect(host.querySelector('a[href="/create?workflow=account%3A1"]')).not.toBeNull();
+  state.account = { id: "bob" };
+  await act(async () => root.render(<TemplatesPage />));
+  expect(host.textContent).not.toContain("My setup");
+});
+it("offers account sign-in to guests instead of a wallet prompt", async () => {
+  state.account = null;
+  await act(async () => root.render(<TemplatesPage />));
+  await act(async () => button("Your draft").click());
+  expect(host.textContent).toContain("No wallet is required");
+  expect(host.textContent).not.toContain("Connect wallet");
+  expect(state.request).not.toHaveBeenCalled();
+});
