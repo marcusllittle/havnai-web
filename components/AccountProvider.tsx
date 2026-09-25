@@ -62,6 +62,7 @@ function AuthenticatedAccountProvider({ children }: { children: React.ReactNode 
       const body = await response.json().catch(() => null);
       if (identity !== identityRef.current) throw new Error("Your account session changed. Please try again.");
       if (!response.ok) throw new AccountRequestError(body?.error?.message || body?.message || `Request failed (${response.status}).`, body?.error?.code);
+      if (response.status === 204) return undefined as T;
       if (body == null) throw new Error("The account service returned an invalid response.");
       return body as T;
     } finally {

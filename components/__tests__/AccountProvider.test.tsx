@@ -82,4 +82,12 @@ describe("Standard account sessions", () => {
     await expect(accountContext.request("/v2/account/credits")).rejects.toThrow("Sign in again.");
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+
+  it("accepts a completed no-content mutation but rejects an empty JSON response", async () => {
+    await render();
+    fetcher.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await expect(accountContext.request<void>("/v2/marketplace/listings/4", { method: "DELETE" })).resolves.toBeUndefined();
+    fetcher.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    await expect(accountContext.request("/v2/account/credits")).rejects.toThrow("invalid response");
+  });
 });

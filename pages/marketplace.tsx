@@ -7,6 +7,8 @@ import { CollectionPreview } from "../components/CollectionPreview";
 import { SeoHead } from "../components/SeoHead";
 import { useWallet } from "../components/WalletProvider";
 import { SiteHeader } from "../components/SiteHeader";
+import { useAccount } from "../components/AccountProvider";
+import { AccountMarketplace } from "../components/AccountMarketplace";
 import {
   createWorkflow,
   fetchCredits,
@@ -1458,4 +1460,8 @@ const MarketplacePage: NextPage = () => {
   );
 };
 
-export default MarketplacePage;
+export default function Marketplace() {
+  const account = useAccount();
+  const router = useRouter();
+  return account.configured && router.query.tab !== "workflows" ? <AccountMarketplace /> : <MarketplacePage />;
+}
