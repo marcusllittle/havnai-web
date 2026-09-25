@@ -46,7 +46,7 @@ replacement Stripe account or move existing payment credentials.
    starting credits. Refresh, sign out, and sign in again; the immutable account ID
    must remain the same. A second user must receive a distinct account and balance.
 
-Production rollout still requires provider lifecycle webhooks, completed studio/
+Production rollout still requires live provider lifecycle webhook delivery, completed studio/
 publication/migration/payment integration, terms and refund policy, and the full
 HAVN-11 acceptance run. A locally passing mocked-provider test is not that evidence.
 
