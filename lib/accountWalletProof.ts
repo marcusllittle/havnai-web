@@ -6,7 +6,7 @@ type Challenge = { challenge_id: string; message: string; expires_at: number };
 type Link = { id: string; wallet: string };
 const pendingSignatures = new WeakMap<InjectedProvider, Promise<unknown>>();
 
-function abortable<T>(promise: Promise<T>, signal: AbortSignal, timeout = 90_000): Promise<T> {
+export function abortable<T>(promise: Promise<T>, signal: AbortSignal, timeout = 90_000): Promise<T> {
   signal.throwIfAborted();
   return new Promise((resolve, reject) => {
     const cleanup = () => { clearTimeout(timer); signal.removeEventListener("abort", abort); };
@@ -16,6 +16,18 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal, timeout = 90_000
     signal.addEventListener("abort", abort, { once: true });
     promise.then(value => { cleanup(); resolve(value); }, fail);
   });
+}
+
+export async function signAccountProof(provider: InjectedProvider, message: string, address: string, signal: AbortSignal) {
+  if (pendingSignatures.has(provider)) throw new Error("A wallet signature is still pending. Complete or cancel it in your wallet first.");
+  const signing = Promise.resolve().then(() => {
+    signal.throwIfAborted();
+    return provider.request({ method: "personal_sign", params: [hexlify(toUtf8Bytes(message)), address] });
+  });
+  pendingSignatures.set(provider, signing);
+  const clear = () => { if (pendingSignatures.get(provider) === signing) pendingSignatures.delete(provider); };
+  void signing.then(clear, clear);
+  return abortable(signing, signal);
 }
 
 /** Sign the exact stored EIP-191 proof; never transfer funds or infer ownership. */
@@ -54,14 +66,7 @@ export async function authorizeAccountWallet({ provider, wallet, accountId, requ
     }
     if (pendingSignatures.has(provider)) throw new Error("A wallet signature is still pending. Complete or cancel it in your wallet first.");
     onStage?.(link ? "Confirm unlinking in your wallet…" : "Confirm linking in your wallet…");
-    const signing = Promise.resolve().then(() => {
-      operation.signal.throwIfAborted();
-      return provider.request({ method: "personal_sign", params: [hexlify(toUtf8Bytes(proof.message)), selected] });
-    });
-    pendingSignatures.set(provider, signing);
-    const clear = () => { if (pendingSignatures.get(provider) === signing) pendingSignatures.delete(provider); };
-    void signing.then(clear, clear);
-    const signature = await abortable(signing, operation.signal);
+    const signature = await signAccountProof(provider, proof.message, selected, operation.signal);
     operation.signal.throwIfAborted();
     if (typeof signature !== "string" || verifyMessage(proof.message, signature).toLowerCase() !== selected) {
       throw new Error("Your wallet signed with a different address. Nothing was linked or unlinked.");

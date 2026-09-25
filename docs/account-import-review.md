@@ -29,3 +29,13 @@ creation, publication and playlist IDs. Pending snapshots never appear as
 completed imports. Reads require only account authentication, and no wallet
 provider is used. Closing history or switching accounts cancels pending reads.
 Errors remain distinct from empty history and can be refreshed explicitly.
+
+`lib/accountImport.ts` provides the confirmation transport for the next UI step.
+It validates account/session/link/snapshot/digest/origin/network, exact resource
+IDs, integer credit units and expiry against the reviewed snapshot before
+signing. It shares a pending-signature lock with wallet link/unlink operations,
+pins the address/network across signing, and aborts on provider changes.
+Execution first checks for a durable receipt, then sends only the stored proof;
+a lost response triggers receipt recovery rather than another wallet request.
+Signed proofs are intended to stay in memory, never browser storage. The review
+panel does not invoke this transport yet.
