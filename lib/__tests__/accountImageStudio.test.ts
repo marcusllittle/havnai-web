@@ -74,3 +74,11 @@ it("exposes only protected media and verifies ownership before restoring a job",
   await expect(fetchAccountJobView(job.id, account, { request, signal: new AbortController().signal })).resolves.toEqual(view);
   expect(request.mock.calls[0][0]).toBe("/v2/jobs/job-one");
 });
+
+it("restores stitched account results as private videos", () => {
+  const view = accountJobView({ ...job, type: "video_stitch", status: "succeeded", artifacts: [
+    { id: "merged", kind: "video", filename: "result.mp4", sha256: "", url: "/v2/artifacts/merged/content" },
+  ] }, account);
+  expect(view.job.task_type).toBe("VIDEO_GEN");
+  expect(view.result.video_url).toBe("/api/account-media/merged");
+});

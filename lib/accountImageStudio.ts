@@ -67,7 +67,7 @@ export function accountJobView(job: V1Job, account: string): { job: JobDetailRes
     job: { id: job.id, model: job.model, status: job.status, stage: job.stage, progress: job.progress,
       collection_hidden: job.collection_hidden,
       timestamp: job.created_at ?? undefined, completed_at: job.completed_at,
-      task_type: job.type === "image_to_video" || job.type === "text_to_video" ? "VIDEO_GEN" : job.type === "text_to_music" ? "MUSIC_GEN" : job.type === "face_swap" ? "FACE_SWAP" : "IMAGE_GEN",
+      task_type: /video|animatediff/i.test(job.type || "") ? "VIDEO_GEN" : job.type === "text_to_music" ? "MUSIC_GEN" : job.type === "face_swap" ? "FACE_SWAP" : "IMAGE_GEN",
       status_reason: job.error_code || undefined,
       data: { ...parameters, prompt: prompts?.original || parameters?.prompt || "" } },
     result: { job_id: job.id, image_url: artifactUrl("image"), video_url: artifactUrl("video") },
