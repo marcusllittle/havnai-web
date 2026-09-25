@@ -508,7 +508,11 @@ function MusicStudioWorkspace({ accountAuth }: { accountAuth?: { id: string; req
             void submitAccountMusicJob(window.sessionStorage, accountAuth.id, studioAccess)
               .then(job => { setJobs(current => mergeJobs(current, [job])); setPendingSubmission(false); })
               .catch(reason => setError(friendlyError(reason)))
-              .finally(() => { submitInFlight.current = false; setSubmitting(false); });
+              .finally(() => {
+                submitInFlight.current = false; setSubmitting(false);
+                try { setPendingSubmission(Boolean(pendingAccountMusicJob(window.sessionStorage, accountAuth.id))); }
+                catch { setPendingSubmission(true); }
+              });
           }}>Resume song request</button></div>}
 
         <div className="studio-music-layout">

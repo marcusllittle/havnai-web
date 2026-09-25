@@ -27,8 +27,8 @@ it("isolates pending requests by account and retains ambiguous response ownershi
   expect(pendingAccountMusicJob(sessionStorage, "acct_alice")).not.toBeNull();
 });
 
-it("allows editing a definitively rejected request without erasing ambiguous ones", async () => {
-  const request = vi.fn().mockRejectedValue(Object.assign(new Error("Not enough credits"), { code: "insufficient_credits" }));
+it.each(["insufficient_credits", "model_task_mismatch"])("allows editing after definitive rejection: %s", async (code) => {
+  const request = vi.fn().mockRejectedValue(Object.assign(new Error("Request rejected"), { code }));
   await expect(submitAccountMusicJob(sessionStorage, "acct_alice", { request, signal: new AbortController().signal }, body)).rejects.toThrow();
   expect(pendingAccountMusicJob(sessionStorage, "acct_alice")).toBeNull();
 });

@@ -67,6 +67,24 @@ it("publishes and unpublishes without signing and uses protected media URLs", as
   expect(state.request).toHaveBeenCalledWith("/v2/music/publications/publication-one", expect.objectContaining({ method: "DELETE" }));
 });
 
+it("unblocks the composer when a resumed request is definitively rejected", async () => {
+  sessionStorage.setItem("havnai.account-music-request.v1:acct_alice", JSON.stringify({
+    key: "pending-request-key-one", body: { type: "text_to_music", prompt: "Original song" },
+  }));
+  const implementation = state.request.getMockImplementation()!;
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === "/v2/jobs") throw Object.assign(new Error("Choose a music model"), { code: "model_task_mismatch" });
+    return implementation(path, init);
+  });
+  await act(async () => root.render(<MusicPage />));
+  expect(button("Create song").disabled).toBe(true);
+  await act(async () => button("Resume song request").click());
+  expect(host.textContent).toContain("Choose a music model");
+  expect(button("Resume song request")).toBeUndefined();
+  expect(button("Create song").disabled).toBe(false);
+  expect(sessionStorage.getItem("havnai.account-music-request.v1:acct_alice")).toBeNull();
+});
+
 it("clears private songs and aborts old requests on account switch, then gates signed-out access", async () => {
   await act(async () => root.render(<MusicPage />));
   const oldSignal = state.request.mock.calls[0][1].signal;
