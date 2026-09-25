@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-import { submitAccountCreateVideo } from "../accountVideoCreate";
+import { submitAccountCreateVideo, extractAccountVideoLastFrame } from "../accountVideoCreate";
 import { pendingAccountJob } from "../accountJobSubmission";
 
 const job = { id: "video-job", owner_account_id: "alice" };
@@ -33,6 +33,23 @@ it("uses the text-to-video contract when no source is supplied", async () => {
   const request = vi.fn().mockResolvedValue(job);
   await submitAccountCreateVideo(sessionStorage, "alice", { request, signal: new AbortController().signal }, { prompt: "Clouds", model: "ltx" });
   expect(JSON.parse(request.mock.calls[0][1].body)).toMatchObject({ type: "text_to_video", prompt: "Clouds" });
+});
+
+it("continues from a private frame asset without downloading or reuploading it", async () => {
+  const read = vi.fn(); vi.stubGlobal("fetch", read);
+  const request = vi.fn(async (path: string) => path.endsWith("/last-frame") ? { id: "asset-last-frame", kind: "image" } : job) as any;
+  const access = { request, signal: new AbortController().signal };
+  const sourceAssetId = await extractAccountVideoLastFrame("prior-video", access);
+  await submitAccountCreateVideo(sessionStorage, "alice", access, { prompt: "Continue", model: "ltx", sourceAssetId });
+  expect(request.mock.calls[0][0]).toBe("/v2/jobs/prior-video/last-frame");
+  expect(JSON.parse(request.mock.calls[1][1].body)).toMatchObject({ type: "image_to_video", source_asset_id: "asset-last-frame" });
+  expect(read).not.toHaveBeenCalled();
+});
+
+it("discards a derived input response after the account scope changes", async () => {
+  const controller = new AbortController();
+  const request = vi.fn(async () => { controller.abort(); return { id: "asset-private", kind: "image" }; }) as any;
+  await expect(extractAccountVideoLastFrame("prior", { request, signal: controller.signal })).rejects.toThrow();
 });
 
 it("allows correcting a rejected video source without losing ambiguous requests", async () => {
