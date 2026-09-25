@@ -129,3 +129,12 @@
 .account-credit-total { font-size: 2rem; color: #61cfff; }
 .account-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1.5rem; }
 .account-nav-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .7rem 1.2rem; border: 1px solid #36acd4; border-radius: 999px; white-space: nowrap; color: #d8f6ff; background: #102536; }
+.account-purchases-heading, .account-purchase-list > li { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+.account-purchase-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.account-purchase-list > li { padding: 1rem 0; border-top: 1px solid #233b52; }
+.account-purchase-list p { color: #a8bbce; margin: .5rem 0 0; }
+.account-summary-card button { min-height: 44px; padding: .6rem .9rem; border-radius: .7rem; border: 1px solid #375a78; color: #d8f6ff; background: #142b40; cursor: pointer; }
+.account-summary-card button:disabled { opacity: .5; cursor: wait; }
+.account-summary-card button:focus-visible { outline: 2px solid #61cfff; outline-offset: 3px; }
+.account-receipt { margin-top: 1.5rem; border-top: 1px solid #375a78; padding-top: 1.5rem; }
+.account-purchase-id { overflow-wrap: anywhere; color: #a8bbce; font-size: .85rem; }

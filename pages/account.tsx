@@ -4,6 +4,7 @@ import Link from "next/link";
 import { SignOutButton } from "@clerk/nextjs";
 import { SiteHeader } from "../components/SiteHeader";
 import { useAccount } from "../components/AccountProvider";
+import { AccountPurchases } from "../components/AccountPurchases";
 
 interface CreditBalance {
   scale: number;
@@ -44,6 +45,7 @@ export default function AccountPage() {
               : <p role={creditError ? "alert" : "status"}>{creditError || "Loading credits…"}</p>}
             <Link href="/pricing">Get credits</Link>
           </section>
+          <AccountPurchases key={account.id} />
           <section className="account-summary-card"><h2>Linked wallets</h2>
             <p>Wallets unlock blockchain rewards, token transfers, and ownership features. You do not need one to create or publish.</p>
             {account.wallets.length ? <ul>{account.wallets.map(wallet => <li key={wallet.id}><code>{wallet.wallet}</code></li>)}</ul> : <p>No wallets linked.</p>}

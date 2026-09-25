@@ -46,3 +46,10 @@ publication/migration/payment integration, terms and refund policy, and the full
 HAVN-11 acceptance run. A locally passing mocked-provider test is not that evidence.
 
 Reference: [Clerk session customization](https://clerk.com/docs/guides/sessions/customize-session-tokens).
+
+The account page now reads authenticated purchase history and durable receipts
+from core's `/v2/account/purchases` routes. Refund/dispute adjustments are shown
+from the stored receipt history. Account changes unmount the old receipt view
+and abort its requests. A checkout return URL never marks a purchase paid.
+Account pricing/checkout controls and published commercial policies remain to be
+integrated; the existing `/pricing` page still uses the legacy wallet flow.
