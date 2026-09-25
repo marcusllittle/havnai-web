@@ -3,8 +3,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { AccountImportReview } from "../AccountImportReview";
 
-const state = vi.hoisted(() => ({ request: vi.fn() }));
+const state = vi.hoisted(() => ({ request: vi.fn(), account: { id: "account" }, refresh: vi.fn(), connect: vi.fn(),
+  recover: vi.fn(), sign: vi.fn(), submit: vi.fn(), provider: vi.fn() }));
 vi.mock("../AccountProvider", () => ({ useAccount: () => state }));
+vi.mock("../WalletProvider", () => ({ useWallet: () => ({ connect: state.connect, connectedWallet: null }) }));
+vi.mock("../../lib/wallet", () => ({ ensureInjectedProvider: state.provider }));
+vi.mock("../../lib/accountImport", () => ({ recoverImport: state.recover, signImport: state.sign, submitImport: state.submit }));
 let host: HTMLDivElement, root: Root;
 const review = vi.fn();
 const close = vi.fn();
@@ -17,7 +21,53 @@ const render = () => root.render(<AccountImportReview link={{ id: "linked", wall
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   state.request.mockReset().mockResolvedValue(inventory); review.mockReset(); close.mockReset();
+  state.refresh.mockReset().mockResolvedValue(undefined); state.connect.mockReset().mockResolvedValue("0xwallet");
+  state.provider.mockReset().mockResolvedValue({ provider: {} }); state.recover.mockReset().mockResolvedValue(null);
+  state.sign.mockReset().mockResolvedValue({ signature: "signed" }); state.submit.mockReset();
   host = document.createElement("div"); document.body.appendChild(host); root = createRoot(host);
+});
+
+async function readyForImport() {
+  state.request.mockImplementation(async (path: string) => path.endsWith("import-capabilities") ? { execution_enabled: true } : inventory);
+  review.mockResolvedValue({ id: "snapshot", account_id: "account", jobs: [{ id: "ready" }], publications: [], playlists: [],
+    credits: null, expires_at: Date.now() / 1000 + 300 });
+  await act(async () => render());
+  await act(async () => input("ready").click());
+  await act(async () => button("Review selection").click());
+  expect(state.connect).not.toHaveBeenCalled(); expect(state.sign).not.toHaveBeenCalled();
+}
+
+it("requires confirmation and reuses the signed proof after a lost response", async () => {
+  await readyForImport();
+  state.submit.mockRejectedValueOnce(new Error("Connection lost")).mockResolvedValue({ receipt: { id: "snapshot" } });
+  await act(async () => button("Confirm import with wallet").click());
+  expect(button("Review a different selection").disabled).toBe(true);
+  expect(host.textContent).toContain("Connection lost");
+  await act(async () => button("Retry import").click());
+  expect(state.connect).toHaveBeenCalledTimes(1); expect(state.sign).toHaveBeenCalledTimes(1);
+  expect(state.submit.mock.calls[0][2]).toBe(state.submit.mock.calls[1][2]);
+  expect(host.textContent).toContain("Import complete"); expect(state.refresh).toHaveBeenCalledTimes(1);
+});
+
+it("recovers an existing receipt without opening the wallet", async () => {
+  await readyForImport();
+  state.recover.mockResolvedValue({ receipt: { id: "snapshot" } });
+  await act(async () => button("Confirm import with wallet").click());
+  expect(state.connect).not.toHaveBeenCalled(); expect(state.sign).not.toHaveBeenCalled(); expect(state.submit).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("Import complete");
+});
+
+it("aborts an in-flight signature when the account review is removed", async () => {
+  await readyForImport();
+  let finish!: (value: unknown) => void;
+  state.sign.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  await act(async () => { button("Confirm import with wallet").click(); button("Confirm import with wallet").click(); });
+  expect(state.sign).toHaveBeenCalledTimes(1);
+  const signal = state.sign.mock.calls[0][0].signal;
+  await act(async () => root.render(<div>Other account</div>));
+  expect(signal.aborted).toBe(true);
+  await act(async () => finish({ signature: "late" }));
+  expect(state.submit).not.toHaveBeenCalled(); expect(host.textContent).toBe("Other account");
 });
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
 
