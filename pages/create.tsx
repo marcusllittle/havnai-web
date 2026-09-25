@@ -9,6 +9,7 @@ import type { WorkflowTemplate } from "../lib/workflowTemplate";
 import { ArrowUpRight, ImageIcon, Film, ScanFace, SlidersHorizontal, ChevronDown, Wallet, Sparkles } from "lucide-react";
 import { SiteHeader } from "../components/SiteHeader";
 import { useAccount } from "../components/AccountProvider";
+import { AccountIdentityAnchors } from "../components/AccountIdentityAnchors";
 import type { AccountStudioAccess } from "../lib/musicStudioApi";
 import { submitAccountImage, submitAccountFaceSwap, fetchAccountJobView } from "../lib/accountImageStudio";
 import { pendingAccountJob } from "../lib/accountJobSubmission";
@@ -1500,10 +1501,6 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
       setStatusMessage("Use Video Studio for account video generation while this workflow is being connected.");
       return;
     }
-    if (accountAuth && promptAnchor.hasAnchorTag) {
-      setStatusMessage("Account identity anchors are being connected. Use a source image to refine this image.");
-      return;
-    }
     if (accountAuth && pendingGeneration) { setStatusMessage("Resume your pending generation request first."); return; }
     operation.current = true;
     setLoading(true);
@@ -2325,6 +2322,8 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                           {imageDefaultsSummary ? `: ${imageDefaultsSummary}.` : "."}
                         </p>
                       )}
+                      {accountAccess && <AccountIdentityAnchors access={accountAccess} onUse={slug => setPrompt(current =>
+                        `[IDENTITY ANCHOR: ${slug}] ${current.replace(/\[\s*identity\s+anchor[^\]]*\]/gi, "").trim()}`)} />}
                       <span className="adv-group-title">Reference image</span>
                       <label className="generator-label" htmlFor="image-reference-url">
                         Image URL

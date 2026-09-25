@@ -50,6 +50,7 @@ export async function submitAccountJob<T extends { id: string; owner_account_id?
       "source_audio_required", "source_image_required", "missing_prompt", "invalid_job_type", "feature_disabled",
       "owned_image_asset_required", "invalid_face_conditioning", "invalid_image_strength",
       "face_swap_images_required", "invalid_face_swap_settings",
+      "identity_anchor_not_found", "invalid_identity_anchor_tag",
       "mode_unsupported_by_model", "invalid_repaint_range", "invalid_track_classes"].includes(code)) {
       storage.removeItem(storageKey(account, kind));
     }

@@ -59,6 +59,17 @@ it("generates once without wallet calls and stores account-only recovery and his
   expect(state.connect).not.toHaveBeenCalled(); expect(state.sse).not.toHaveBeenCalled();
 });
 
+it("passes account identity tags to the server without a wallet signature", async () => {
+  state.router.query = { prompt: "[IDENTITY ANCHOR: pilot] A blue coast" };
+  try {
+    await act(async () => root.render(<CreatePage />));
+    await act(async () => button("Generate image").click());
+    const submission = state.request.mock.calls.find(([path]) => path === "/v2/jobs")!;
+    expect(JSON.parse(submission[1].body).prompt).toBe("[IDENTITY ANCHOR: pilot] A blue coast");
+    expect(state.connect).not.toHaveBeenCalled();
+  } finally { state.router.query = { prompt: "A blue coast" }; }
+});
+
 it("resumes an ambiguous image request with its original idempotency key", async () => {
   const implementation = state.request.getMockImplementation()!;
   let submissions = 0;
