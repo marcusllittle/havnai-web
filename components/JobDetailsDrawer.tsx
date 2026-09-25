@@ -47,6 +47,7 @@ interface JobDetailsDrawerProps {
   result?: ResultResponse | null;
   loading?: boolean;
   error?: string;
+  accountId?: string;
   marketplace?: {
     wallet?: string | null;
     canSign?: boolean;
@@ -169,6 +170,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
   loading,
   error,
   marketplace,
+  accountId,
   onClose,
 }) => {
   const resolvedId = job?.id || summary?.job_id || summary?.id || jobId;
@@ -212,7 +214,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     actionVersion.current += 1;
     setActionNotice(""); setDownloadBusy(false);
     return () => { actionVersion.current += 1; };
-  }, [open, resolvedId]);
+  }, [open, resolvedId, accountId]);
   useEffect(() => { setPreviewFailed(false); setPreviewRevision(0); }, [previewImage, previewVideo]);
   useEffect(() => {
     if (!open) return;
@@ -239,7 +241,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
       setIsSaved(false);
       return;
     }
-    setIsSaved(isInLibrary(resolvedId));
+    setIsSaved(isInLibrary(resolvedId, accountId));
   }, [resolvedId, open]);
 
   useEffect(() => {
@@ -259,11 +261,11 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
     setListingError(undefined);
     setListingSuccess(undefined);
     setListingOpen(false);
-  }, [open, resolvedId]);
+  }, [open, resolvedId, accountId]);
 
   useEffect(() => {
     let active = true;
-    if (!open || !resolvedId) {
+    if (!open || !resolvedId || accountId) {
       setExecutionTimeline(null);
       return () => { active = false; };
     }
@@ -276,11 +278,11 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
         if (active) setExecutionTimeline(null);
       });
     return () => { active = false; };
-  }, [open, resolvedId, statusValue]);
+  }, [open, resolvedId, statusValue, accountId]);
 
   useEffect(() => {
     let active = true;
-    if (!open || !resolvedId || job?.proof_receipt?.available === false) {
+    if (!open || !resolvedId || accountId || job?.proof_receipt?.available === false) {
       setProofReceipt(null);
       setReceiptVerification(null);
       setLocalReceiptVerification(null);
@@ -312,7 +314,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
         setLocalInclusionValid(null);
       });
     return () => { active = false; };
-  }, [open, resolvedId, job?.proof_receipt?.available]);
+  }, [open, resolvedId, job?.proof_receipt?.available, accountId]);
 
   const createdAt =
     formatUnixSeconds(job?.timestamp) ||
@@ -428,13 +430,13 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
       created_at: createdAtIso,
       type,
       preview_hint: previewHint || undefined,
-    });
+    }, accountId);
     setIsSaved(true);
   };
 
   const handleRemove = () => {
     if (!resolvedId) return;
-    removeFromLibrary(resolvedId);
+    removeFromLibrary(resolvedId, accountId);
     setIsSaved(false);
   };
 

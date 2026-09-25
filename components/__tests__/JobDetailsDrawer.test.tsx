@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JobDetailsDrawer } from "../JobDetailsDrawer";
 import { downloadAsset } from "../../lib/download";
 import type { JobDetailResponse } from "../../lib/havnai";
+import { fetchJobTimeline, fetchProofReceipt } from "../../lib/havnai";
+import { loadLibrary } from "../../lib/libraryStore";
 
 vi.mock("../../lib/havnai", async original => ({ ...await original<typeof import("../../lib/havnai")>(), fetchJobTimeline: vi.fn().mockResolvedValue({ events: [], event_count: 0, total_elapsed_ms: 0 }), fetchProofReceipt: vi.fn().mockRejectedValue(new Error("Unavailable")), verifyProofReceipt: vi.fn().mockRejectedValue(new Error("Unavailable")) }));
 vi.mock("../../lib/download", () => ({ downloadAsset: vi.fn() }));
@@ -29,6 +31,17 @@ describe("Result review", () => {
     expect(button("Copy debug info").closest("details")?.open).toBe(false);
     expect(container.querySelector("img")?.getAttribute("alt")).toBe("A coast at dawn");
     expect(button("Save to Collection")).toBeDefined();
+  });
+
+  it("saves private account media only to its account cache and avoids legacy telemetry", async () => {
+    await act(async () => root.render(<JobDetailsDrawer open accountId="acct_alice" job={job}
+      result={{ job_id: job.id, image_url: "/api/account-media/private" }} onClose={onClose} />));
+    await act(async () => button("Save to Collection").click());
+    expect(loadLibrary("acct_alice")[0].job_id).toBe(job.id);
+    expect(loadLibrary()).toEqual([]);
+    expect(loadLibrary("acct_bob")).toEqual([]);
+    expect(fetchJobTimeline).not.toHaveBeenCalled();
+    expect(fetchProofReceipt).not.toHaveBeenCalled();
   });
 
   it("names the dialog, closes with Escape, and returns focus", async () => {

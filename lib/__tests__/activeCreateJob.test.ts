@@ -12,6 +12,18 @@ describe("active create job persistence", () => {
     window.localStorage.clear();
   });
 
+  it("isolates recovery and deletion by account without importing legacy jobs", () => {
+    const job = { id: "job-alice", prompt: "Private", mode: "image" as const, startedAt: Date.now() };
+    saveActiveCreateJob(job, "acct_alice");
+    saveActiveCreateJob({ ...job, id: "job-legacy" });
+    expect(loadActiveCreateJob(Date.now(), "acct_bob")).toBeNull();
+    clearActiveCreateJob(undefined, "acct_bob");
+    expect(loadActiveCreateJob(Date.now(), "acct_alice")).toEqual(job);
+    clearActiveCreateJob("job-alice", "acct_alice");
+    expect(loadActiveCreateJob(Date.now(), "acct_alice")).toBeNull();
+    expect(loadActiveCreateJob()?.id).toBe("job-legacy");
+  });
+
   it("restores a current job", () => {
     const job = {
       id: "job-abc123",

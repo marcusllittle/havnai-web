@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { SeoHead } from "../components/SeoHead";
@@ -8,6 +8,10 @@ import { WorkflowImport } from "../components/WorkflowImport";
 import type { WorkflowTemplate } from "../lib/workflowTemplate";
 import { ArrowUpRight, ImageIcon, Film, ScanFace, SlidersHorizontal, ChevronDown, Wallet, Sparkles } from "lucide-react";
 import { SiteHeader } from "../components/SiteHeader";
+import { useAccount } from "../components/AccountProvider";
+import type { AccountStudioAccess } from "../lib/musicStudioApi";
+import { submitAccountImage, fetchAccountJobView } from "../lib/accountImageStudio";
+import { pendingAccountJob } from "../lib/accountJobSubmission";
 import { useWallet } from "../components/WalletProvider";
 import { HavnAIPrompt } from "../components/HavnAIPrompt";
 import { HavnAIButton } from "../components/HavnAIButton";
@@ -50,9 +54,10 @@ import { getApiBase } from "../lib/apiBase";
 import { getConnectButtonLabel } from "../lib/wallet";
 import { buildModelOptionLabel } from "../lib/modelMetadata";
 import {
-  clearActiveCreateJob,
-  loadActiveCreateJob,
-  saveActiveCreateJob,
+  clearActiveCreateJob as clearStoredCreateJob,
+  loadActiveCreateJob as loadStoredCreateJob,
+  saveActiveCreateJob as saveStoredCreateJob,
+  type ActiveCreateJob,
 } from "../lib/activeCreateJob";
 import {
   ActiveVideoChain,
@@ -68,7 +73,7 @@ import {
   getWalletStatusCopy,
 } from "../lib/publicAlpha";
 
-const HISTORY_KEY = "havnai_test_history_v1";
+const LEGACY_HISTORY_KEY = "havnai_test_history_v1";
 
 // Keep the image selector empty until live model capacity is loaded.
 const FALLBACK_IMAGE_MODELS: { id: string; label: string }[] = [];
@@ -328,7 +333,28 @@ const inspectPromptIdentityAnchor = (promptText: string): {
   };
 };
 
-const TestPage: React.FC = () => {
+type CreateAccount = { id: string; request: AccountStudioAccess["request"] };
+const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) => {
+  const lifetime = useRef(new AbortController());
+  useEffect(() => {
+    if (lifetime.current.signal.aborted) lifetime.current = new AbortController();
+    return () => lifetime.current.abort();
+  }, []);
+  const accountAccess = useMemo<AccountStudioAccess | undefined>(() => accountAuth ? {
+    request: accountAuth.request, get signal() { return lifetime.current.signal; },
+  } : undefined, [accountAuth?.id, accountAuth?.request]);
+  const HISTORY_KEY = accountAuth ? `${LEGACY_HISTORY_KEY}:${accountAuth.id}` : LEGACY_HISTORY_KEY;
+  const loadActiveCreateJob = () => loadStoredCreateJob(Date.now(), accountAuth?.id);
+  const saveActiveCreateJob = (job: ActiveCreateJob) => saveStoredCreateJob(job, accountAuth?.id);
+  const clearActiveCreateJob = (id?: string) => clearStoredCreateJob(id, accountAuth?.id);
+  const [pendingImage, setPendingImage] = useState(false);
+  const operation = useRef(false);
+  const syncPendingImage = () => {
+    if (!accountAuth) return;
+    try { setPendingImage(Boolean(pendingAccountJob(sessionStorage, accountAuth.id, "image"))); }
+    catch { setPendingImage(true); }
+  };
+  useEffect(syncPendingImage, [accountAuth?.id]);
   const router = useRouter();
   const entryApplied = useRef(false);
   const wallet = useWallet();
@@ -338,7 +364,7 @@ const TestPage: React.FC = () => {
     if (!router.isReady || entryApplied.current) return;
     entryApplied.current = true;
     // Restoring an in-progress render takes precedence over a new starting point.
-    if (loadActiveCreateJob() || loadActiveVideoChain()) return;
+    if (loadActiveCreateJob() || (!accountAuth && loadActiveVideoChain())) return;
     const entryMode = router.query.mode;
     if (entryMode === "image" || entryMode === "video" || entryMode === "face_swap") setMode(entryMode);
     if (typeof router.query.prompt === "string") setPrompt(router.query.prompt.slice(0, 4000));
@@ -878,7 +904,7 @@ const TestPage: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    if (!savedInviteCode) {
+    if (accountAuth || !savedInviteCode) {
       setQuota(null);
       setQuotaError(undefined);
       return () => {
@@ -909,13 +935,17 @@ const TestPage: React.FC = () => {
   // Fetch credit balance on mount and after each job completes
   useEffect(() => {
     let cancelled = false;
-    if (!activeWallet) {
+    if (!accountAuth && !activeWallet) {
       setCredits(null);
       return () => {
         cancelled = true;
       };
     }
-    fetchCredits(activeWallet)
+    const balanceRequest = accountAuth && accountAccess
+      ? accountAccess.request<{ available_units: number; scale: number }>("/v2/account/credits", { signal: accountAccess.signal })
+          .then(balance => ({ wallet: "", balance: balance.available_units / balance.scale, total_deposited: 0, total_spent: 0, credits_enabled: true }))
+      : fetchCredits(activeWallet!);
+    balanceRequest
       .then((data) => {
         if (!cancelled) setCredits(data);
       })
@@ -924,7 +954,7 @@ const TestPage: React.FC = () => {
         if (!cancelled) setCredits(null);
       });
     return () => { cancelled = true; };
-  }, [activeWallet, loading]); // re-fetch when loading toggles (i.e. after a job finishes)
+  }, [activeWallet, loading, accountAuth?.id, accountAccess]); // re-fetch when loading toggles (i.e. after a job finishes)
 
   const saveHistory = (items: HistoryItem[]) => {
     setHistory(items);
@@ -1046,7 +1076,7 @@ const TestPage: React.FC = () => {
   };
 
   const applyTemplate = (template: WorkflowTemplate): string | undefined => {
-    if (loading || loadActiveCreateJob() || loadActiveVideoChain()) return "Finish the current generation before applying a template.";
+    if (loading || loadActiveCreateJob() || (!accountAuth && loadActiveVideoChain())) return "Finish the current generation before applying a template.";
     if (modelsLoading || modelsError) return "Load the available models before applying this template.";
     const options = template.mode === "image" ? imageModels : template.mode === "video" ? videoModels : faceSwapModels;
     const target = template.model.toLowerCase() === "auto"
@@ -1085,7 +1115,7 @@ const TestPage: React.FC = () => {
     const sizePreset = imageSizePreset === "auto" ? undefined : selectedImageSizePreset;
     const requestedLoras = buildLoraPayload();
 
-    if (activeWallet) options.wallet = activeWallet;
+    if (!accountAuth && activeWallet) options.wallet = activeWallet;
     options.steps = imageTemplateSettings?.steps ?? imageStepPresets[imageQualityPreset];
     if (imageTemplateSettings?.guidance != null) options.guidance = imageTemplateSettings.guidance;
     else if (modelDefaults?.guidance != null) options.guidance = modelDefaults.guidance;
@@ -1303,7 +1333,7 @@ const TestPage: React.FC = () => {
           }
           return next;
         });
-        clearActiveVideoChain();
+        if (!accountAuth) clearActiveVideoChain();
       } catch (err: any) {
         setStatusMessage(err?.message || "Automatic clip merge failed.");
         setChainSummary({ clips: jobIds.length, stitched: false });
@@ -1312,7 +1342,7 @@ const TestPage: React.FC = () => {
       }
     } else if (jobIds.length > 1) {
       setChainSummary({ clips: jobIds.length, stitched: false });
-      clearActiveVideoChain();
+      if (!accountAuth) clearActiveVideoChain();
       setChainProgress(null);
     }
   };
@@ -1402,7 +1432,7 @@ const TestPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (loading) return;
+    if (loading || operation.current) return;
     if (modelsLoading || modelsError) {
       setStatusMessage(modelsLoading ? "Wait for the available models to load." : "Retry loading models before generating.");
       return;
@@ -1413,7 +1443,7 @@ const TestPage: React.FC = () => {
     const promptAnchor = inspectPromptIdentityAnchor(prompt);
     const cleanedPrompt = promptAnchor.promptWithoutTag.trim();
     const effectivePrompt = mode === "face_swap" ? trimmed : cleanedPrompt || trimmed;
-    if (!activeWallet) {
+    if (!accountAuth && !activeWallet) {
       setStatusMessage("Connect a wallet or use an active HavnAI site session before submitting.");
       return;
     }
@@ -1462,6 +1492,16 @@ const TestPage: React.FC = () => {
       setStatusMessage("No face swap model is currently selectable.");
       return;
     }
+    if (accountAuth && mode !== "image") {
+      setStatusMessage(mode === "video" ? "Use Video Studio for account video generation while this workflow is being connected." : "Account face-swap submission is being connected. Your settings are preserved.");
+      return;
+    }
+    if (accountAuth && promptAnchor.hasAnchorTag) {
+      setStatusMessage("Account identity anchors are being connected. Use a source image to refine this image.");
+      return;
+    }
+    if (accountAuth && pendingImage) { setStatusMessage("Resume your pending image request first."); return; }
+    operation.current = true;
     setLoading(true);
     setStatusMessage("Submitting to the grid...");
     setImageUrl(undefined);
@@ -1472,7 +1512,7 @@ const TestPage: React.FC = () => {
     setJobId(undefined);
     setChainProgress(null);
     clearActiveCreateJob();
-    clearActiveVideoChain();
+    if (!accountAuth) clearActiveVideoChain();
     setPollTimedOut(false);
     setLastUsedPrompt(effectivePrompt || "Face swap");
 
@@ -1481,12 +1521,10 @@ const TestPage: React.FC = () => {
     try {
       if (mode === "image") {
         const options = buildOptions();
-        const id = await submitAutoJob(
-          trimmed,
-          selectedModel || undefined,
-          negativePrompt,
-          options
-        );
+        const id = accountAuth && accountAccess
+          ? (await submitAccountImage(sessionStorage, accountAuth.id, accountAccess,
+              { prompt: trimmed, model: selectedModel, negativePrompt, options })).id
+          : await submitAutoJob(trimmed, selectedModel || undefined, negativePrompt, options);
         setJobId(id);
         saveActiveCreateJob({ id, prompt: effectivePrompt, mode: "image", startedAt: Date.now() });
         setStatusMessage("Waiting for available GPU capacity...");
@@ -1566,6 +1604,8 @@ const TestPage: React.FC = () => {
       }
       setChainProgress(null);
     } finally {
+      operation.current = false;
+      syncPendingImage();
       setLoading(false);
     }
   };
@@ -1588,7 +1628,7 @@ const TestPage: React.FC = () => {
       runtime = Math.max(0, job.completed_at - job.timestamp);
     }
 
-    const result = await fetchCompletedResult(id);
+    const result = accountAuth && accountAccess ? (await fetchAccountJobView(id, accountAuth.id, accountAccess)).result : await fetchCompletedResult(id);
     const resolvedImage = result.image_url;
     const resolvedVideo = result.video_url;
     if (!resolvedImage && !resolvedVideo) {
@@ -1603,7 +1643,7 @@ const TestPage: React.FC = () => {
     let type: LibraryItemType = "unknown";
     if (resolvedVideo) type = "video";
     else if (resolvedImage) type = "image";
-    addToLibrary({ job_id: id, created_at: createdAt, type });
+    addToLibrary({ job_id: id, created_at: createdAt, type }, accountAuth?.id);
 
     if (resolvedVideo) {
       setVideoUrl(resolvedVideo);
@@ -1636,6 +1676,29 @@ const TestPage: React.FC = () => {
   const pollJob = async (id: string, usedPrompt: string, maxWaitSeconds = 600) => {
     const start = Date.now();
     setPollTimedOut(false);
+    if (accountAuth && accountAccess) {
+      const access = { request: accountAccess.request, signal: accountAccess.signal };
+      try {
+        while ((Date.now() - start) / 1000 < maxWaitSeconds) {
+          const view = await fetchAccountJobView(id, accountAuth.id, access);
+          if (view.job.status === "succeeded") return await finalizeJob(id, usedPrompt, view.job);
+          if (["failed", "cancelled", "expired"].includes(view.job.status)) {
+            setStatusMessage(view.job.status_reason || `Render ${view.job.status}.`);
+            clearActiveCreateJob(id); return null;
+          }
+          setStatusMessage(view.job.progress ? `Rendering: ${Math.round(view.job.progress)}%` : "Waiting for available GPU capacity...");
+          await new Promise<void>((resolve, reject) => {
+            const abort = () => { clearTimeout(timer); reject(access.signal.reason); };
+            const timer = setTimeout(() => { access.signal.removeEventListener("abort", abort); resolve(); }, 2000);
+            access.signal.addEventListener("abort", abort, { once: true });
+          });
+        }
+        setPollTimedOut(true); setStatusMessage("Your render is still in progress. Check status to keep waiting.");
+      } catch (reason) {
+        if (!access.signal.aborted) { setPollTimedOut(true); setStatusMessage(reason instanceof Error ? reason.message : "Could not check this render."); }
+      }
+      return null;
+    }
 
     // Listen for real-time updates and keep a short polling fallback because
     // proxies may interrupt long-lived SSE connections.
@@ -1773,7 +1836,7 @@ const TestPage: React.FC = () => {
         let type: LibraryItemType = "unknown";
         if (resolvedVideo) type = "video";
         else if (resolvedImage) type = "image";
-        addToLibrary({ job_id: id, created_at: createdAt, type });
+        addToLibrary({ job_id: id, created_at: createdAt, type }, accountAuth?.id);
         const item: HistoryItem = {
           jobId: id,
           prompt: usedPrompt,
@@ -1802,6 +1865,21 @@ const TestPage: React.FC = () => {
     return null;
   };
 
+  const handleResumeImage = async () => {
+    if (!accountAuth || !accountAccess || operation.current) return;
+    operation.current = true; setLoading(true);
+    try {
+      const pending = pendingAccountJob(sessionStorage, accountAuth.id, "image");
+      const usedPrompt = String(pending?.body.prompt || "Image");
+      const job = await submitAccountImage(sessionStorage, accountAuth.id, accountAccess);
+      setJobId(job.id); setLastUsedPrompt(usedPrompt); setPendingImage(false);
+      saveActiveCreateJob({ id: job.id, prompt: usedPrompt, mode: "image", startedAt: Date.now() });
+      await pollJob(job.id, usedPrompt, 1800);
+    } catch (reason) {
+      if (!accountAccess.signal.aborted) setStatusMessage(reason instanceof Error ? reason.message : "Could not resume this image request.");
+    } finally { operation.current = false; syncPendingImage(); setLoading(false); }
+  };
+
   const handleCheckStatus = async () => {
     if (!jobId) return;
     setLoading(true);
@@ -1815,7 +1893,7 @@ const TestPage: React.FC = () => {
   useEffect(() => {
     if (activeRecoveryStartedRef.current) return;
     activeRecoveryStartedRef.current = true;
-    const activeChain = loadActiveVideoChain();
+    const activeChain = accountAuth ? null : loadActiveVideoChain();
     if (activeChain) {
       setMode("video");
       setPrompt(activeChain.prompt);
@@ -1848,6 +1926,7 @@ const TestPage: React.FC = () => {
       activeJob.prompt,
       activeJob.mode === "video" ? 2400 : 1800
     ).finally(() => setLoading(false));
+    return () => { activeRecoveryStartedRef.current = false; };
     // Polling intentionally starts once from the job snapshot saved by submission.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1904,7 +1983,7 @@ const TestPage: React.FC = () => {
 
   const handleAnimateImage = () => {
     if (!imageUrl) return;
-    const coordinatorPath = imageUrl.startsWith("/api/") ? imageUrl.slice(4) : imageUrl;
+    const coordinatorPath = !accountAuth && imageUrl.startsWith("/api/") ? imageUrl.slice(4) : imageUrl;
     setMode("video");
     setAdvancedOpen(true);
     setVideoInitData(undefined);
@@ -1916,7 +1995,7 @@ const TestPage: React.FC = () => {
 
   const handleRefineImage = () => {
     if (!imageUrl) return;
-    const coordinatorPath = imageUrl.startsWith("/api/") ? imageUrl.slice(4) : imageUrl;
+    const coordinatorPath = !accountAuth && imageUrl.startsWith("/api/") ? imageUrl.slice(4) : imageUrl;
     setMode("image");
     setAdvancedOpen(true);
     setImageReferenceData(undefined);
@@ -1936,7 +2015,7 @@ const TestPage: React.FC = () => {
     setDrawerError(undefined);
     setDrawerSummary(summary || null);
     try {
-      const { job, result } = await fetchJobWithResult(id);
+      const { job, result } = accountAuth && accountAccess ? await fetchAccountJobView(id, accountAuth.id, accountAccess) : await fetchJobWithResult(id);
       setDrawerJob(job);
       setDrawerResult(result || null);
     } catch (err: any) {
@@ -2709,7 +2788,7 @@ const TestPage: React.FC = () => {
                         : "Generate image"
                     }
                     loading={loading}
-                    disabled={modelsLoading || modelsError || !(mode === "face_swap" ? faceswapModel : selectedModel) || (mode !== "face_swap" && !prompt.trim())}
+                    disabled={pendingImage || modelsLoading || modelsError || !(mode === "face_swap" ? faceswapModel : selectedModel) || (mode !== "face_swap" && !prompt.trim())}
                     onClick={handleSubmit}
                   />
                   <label className="generator-checkbox">
@@ -2724,7 +2803,12 @@ const TestPage: React.FC = () => {
                 </div>
 
 
-                <details className="studio-account">
+                {accountAuth ? <section className="studio-account">
+                  <p>Your account{credits ? `: ${credits.balance.toFixed(1)} credits available` : ""}</p>
+                  <Link href="/account">Manage credits</Link>
+                  {pendingImage && <p role="status">An image request needs confirmation. <button type="button" className="generator-mini-button" disabled={loading} onClick={handleResumeImage}>Resume image request</button></p>}
+                  <p><Link href="/video-studio">Open account Video Studio</Link></p>
+                </section> : <details className="studio-account">
                   <summary><Wallet size={15} aria-hidden="true" /><span>Access & credits</span><span className="studio-account-balance">{credits?.credits_enabled ? credits.balance.toFixed(1) + " cr" : inviteSaved ? "Code saved" : "Account"}</span><ChevronDown size={15} aria-hidden="true" /></summary>
                   <div className="studio-account-content">
                 <div className="invite-panel">
@@ -2850,7 +2934,7 @@ const TestPage: React.FC = () => {
 
                     <Link href="/pricing" className="studio-library-link">Manage credits <ArrowUpRight size={14} aria-hidden="true" /></Link>
                   </div>
-                </details>
+                </details>}
                 <StatusBox message={statusMessage} />
                 {chainProgress && (
                   <div className="chain-progress" aria-live="polite">
@@ -2942,7 +3026,8 @@ const TestPage: React.FC = () => {
         result={drawerResult}
         loading={drawerLoading}
         error={drawerError}
-        marketplace={{
+        accountId={accountAuth?.id}
+        marketplace={accountAuth ? undefined : {
           wallet: wallet.activeWallet,
           canSign: Boolean(wallet.connectedWallet),
           source: wallet.source,
@@ -2953,4 +3038,11 @@ const TestPage: React.FC = () => {
   );
 };
 
-export default TestPage;
+export default function CreatePage() {
+  const account = useAccount();
+  if (!account.configured) return <TestPage />;
+  if (!account.signedIn || !account.account) return <><SeoHead title="Create | HavnAI" /><SiteHeader />
+    <main className="container"><h1>Create with HavnAI</h1><p>{account.error || (account.loading ? "Loading your account..." : "Sign in to create and keep your work in your account.")}</p>
+    {!account.loading && <><Link href="/sign-in">Sign in</Link> | <Link href="/sign-up">Create account</Link></>}</main></>;
+  return <TestPage key={account.account.id} accountAuth={{ id: account.account.id, request: account.request }} />;
+}
