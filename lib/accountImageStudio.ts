@@ -1,4 +1,4 @@
-import type { SubmitJobOptions, JobDetailResponse, ResultResponse } from "./havnai";
+import type { SubmitJobOptions, FaceSwapRequest, JobDetailResponse, ResultResponse } from "./havnai";
 import type { AccountStudioAccess } from "./musicStudioApi";
 import { pendingAccountJob, submitAccountJob } from "./accountJobSubmission";
 import { uploadStudioAsset, mediaUrl, type V1Job } from "./videoStudioApi";
@@ -66,11 +66,28 @@ export function accountJobView(job: V1Job, account: string): { job: JobDetailRes
   return {
     job: { id: job.id, model: job.model, status: job.status, stage: job.stage, progress: job.progress,
       timestamp: job.created_at ?? undefined, completed_at: job.completed_at,
-      task_type: job.type === "image_to_video" ? "VIDEO_GEN" : job.type === "text_to_music" ? "MUSIC_GEN" : "IMAGE_GEN",
+      task_type: job.type === "image_to_video" ? "VIDEO_GEN" : job.type === "text_to_music" ? "MUSIC_GEN" : job.type === "face_swap" ? "FACE_SWAP" : "IMAGE_GEN",
       status_reason: job.error_code || undefined,
       data: { ...parameters, prompt: prompts?.original || parameters?.prompt || "" } },
     result: { job_id: job.id, image_url: artifactUrl("image"), video_url: artifactUrl("video") },
   };
+}
+
+export async function submitAccountFaceSwap(storage: Storage, account: string, access: AccountStudioAccess,
+  input?: FaceSwapRequest): Promise<V1Job> {
+  access = { request: access.request, signal: access.signal };
+  access.signal.throwIfAborted();
+  if (!input) return submitAccountJob<V1Job>(storage, account, access, "face_swap");
+  if (pendingAccountJob(storage, account, "face_swap")) throw new Error("Resume your pending face swap before starting another.");
+  if (input.wallet) throw new Error("Account face swaps must use account identity.");
+  if (!input.baseImageUrl || !input.faceSourceUrl) throw new Error("Base image and face source are required.");
+  const source = await uploadImage(input.baseImageUrl, "source", access);
+  const face = await uploadImage(input.faceSourceUrl, "face", access);
+  return submitAccountJob<V1Job>(storage, account, access, "face_swap", {
+    type: "face_swap", model: input.model, prompt: input.prompt || "", source_asset_id: source,
+    face_asset_id: face, strength: input.strength, num_steps: input.numSteps,
+    guidance: input.guidance, seed: input.seed, sfw_mode: input.sfwMode === true,
+  });
 }
 
 export async function fetchAccountJobView(id: string, account: string, access: AccountStudioAccess) {

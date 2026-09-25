@@ -32,7 +32,7 @@ beforeEach(() => {
     throw new Error(`Unexpected account request: ${path}`);
   });
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-    if (url.endsWith("/models/list")) return { ok: true, json: async () => ({ models: [{ name: "Studio SDXL", tier: "A", available: true, pipeline: "sdxl", task_type: "IMAGE_GEN" }] }) };
+    if (url.endsWith("/models/list")) return { ok: true, json: async () => ({ models: [{ name: "Studio SDXL", tier: "A", available: true, pipeline: "sdxl", task_type: "IMAGE_GEN", face_swap_available: true }] }) };
     if (url.includes("/loras/list")) return { ok: true, json: async () => ({ loras: [] }) };
     throw new Error(`Legacy or unexpected request: ${url}`);
   }));
@@ -88,4 +88,40 @@ it("recovers only this account's active image and clears the private view on sig
   expect(host.querySelector('img[src="/api/account-media/art-image"]')).toBeNull();
   expect(host.querySelector('a[href="/sign-in"]')).not.toBeNull();
   expect(state.request).not.toHaveBeenCalled(); expect(state.connect).not.toHaveBeenCalled();
+});
+
+it("submits and resumes a face swap with two private uploads and no wallet signature", async () => {
+  const publicRead = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (String(url).includes("/input-")) return { ok: true, blob: async () => new Blob(["image"], { type: "image/png" }) };
+    return publicRead(url, init);
+  }));
+  let uploads = 0, posts = 0;
+  state.request.mockImplementation(async (path: string) => {
+    if (path === "/v2/account/credits") return { available_units: 10000, scale: 1000 };
+    if (path === "/v2/assets") return { id: `asset-${++uploads}`, kind: "image" };
+    if (path === "/v2/jobs" && ++posts === 1) throw new Error("Connection lost");
+    return { ...job, type: "face_swap" };
+  });
+  await act(async () => root.render(<CreatePage />));
+  await act(async () => button("Face swap").click());
+  const setInput = (id: string, value: string) => {
+    const element = host.querySelector<HTMLInputElement>(id)!;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  await act(async () => { setInput("#base-image-url", "/input-base"); setInput("#face-source-url", "/input-face"); });
+  await act(async () => { button("Run face swap").click(); button("Run face swap").click(); });
+  expect(uploads).toBe(2);
+  expect(posts).toBe(1);
+  await act(async () => button("Resume face swap").click());
+  expect(uploads).toBe(2);
+  const submissions = state.request.mock.calls.filter(([path]) => path === "/v2/jobs");
+  expect(submissions).toHaveLength(2);
+  expect(submissions[1][1].headers).toEqual(submissions[0][1].headers);
+  expect(submissions[1][1].body).toEqual(submissions[0][1].body);
+  expect(JSON.parse(submissions[0][1].body)).toMatchObject({ type: "face_swap", source_asset_id: "asset-1", face_asset_id: "asset-2" });
+  expect(JSON.parse(submissions[0][1].body)).not.toHaveProperty("wallet");
+  expect(host.querySelector('img[src="/api/account-media/art-image"]')).not.toBeNull();
+  expect(state.connect).not.toHaveBeenCalled();
 });

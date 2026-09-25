@@ -1,8 +1,8 @@
 import type { AccountStudioAccess, MusicJob } from "./musicStudioApi";
 
 interface PendingJob { key: string; body: Record<string, unknown> }
-type JobKind = "text_to_music" | "image_to_video" | "image";
-const storageKey = (account: string, kind: JobKind) => `havnai.account-${kind === "text_to_music" ? "music" : kind === "image_to_video" ? "video" : "image"}-request.v1:${account}`;
+type JobKind = "text_to_music" | "image_to_video" | "image" | "face_swap";
+const storageKey = (account: string, kind: JobKind) => `havnai.account-${kind === "text_to_music" ? "music" : kind === "image_to_video" ? "video" : kind}-request.v1:${account}`;
 
 export function pendingAccountMusicJob(storage: Storage, account: string): PendingJob | null {
   return pendingAccountJob(storage, account, "text_to_music");
@@ -49,6 +49,7 @@ export async function submitAccountJob<T extends { id: string; owner_account_id?
       "unsupported_type", "unknown_model", "model_task_mismatch", "invalid_duration", "invalid_bpm", "invalid_seed",
       "source_audio_required", "source_image_required", "missing_prompt", "invalid_job_type", "feature_disabled",
       "owned_image_asset_required", "invalid_face_conditioning", "invalid_image_strength",
+      "face_swap_images_required", "invalid_face_swap_settings",
       "mode_unsupported_by_model", "invalid_repaint_range", "invalid_track_classes"].includes(code)) {
       storage.removeItem(storageKey(account, kind));
     }
