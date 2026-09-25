@@ -14,6 +14,8 @@ import {
   X,
 } from "lucide-react";
 import { SiteHeader } from "../components/SiteHeader";
+import { useAccount } from "../components/AccountProvider";
+import { pendingAccountMusicJob, submitAccountMusicJob } from "../lib/accountJobSubmission";
 import { StudioAccessGate } from "../components/StudioAccessGate";
 import { useMusicPlayer } from "../components/MusicPlayer";
 import { useWallet } from "../components/WalletProvider";
@@ -37,6 +39,7 @@ import {
   uploadMusicAsset,
   type MusicCapabilities,
   type MusicJob,
+  type AccountStudioAccess,
 } from "../lib/musicStudioApi";
 import {
   FINAL_MUSIC_STATES,
@@ -106,11 +109,28 @@ function jobMode(job: MusicJob): MusicMode | null {
 }
 
 export default function MusicStudioPage() {
+  const account = useAccount();
+  if (!account.configured) return <MusicStudioWorkspace />;
+  if (!account.account) return <><Head><title>Music Studio | HavnAI</title></Head><SiteHeader />
+    <main className="account-page"><h1>Make a little noise.</h1>
+      {account.loading ? <p role="status">Opening your studio…</p> : account.signedIn ?
+        <><p role="alert">{account.error || "Your account could not load."}</p><button onClick={() => void account.refresh().catch(() => undefined)}>Try again</button></> :
+        <><p>Sign in to create music and keep your songs in your account. No wallet needed.</p><Link href="/sign-in" className="account-primary">Sign in</Link> <Link href="/sign-up" className="account-secondary">Create account</Link></>}
+      <p><Link href="/discover">Listen to community music</Link></p></main></>;
+  return <MusicStudioWorkspace key={account.account.id} accountAuth={{ id: account.account.id, request: account.request }} />;
+}
+
+function MusicStudioWorkspace({ accountAuth }: { accountAuth?: { id: string; request: AccountStudioAccess["request"] } }) {
+  const formStorageKey = accountAuth ? `${FORM_STORAGE_KEY}:${accountAuth.id}` : FORM_STORAGE_KEY;
+  const activeStorageKey = accountAuth ? `${ACTIVE_STORAGE_KEY}:${accountAuth.id}` : ACTIVE_STORAGE_KEY;
   const [accessKey, setAccessKey] = useState("");
   const [unlocked, setUnlocked] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(false);
   const [capabilities, setCapabilities] = useState<MusicCapabilities | null>(null);
-  const [form, setForm] = useState<MusicFormState>(DEFAULT_MUSIC_FORM);
+  const [form, setForm] = useState<MusicFormState>(() => {
+    try { return typeof window === "undefined" ? DEFAULT_MUSIC_FORM : restoreMusicForm(window.localStorage.getItem(formStorageKey)); }
+    catch { return DEFAULT_MUSIC_FORM; }
+  });
   const [jobs, setJobs] = useState<MusicJob[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -134,20 +154,40 @@ export default function MusicStudioPage() {
   const publicationReadInFlight = useRef(false);
   const publicationWallet = useRef(connectedWallet);
   publicationWallet.current = connectedWallet;
+  const controller = useRef(new AbortController());
+  const studioAccess = useMemo(() => accountAuth ? { request: accountAuth.request, get signal() { return controller.current.signal; } } : accessKey,
+    [accountAuth?.request, controller, accessKey]);
+  const [pendingSubmission, setPendingSubmission] = useState(false);
+  const submitInFlight = useRef(false);
 
   useEffect(() => {
-    setForm(restoreMusicForm(window.localStorage.getItem(FORM_STORAGE_KEY)));
-    const savedKey = window.sessionStorage.getItem(STUDIO_KEY) || "";
-    if (savedKey) {
-      setAccessKey(savedKey);
-      void connect(savedKey);
+    const lifetime = new AbortController();
+    controller.current = lifetime;
+    try {
+      if (accountAuth && typeof studioAccess !== "string") {
+        try { setPendingSubmission(Boolean(pendingAccountMusicJob(window.sessionStorage, accountAuth.id))); }
+        catch (reason) { setError(friendlyError(reason)); setPendingSubmission(true); }
+        setCheckingAccess(true);
+        void Promise.all([fetchMusicCapabilities(studioAccess), fetchMusicJobs(studioAccess)])
+          .then(([nextCapabilities, recent]) => {
+            if (lifetime.signal.aborted) return;
+            setCapabilities(nextCapabilities); setJobs(recent); setUnlocked(true);
+          }).catch(reason => { if (!lifetime.signal.aborted) setError(friendlyError(reason)); })
+          .finally(() => { if (!lifetime.signal.aborted) setCheckingAccess(false); });
+      } else {
+        const savedKey = window.sessionStorage.getItem(STUDIO_KEY) || "";
+        if (savedKey) { setAccessKey(savedKey); void connect(savedKey); }
+      }
+    } catch (reason) {
+      setError(friendlyError(reason));
     }
     mountedRef.current = true;
+    return () => { mountedRef.current = false; lifetime.abort(); };
   }, []);
 
   useEffect(() => {
     if (!mountedRef.current) return;
-    try { window.localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(form)); } catch { /* ignore */ }
+    try { window.localStorage.setItem(formStorageKey, JSON.stringify(form)); } catch { /* ignore */ }
   }, [form]);
 
   // Close the row action menu on any outside click.
@@ -162,24 +202,24 @@ export default function MusicStudioPage() {
   useEffect(() => {
     if (!unlocked || !activeIds) return;
     const timer = window.setTimeout(() => {
-      void Promise.all(activeIds.split(",").map((id) => fetchMusicJob(id, accessKey)))
+      void Promise.all(activeIds.split(",").map((id) => fetchMusicJob(id, studioAccess)))
         .then((updates) => {
           setJobs((current) => mergeJobs(current, updates));
           const remaining = updates.find((job) => !FINAL_MUSIC_STATES.has(job.status));
-          if (remaining) window.localStorage.setItem(ACTIVE_STORAGE_KEY, remaining.id);
-          else window.localStorage.removeItem(ACTIVE_STORAGE_KEY);
+          if (remaining) window.localStorage.setItem(activeStorageKey, remaining.id);
+          else window.localStorage.removeItem(activeStorageKey);
         })
         .catch((reason) => setError(friendlyError(reason)));
     }, 1500);
     return () => window.clearTimeout(timer);
-  }, [accessKey, activeIds, unlocked]);
+  }, [studioAccess, activeIds, unlocked]);
 
   useEffect(() => {
     if (!unlocked) return;
     const timer = window.setInterval(() => {
       void Promise.all([
-        fetchMusicJobs(accessKey),
-        fetchMusicCapabilities(accessKey),
+        fetchMusicJobs(studioAccess),
+        fetchMusicCapabilities(studioAccess),
       ])
         .then(([recent, nextCapabilities]) => {
           setJobs((current) => mergeJobs(current, recent));
@@ -188,17 +228,18 @@ export default function MusicStudioPage() {
         .catch(() => undefined);
     }, 6000);
     return () => window.clearInterval(timer);
-  }, [accessKey, unlocked]);
+  }, [studioAccess, unlocked]);
 
-  useEffect(() => { setPublications([]); }, [activeWallet]);
+  useEffect(() => { if (!accountAuth) setPublications([]); }, [activeWallet]);
 
   async function loadPublishingStatus() {
-    if (!connectedWallet || publicationReadInFlight.current) return;
+    if ((!accountAuth && !connectedWallet) || publicationReadInFlight.current) return;
     publicationReadInFlight.current = true;
     setLoadingPublications(true);
     try {
-      const response = await fetchMusicDiscover({ creator_wallet: connectedWallet, wallet: connectedWallet, limit: 100 });
-      if (publicationWallet.current === connectedWallet) setPublications(response.publications);
+      const response = accountAuth ? await accountAuth.request<{ publications: MusicPublication[] }>("/v2/music/publications", { signal: controller.current.signal }) :
+        await fetchMusicDiscover({ creator_wallet: connectedWallet, wallet: connectedWallet, limit: 100 });
+      if (!controller.current.signal.aborted && (accountAuth || publicationWallet.current === connectedWallet)) setPublications(response.publications);
     } catch (reason) { setError(friendlyError(reason)); }
     finally { publicationReadInFlight.current = false; setLoadingPublications(false); }
   }
@@ -286,7 +327,7 @@ export default function MusicStudioPage() {
     setUploading(true);
     setError("");
     try {
-      const asset = await uploadMusicAsset(file, accessKey);
+      const asset = await uploadMusicAsset(file, studioAccess);
       setSource({ assetId: asset.id, filename: asset.filename || file.name });
     } catch (reason) {
       setError(friendlyError(reason));
@@ -297,7 +338,8 @@ export default function MusicStudioPage() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (blocker || !selectedModel) return;
+    if (blocker || !selectedModel || submitInFlight.current || pendingSubmission) return;
+    submitInFlight.current = true;
     setError("");
     setSubmitting(true);
     const optimisticId = `pending-${Date.now()}`;
@@ -308,7 +350,7 @@ export default function MusicStudioPage() {
       stage: "queued",
       progress: 0,
       model: selectedModel.id,
-      wallet: activeWallet || undefined,
+      wallet: accountAuth ? undefined : activeWallet || undefined,
       created_at: Date.now() / 1000,
       resolved_spec: {
         mode: form.mode,
@@ -327,27 +369,29 @@ export default function MusicStudioPage() {
     };
     setJobs((current) => mergeJobs(current, [optimistic]));
     try {
-      const created = await createMusicJob(
-        musicJobRequest(form, {
+      const body = musicJobRequest(form, {
           audioAssetId: source?.assetId,
-          wallet: activeWallet || undefined,
-        }),
-        accessKey
-      );
+          wallet: accountAuth ? undefined : activeWallet || undefined,
+        });
+      const created = accountAuth && typeof studioAccess !== "string" ?
+        await submitAccountMusicJob(window.sessionStorage, accountAuth.id, studioAccess, body) :
+        await createMusicJob(body, studioAccess);
       setJobs((current) => mergeJobs(current.filter((job) => job.id !== optimisticId), [created]));
-      window.localStorage.setItem(ACTIVE_STORAGE_KEY, created.id);
+      window.localStorage.setItem(activeStorageKey, created.id);
     } catch (reason) {
       setJobs((current) => current.filter((job) => job.id !== optimisticId));
       setError(friendlyError(reason));
     } finally {
+      submitInFlight.current = false;
+      if (accountAuth) { try { setPendingSubmission(Boolean(pendingAccountMusicJob(window.sessionStorage, accountAuth.id))); } catch { setPendingSubmission(true); } }
       setSubmitting(false);
     }
   }
 
   async function cancel(job: MusicJob) {
     try {
-      await cancelMusicJob(job.id, accessKey);
-      const updated = await fetchMusicJob(job.id, accessKey);
+      await cancelMusicJob(job.id, studioAccess);
+      const updated = await fetchMusicJob(job.id, studioAccess);
       setJobs((current) => mergeJobs(current, [updated]));
     } catch (reason) {
       setError(friendlyError(reason));
@@ -370,6 +414,15 @@ export default function MusicStudioPage() {
     setPublishing(true);
     setPublishError("");
     try {
+      if (accountAuth) {
+        setPublishProgress("Publishing…");
+        const publication = await accountAuth.request<MusicPublication>("/v2/music/publications", { method: "POST", signal: controller.current.signal,
+          body: JSON.stringify({ job_id: publishJob.id, title: publishTitle, style: publishTags,
+            tags: publishTags.split(",").map(tag => tag.trim()).filter(Boolean) }) });
+        setPublications(current => [publication, ...current.filter(item => item.job_id !== publication.job_id)]);
+        setPublishJob(null);
+        return;
+      }
       // The configured fallback wallet can browse/create, but is not a signer.
       setPublishProgress(connectedWallet ? "Preparing signature..." : "Connect in MetaMask...");
       const signerWallet = connectedWallet || await wallet.connect();
@@ -408,10 +461,11 @@ export default function MusicStudioPage() {
   }
 
   async function unpublish(publication: MusicPublication) {
-    if (!activeWallet) return;
+    if (!accountAuth && !activeWallet) return;
     setError("");
     try {
-      await unpublishMusicPublication(publication.id, activeWallet);
+      if (accountAuth) await accountAuth.request(`/v2/music/publications/${encodeURIComponent(publication.id)}`, { method: "DELETE", signal: controller.current.signal });
+      else await unpublishMusicPublication(publication.id, activeWallet!);
       setPublications((current) => current.filter((item) => item.id !== publication.id));
     } catch (reason) {
       setError(friendlyError(reason));
@@ -423,7 +477,9 @@ export default function MusicStudioPage() {
       <>
         <Head><title>Music Studio | HavnAI</title></Head>
         <SiteHeader />
-        <StudioAccessGate kind="music" accessKey={accessKey} onChange={setAccessKey} onSubmit={event => { event.preventDefault(); void connect(accessKey); }} checking={checkingAccess} error={error} />
+        {accountAuth ? <main className="account-page"><h1>Your music studio</h1><p role={error ? "alert" : "status"}>{error || "Opening your songs…"}</p>
+          {error && <button onClick={() => window.location.reload()}>Try again</button>}</main> :
+          <StudioAccessGate kind="music" accessKey={accessKey} onChange={setAccessKey} onSubmit={event => { event.preventDefault(); void connect(accessKey); }} checking={checkingAccess} error={error} />}
       </>
     );
   }
@@ -437,7 +493,7 @@ export default function MusicStudioPage() {
           <div><span><Music2 size={14} aria-hidden="true" /> Music Studio</span><h1>Make a little noise.</h1><p>A feeling, a scene, a sound. Start with what moves you.</p></div>
           <div className="music-runtime-row">
             <span className={musicAvailable ? "is-online" : ""}>{musicAvailable ? "Music ready" : "Music unavailable"}</span>
-            <button type="button" title="Leave studio" aria-label="Leave studio" onClick={() => { window.sessionStorage.removeItem(STUDIO_KEY); setAccessKey(""); setUnlocked(false); setCapabilities(null); setError(""); }}><LogOut size={18} /></button>
+            {accountAuth ? <Link href="/account">Your account</Link> : <button type="button" title="Leave studio" aria-label="Leave studio" onClick={() => { window.sessionStorage.removeItem(STUDIO_KEY); setAccessKey(""); setUnlocked(false); setCapabilities(null); setError(""); }}><LogOut size={18} /></button>}
           </div>
         </header>
 
@@ -445,6 +501,15 @@ export default function MusicStudioPage() {
           <div className="music-offline" role="status"><WifiOff size={20} /><div><strong>Music creation is offline</strong><span>Your settings are saved. Try again when music creation is back online.</span></div></div>
         )}
         {error && <div className="music-alert" role="alert"><span>{error}</span><button type="button" onClick={() => setError("")} aria-label="Dismiss error"><X size={17} /></button></div>}
+        {pendingSubmission && accountAuth && typeof studioAccess !== "string" && <div className="music-alert" role="status"><span>A song request needs confirmation. Resume it to recover the result without submitting another song.</span>
+          <button disabled={submitting} onClick={() => {
+            if (submitInFlight.current) return;
+            submitInFlight.current = true; setSubmitting(true); setError("");
+            void submitAccountMusicJob(window.sessionStorage, accountAuth.id, studioAccess)
+              .then(job => { setJobs(current => mergeJobs(current, [job])); setPendingSubmission(false); })
+              .catch(reason => setError(friendlyError(reason)))
+              .finally(() => { submitInFlight.current = false; setSubmitting(false); });
+          }}>Resume song request</button></div>}
 
         <div className="studio-music-layout">
         <MusicComposer
@@ -454,7 +519,7 @@ export default function MusicStudioPage() {
           source={source}
           uploading={uploading}
           submitting={submitting}
-          blocker={blocker}
+          blocker={pendingSubmission ? "Resume your pending song request first." : blocker}
           maxBatch={selectedModel?.maxBatch || 1}
           onChange={update}
           onApplyStarter={(prompt, style) => setForm((current) => ({ ...current, prompt, style }))}
@@ -465,7 +530,7 @@ export default function MusicStudioPage() {
 
         <section className="music-results" aria-live="polite">
           <div className="music-results-heading"><div><span>Your studio</span><h2>Recent songs <span className="studio-song-count">{jobs.length}</span></h2></div><Link href="/music/library">Music library <ArrowUpRight size={14} aria-hidden="true" /></Link></div>
-          {connectedWallet && jobs.length > 0 && <button type="button" className="studio-publishing-status" disabled={loadingPublications} onClick={() => void loadPublishingStatus()}>{loadingPublications ? "Checking publishing status..." : "Check publishing status (wallet signature)"}</button>}
+          {(accountAuth || connectedWallet) && jobs.length > 0 && <button type="button" className="studio-publishing-status" disabled={loadingPublications} onClick={() => void loadPublishingStatus()}>{loadingPublications ? "Checking publishing status..." : accountAuth ? "Check publishing status" : "Check publishing status (wallet signature)"}</button>}
           {jobs.length === 0 ? (
             <div className="music-empty studio-music-empty"><div className="studio-record" aria-hidden="true"><Image src="/music-default-cover.png" alt="" fill sizes="200px" /></div><strong>There&rsquo;s a song in that idea.</strong><span>Your creations will appear here, ready to play, download, or publish.</span><Link href="/discover">Find inspiration in Discover <ArrowUpRight size={14} aria-hidden="true" /></Link></div>
           ) : (
@@ -483,8 +548,8 @@ export default function MusicStudioPage() {
                 const publication = publicationByJobId.get(job.id);
                 const mode = jobMode(job);
                 const track = job.resolved_spec?.parameters?.track_name;
-                const canPublish = Boolean(audio && job.status === "succeeded" && job.wallet &&
-                  (!connectedWallet || job.wallet.toLowerCase() === connectedWallet.toLowerCase()));
+                const canPublish = Boolean(audio && job.status === "succeeded" && (accountAuth ? job.owner_account_id === accountAuth.id : job.wallet &&
+                  (!connectedWallet || job.wallet.toLowerCase() === connectedWallet.toLowerCase())));
                 const progress = isCurrent && duration > 0 ? currentTime / duration : 0;
                 return (
                   <article className={`music-song ${active ? "is-generating" : ""}`} key={job.id}>
@@ -636,7 +701,7 @@ export default function MusicStudioPage() {
                 {publishError && <p className="music-publish-error" role="alert">{publishError}</p>}
                 {publishProgress && <p className="music-publish-progress" role="status">{publishProgress}</p>}
                 <button className="music-generate" type="submit" disabled={publishing || !publishTitle.trim()}>
-                  {publishing ? "Publishing..." : connectedWallet ? "Publish" : "Connect and publish"}
+                  {publishing ? "Publishing..." : accountAuth || connectedWallet ? "Publish" : "Connect and publish"}
                 </button>
               </div>
             </form>

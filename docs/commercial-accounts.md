@@ -6,7 +6,9 @@ contract is `havnai-core/docs/commercial-accounts.md` on branch
 
 This branch now includes Clerk provider integration, sign-in/sign-up/account pages,
 account-scoped authenticated requests and logout/account-switch isolation. Clerk
-application configuration, commercial checkout and studio integration remain work.
+development sign-in is configured and verified. Account checkout and Music Studio
+creation/recovery/publication are implemented; live paid generation acceptance,
+other studios, libraries/playlists, wallet-link UI, and explicit migration remain.
 Keep HAVN-11 open until the complete acceptance flow has been exercised.
 
 ## Required web changes in HAVN-19/21/22
@@ -16,7 +18,7 @@ Keep HAVN-11 open until the complete acceptance flow has been exercised.
   A wallet address, environment wallet, email, or client-supplied ID is never
   an account session. No fake wallets for account users.
 * Configure a managed sign-in provider in the existing Pages Router. Provider
-  is Clerk; application configuration remains pending. Keep public browse and music playback
+  is Clerk; production application configuration remains pending. Keep public browse and music playback
   anonymous. Show Sign in for private account operations, not Connect Wallet.
 * Forward short-lived verified-provider session tokens on account API requests.
   Never attach `HAVNAI_OWNER_TOKEN` or the shared studio key to these requests.

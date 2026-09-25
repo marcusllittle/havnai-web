@@ -2984,7 +2984,9 @@ export async function fetchMusicCreator(wallet: string, opts: { sort?: string; v
   const params = new URLSearchParams();
   if (opts.sort) params.set("sort", opts.sort);
   let res: Response;
-  if (opts.viewerWallet) {
+  if (/^creator_[a-f0-9]{32}$/.test(wallet)) {
+    res = await fetchMusicRead(apiUrl(`/music/creators/${encodeURIComponent(wallet)}?${params}`), { headers: buildHeaders(false) });
+  } else if (opts.viewerWallet) {
     const signed = await musicReadAccess(opts.viewerWallet);
     res = await fetchMusicRead(apiUrl(`/music/creator/${encodeURIComponent(wallet)}`), {
       method: "POST",

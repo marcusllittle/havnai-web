@@ -18,6 +18,7 @@ export interface MusicJob {
   progress: number;
   model: string;
   wallet?: string;
+  owner_account_id?: string | null;
   created_at?: number | null;
   updated_at?: number | null;
   completed_at?: number | null;
@@ -44,6 +45,17 @@ export interface MusicJob {
     [key: string]: unknown;
   };
   artifacts: MusicArtifact[];
+}
+
+export interface AccountStudioAccess {
+  request: <T>(path: string, init?: RequestInit) => Promise<T>;
+  signal: AbortSignal;
+}
+export type StudioAccess = string | AccountStudioAccess;
+
+function studioRequest<T>(path: string, access: StudioAccess, init: RequestInit = {}): Promise<T> {
+  if (typeof access !== "string") return access.request<T>(`/v2${path}`, { ...init, signal: access.signal });
+  return studioFetch(`/api/owner/v1${path}`, access, init).then(parseResponse<T>);
 }
 
 export interface MusicModelInfo {
@@ -91,22 +103,21 @@ function studioFetch(path: string, accessKey: string, init: RequestInit = {}): P
   return fetch(path, { ...init, headers });
 }
 
-export function fetchMusicCapabilities(accessKey: string): Promise<MusicCapabilities> {
-  return studioFetch("/api/owner/v1/capabilities", accessKey, { cache: "no-store" })
-    .then(parseResponse<MusicCapabilities>);
+export function fetchMusicCapabilities(accessKey: StudioAccess): Promise<MusicCapabilities> {
+  return studioRequest("/capabilities", accessKey, { cache: "no-store" });
 }
 
 /** Upload a creator's own recording so remix/repaint/stem jobs can reference it. */
-export function uploadMusicAsset(file: File, accessKey: string): Promise<MusicAsset> {
+export function uploadMusicAsset(file: File, accessKey: StudioAccess): Promise<MusicAsset> {
   const body = new FormData();
   // The coordinator reads the `file` part and infers `kind` from its MIME type.
   body.append("file", file, file.name);
   body.append("kind", "audio");
   // Content-Type is deliberately unset so the browser adds the multipart boundary.
-  return studioFetch("/api/owner/v1/assets", accessKey, {
+  return studioRequest("/assets", accessKey, {
     method: "POST",
     body,
-  }).then(parseResponse<MusicAsset>);
+  });
 }
 
 /** Translate the studio form into the coordinator's text_to_music contract. */
@@ -157,36 +168,38 @@ export function musicJobRequest(
 
 export function createMusicJob(
   body: Record<string, unknown>,
-  accessKey: string
+  accessKey: StudioAccess,
+  requestKey?: string
 ): Promise<MusicJob> {
-  return studioFetch("/api/owner/v1/jobs", accessKey, {
+  return studioRequest("/jobs", accessKey, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(requestKey ? { "Idempotency-Key": requestKey } : {}) },
     body: JSON.stringify({ type: "text_to_music", ...body }),
-  }).then(parseResponse<MusicJob>);
+  });
 }
 
-export function fetchMusicJob(jobId: string, accessKey: string): Promise<MusicJob> {
-  return studioFetch(`/api/owner/v1/jobs/${encodeURIComponent(jobId)}`, accessKey, {
+export function fetchMusicJob(jobId: string, accessKey: StudioAccess): Promise<MusicJob> {
+  return studioRequest(`/jobs/${encodeURIComponent(jobId)}`, accessKey, {
     cache: "no-store",
-  }).then(parseResponse<MusicJob>);
+  });
 }
 
-export async function fetchMusicJobs(accessKey: string): Promise<MusicJob[]> {
-  const payload = await studioFetch("/api/owner/v1/jobs?type=text_to_music&limit=20", accessKey, {
+export async function fetchMusicJobs(accessKey: StudioAccess): Promise<MusicJob[]> {
+  const payload = await studioRequest<{ jobs?: MusicJob[] }>("/jobs?type=text_to_music&limit=20", accessKey, {
     cache: "no-store",
-  }).then(parseResponse<{ jobs?: MusicJob[] }>);
+  });
   return payload.jobs || [];
 }
 
-export function cancelMusicJob(jobId: string, accessKey: string): Promise<{ id: string; status: string }> {
-  return studioFetch(`/api/owner/v1/jobs/${encodeURIComponent(jobId)}/cancel`, accessKey, {
+export function cancelMusicJob(jobId: string, accessKey: StudioAccess): Promise<{ id: string; status: string }> {
+  return studioRequest(`/jobs/${encodeURIComponent(jobId)}/cancel`, accessKey, {
     method: "POST",
-  }).then(parseResponse<{ id: string; status: string }>);
+  });
 }
 
 export function musicMediaUrl(url?: string | null): string | undefined {
   if (!url) return undefined;
+  if (/^\/v2\/artifacts\/[a-zA-Z0-9_-]+\/content$/.test(url)) return `/api/account-media/${url.split("/")[3]}`;
   return url.startsWith("/") ? `/api${url}` : url;
 }
 

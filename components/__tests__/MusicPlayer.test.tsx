@@ -4,6 +4,9 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MusicPlayerProvider, type PlayerTrack, useMusicPlayer } from "../MusicPlayer";
 
+const account = vi.hoisted(() => ({ configured: false, account: null as { id: string } | null }));
+vi.mock("../AccountProvider", () => ({ useAccount: () => account }));
+
 const tracks: PlayerTrack[] = [
   { id: "one", title: "First", style: "Synthwave", audioUrl: "/one.mp3", publicationId: "pub-one" },
   { id: "two", title: "Second", style: "Ambient", audioUrl: "/two.mp3", publicationId: "pub-two" },
@@ -49,6 +52,7 @@ describe("MusicPlayerProvider", () => {
   let root: Root;
 
   beforeEach(() => {
+    account.configured = false; account.account = null;
     vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     vi.spyOn(window.HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: true })) as unknown as typeof fetch);
@@ -63,6 +67,22 @@ describe("MusicPlayerProvider", () => {
     container.remove();
     vi.restoreAllMocks();
     window.localStorage.clear();
+  });
+
+  it("removes private playback from view and separates saved queues on account changes", async () => {
+    account.configured = true; account.account = { id: "acct_alice" };
+    await act(async () => root.render(<Shell />));
+    await act(async () => click(container, "[data-testid='play-all']"));
+    expect(localStorage.getItem("havnai_music_player_track:acct_alice")).toContain("First");
+    expect(localStorage.getItem("havnai_music_player_track")).toBeNull();
+    account.account = { id: "acct_bob" };
+    await act(async () => root.render(<Shell />));
+    expect(text(container, "[data-testid='current']")).toBe("none");
+    expect(container.querySelector("audio")?.getAttribute("src")).toBeNull();
+    account.account = null;
+    await act(async () => root.render(<Shell />));
+    expect(text(container, "[data-testid='current']")).toBe("none");
+    expect(localStorage.getItem("havnai_music_player_track:guest")).toBeNull();
   });
 
   it("plays a queue with previous, next, and automatic next-track playback", async () => {

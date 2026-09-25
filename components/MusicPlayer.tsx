@@ -4,6 +4,7 @@ import { Pause, Play, SkipBack, SkipForward, Volume1, Volume2, VolumeX, X } from
 import { formatMusicDuration } from "../lib/musicJobPresentation";
 import { getApiBase } from "../lib/apiBase";
 import { adjacentQueueIndex, playableQueue, resolveQueueSelection, restoreQueueSelection } from "../lib/musicPlayerQueue";
+import { useAccount } from "./AccountProvider";
 
 export interface PlayerTrack {
   id: string;
@@ -75,6 +76,14 @@ export function useMusicPlayer(): PlayerContextValue {
 }
 
 export function MusicPlayerProvider({ children }: { children: React.ReactNode }) {
+  const account = useAccount();
+  const scope = account.configured ? account.account?.id || "guest" : "";
+  return <ScopedMusicPlayer key={scope} scope={scope}>{children}</ScopedMusicPlayer>;
+}
+
+function ScopedMusicPlayer({ children, scope }: { children: React.ReactNode; scope: string }) {
+  const trackStorageKey = scope ? `${STORAGE_KEY}:${scope}` : STORAGE_KEY;
+  const queueStorageKey = scope ? `${QUEUE_STORAGE_KEY}:${scope}` : QUEUE_STORAGE_KEY;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const shouldPlayRef = useRef(false);
   const [currentTrack, setCurrentTrack] = useState<PlayerTrack | null>(null);
@@ -89,8 +98,8 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      const savedQueue = window.localStorage.getItem(QUEUE_STORAGE_KEY);
+      const saved = window.localStorage.getItem(trackStorageKey);
+      const savedQueue = window.localStorage.getItem(queueStorageKey);
       const savedVolumeRaw = window.localStorage.getItem(VOLUME_KEY);
       const savedVolume = savedVolumeRaw === null ? Number.NaN : Number(savedVolumeRaw);
       const parsedTrack = saved ? JSON.parse(saved) as PlayerTrack : null;
@@ -119,7 +128,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
     setCurrentTime(0);
     setDuration(currentTrack.duration || 0);
     countedPlayRef.current = null;
-    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(currentTrack)); } catch { /* ignore */ }
+    try { window.localStorage.setItem(trackStorageKey, JSON.stringify(currentTrack)); } catch { /* ignore */ }
     if (shouldPlayRef.current) {
       shouldPlayRef.current = false;
       void audio.play().catch(() => setPlayerError("Playback could not start. Try pressing play again."));
@@ -128,7 +137,7 @@ export function MusicPlayerProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!currentTrack) return;
-    try { window.localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(queue)); } catch { /* ignore */ }
+    try { window.localStorage.setItem(queueStorageKey, JSON.stringify(queue)); } catch { /* ignore */ }
   }, [currentTrack, queue]);
 
   const playTrack = useCallback((track: PlayerTrack, nextQueue?: PlayerTrack[], index?: number) => {
