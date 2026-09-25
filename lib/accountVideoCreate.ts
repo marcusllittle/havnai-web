@@ -18,6 +18,12 @@ export async function submitAccountCreateVideo(storage: Storage, account: string
   access.signal.throwIfAborted();
   if (!input) return submitAccountJob(storage, account, access, "create_video");
   if (pendingAccountJob(storage, account, "create_video")) throw new Error("Resume your pending video request before starting another.");
+  const body = await prepareAccountVideo(input, access);
+  return submitAccountJob(storage, account, access, "create_video", body);
+}
+
+export async function prepareAccountVideo(input: VideoJobRequest & { sourceAssetId?: string }, access: AccountStudioAccess): Promise<Record<string, unknown>> {
+  access.signal.throwIfAborted();
   if (input.wallet) throw new Error("Account video requests must use account identity.");
   if (input.sourceAssetId && input.initImage) throw new Error("Choose one starting image for this clip.");
   if (input.referenceImage) throw new Error("Reference-sheet video is still being connected to accounts. Use a starting image for this clip.");
@@ -29,5 +35,5 @@ export async function submitAccountCreateVideo(storage: Storage, account: string
   if (input.initImage) body.source_asset_id = await uploadImage(input.initImage, "video-source", access);
   if (input.sourceAssetId) body.source_asset_id = input.sourceAssetId;
   // Create's workflow presets populate the numeric controls above.
-  return submitAccountJob(storage, account, access, "create_video", body);
+  return body;
 }

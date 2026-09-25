@@ -97,6 +97,75 @@ it("generates and recovers a single account video without legacy or wallet calls
   expect(loadLibrary("acct_alice")[0].type).toBe("video");
 });
 
+it("runs two account clips and saves the private merged result without wallet calls", async () => {
+  const publicRead = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/models/list")) return { ok: true, json: async () => ({ models: [{ name: "ltx_video_dev", available: true,
+      pipeline: "ltx_video", task_type: "LTX_VIDEO_GEN", capabilities: ["text_to_video", "image_to_video"], video_defaults: { width: 640, height: 384, frames: 49, fps: 16 } }] }) };
+    return publicRead(url, init);
+  }));
+  const chain: any = { id: "chain-one", owner_account_id: "acct_alice", template: { prompt: "Coast" }, total: 2, auto_stitch: true, state: "active", jobs: [] };
+  const video = (id: string) => ({ ...job, id, type: "text_to_video", artifacts: [{ id: `art-${id}`, kind: "video", url: `/v2/artifacts/art-${id}/content` }] });
+  state.request.mockImplementation(async (path: string) => {
+    if (path === "/v2/account/credits") return { available_units: 10000, scale: 1000 };
+    if (path === "/v2/video-chains") return chain;
+    if (path.endsWith("/next")) {
+      const id = `clip-${chain.jobs.length}`;
+      chain.jobs.push({ id, index: chain.jobs.length, status: "succeeded" });
+      if (chain.jobs.length === 2) chain.state = "rendered";
+      return { chain: { ...chain }, job: video(id) };
+    }
+    if (path.endsWith("/stitch")) return { chain: { ...chain, state: "complete", result_job_id: "merged" }, job: video("merged") };
+    if (path === "/v2/video-chains/chain-one") return { ...chain };
+    if (path.startsWith("/v2/jobs/")) return video(path.split("/").at(-1)!);
+    throw new Error(`Unexpected request ${path}`);
+  });
+  await act(async () => root.render(<CreatePage />));
+  await act(async () => button("Video").click());
+  expect(state.request.mock.calls.filter(([path]) => path.includes("video-chains"))).toHaveLength(0);
+  await act(async () => host.querySelector<HTMLButtonElement>(".studio-settings-toggle")!.click());
+  await act(async () => {
+    const input = host.querySelector<HTMLInputElement>("#extend-chunks")!;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "2");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => { button("Generate video").click(); button("Generate video").click(); });
+  expect(state.request.mock.calls.filter(([path]) => path === "/v2/video-chains")).toHaveLength(1);
+  expect(state.request.mock.calls.filter(([path]) => path.endsWith("/next"))).toHaveLength(2);
+  expect(state.request.mock.calls.filter(([path]) => path.endsWith("/stitch"))).toHaveLength(1);
+  expect(host.textContent).toContain("stitched into a single video");
+  expect(loadLibrary("acct_alice").map(item => item.job_id)).toContain("merged");
+  expect(state.connect).not.toHaveBeenCalled(); expect(state.sse).not.toHaveBeenCalled();
+});
+
+it("stops further sequence submissions while an accepted clip is still running", async () => {
+  const chain: any = { id: "chain-one", owner_account_id: "acct_alice", template: { prompt: "Coast" }, total: 2, auto_stitch: true, state: "active", jobs: [] };
+  let pollSignal: AbortSignal | undefined;
+  state.request.mockImplementation(async (path: string, init: RequestInit) => {
+    if (path === "/v2/account/credits") return { available_units: 10000, scale: 1000 };
+    if (path.startsWith("/v2/video-chains?")) return { chains: [{ ...chain }] };
+    if (path.endsWith("/next")) return { chain, job: { ...job, id: "clip-running", type: "text_to_video", status: "running" } };
+    if (path === "/v2/video-chains/chain-one") {
+      if (init.method === "DELETE") chain.state = "stopped";
+      return { ...chain };
+    }
+    if (path === "/v2/jobs/clip-running") return new Promise((_, reject) => {
+      pollSignal = init.signal!;
+      pollSignal.addEventListener("abort", () => reject(pollSignal!.reason), { once: true });
+    });
+    throw new Error(`Unexpected request ${path}`);
+  });
+  await act(async () => root.render(<CreatePage />));
+  await act(async () => button("Saved video sequences").click());
+  await act(async () => button("Resume sequence").click());
+  expect(pollSignal).toBeDefined();
+  await act(async () => button("Stop remaining clips").click());
+  expect(pollSignal!.aborted).toBe(true);
+  expect(state.request.mock.calls.filter(([path]) => path.endsWith("/next"))).toHaveLength(1);
+  expect(host.textContent).toContain("Sequence stopped. Any submitted clip keeps running.");
+  expect(button("Stop remaining clips")).toBeUndefined();
+});
+
 it("resumes an ambiguous image request with its original idempotency key", async () => {
   const implementation = state.request.getMockImplementation()!;
   let submissions = 0;

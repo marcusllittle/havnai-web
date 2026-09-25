@@ -10,10 +10,12 @@ import { ArrowUpRight, ImageIcon, Film, ScanFace, SlidersHorizontal, ChevronDown
 import { SiteHeader } from "../components/SiteHeader";
 import { useAccount } from "../components/AccountProvider";
 import { AccountIdentityAnchors } from "../components/AccountIdentityAnchors";
+import { AccountVideoSequences } from "../components/AccountVideoSequences";
 import type { AccountStudioAccess } from "../lib/musicStudioApi";
 import { submitAccountImage, submitAccountFaceSwap, fetchAccountJobView } from "../lib/accountImageStudio";
 import { pendingAccountJob } from "../lib/accountJobSubmission";
 import { submitAccountCreateVideo } from "../lib/accountVideoCreate";
+import { createAccountVideoChain, pendingVideoChain, runAccountVideoChain } from "../lib/accountVideoChains";
 import { useWallet } from "../components/WalletProvider";
 import { HavnAIPrompt } from "../components/HavnAIPrompt";
 import { HavnAIButton } from "../components/HavnAIButton";
@@ -352,6 +354,11 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
   const [pendingImage, setPendingImage] = useState(false);
   const [pendingFaceSwap, setPendingFaceSwap] = useState(false);
   const [pendingVideo, setPendingVideo] = useState(false);
+  const [pendingSequence, setPendingSequence] = useState(false);
+  const [sequenceRevision, setSequenceRevision] = useState(0);
+  const [activeSequence, setActiveSequence] = useState<string | null>(null);
+  const sequenceController = useRef<AbortController | null>(null);
+  const stoppingSequence = useRef(false);
   const operation = useRef(false);
   const syncPendingImage = () => {
     if (!accountAuth) return;
@@ -361,13 +368,15 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     catch { setPendingFaceSwap(true); }
     try { setPendingVideo(Boolean(pendingAccountJob(sessionStorage, accountAuth.id, "create_video"))); }
     catch { setPendingVideo(true); }
+    try { setPendingSequence(Boolean(pendingVideoChain(sessionStorage, accountAuth.id))); }
+    catch { setPendingSequence(true); }
   };
   useEffect(syncPendingImage, [accountAuth?.id]);
   const router = useRouter();
   const entryApplied = useRef(false);
   const wallet = useWallet();
   const [mode, setMode] = useState<GeneratorMode>("image");
-  const pendingGeneration = mode === "video" ? pendingVideo : mode === "face_swap" ? pendingFaceSwap : pendingImage;
+  const pendingGeneration = mode === "video" ? pendingVideo || pendingSequence : mode === "face_swap" ? pendingFaceSwap : pendingImage;
   const [prompt, setPrompt] = useState("");
   useEffect(() => {
     if (!router.isReady || entryApplied.current) return;
@@ -1501,10 +1510,6 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
       setStatusMessage("No face swap model is currently selectable.");
       return;
     }
-    if (accountAuth && mode === "video" && (parseOptionalInt(extendChunks) ?? 1) > 1) {
-      setStatusMessage("Account clip chaining is being connected. Set Total clips to 1 to render a single clip.");
-      return;
-    }
     if (accountAuth && pendingGeneration) { setStatusMessage("Resume your pending generation request first."); return; }
     operation.current = true;
     setLoading(true);
@@ -1571,7 +1576,12 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
         await pollJob(id, effectivePrompt || "Face swap", 1800);
       } else if (mode === "video") {
         if (totalVideoClips > 1) {
-          await runVideoChain(effectivePrompt, totalVideoClips - 1);
+          if (accountAuth && accountAccess) {
+            const chain = await createAccountVideoChain(sessionStorage, accountAuth.id, accountAccess,
+              { request: buildVideoRequest(effectivePrompt), total: totalVideoClips, autoStitch });
+            syncPendingImage(); setSequenceRevision(value => value + 1);
+            await runOwnedSequence(chain.id);
+          } else await runVideoChain(effectivePrompt, totalVideoClips - 1);
         } else {
           const request = buildVideoRequest(effectivePrompt);
           const id = accountAuth && accountAccess
@@ -1584,6 +1594,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
         }
       }
     } catch (err: any) {
+      if (err?.name === "AbortError") return;
       if (err instanceof HavnaiApiError || err?.code) {
         const code = err.code || err?.data?.error;
         if (code === "insufficient_credits") {
@@ -1682,11 +1693,11 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     return { videoUrl: resolvedVideo, imageUrl: resolvedImage, job };
   };
 
-  const pollJob = async (id: string, usedPrompt: string, maxWaitSeconds = 600) => {
+  const pollJob = async (id: string, usedPrompt: string, maxWaitSeconds = 600, signalOverride?: AbortSignal) => {
     const start = Date.now();
     setPollTimedOut(false);
     if (accountAuth && accountAccess) {
-      const access = { request: accountAccess.request, signal: accountAccess.signal };
+      const access = { request: accountAccess.request, signal: signalOverride || accountAccess.signal };
       try {
         while ((Date.now() - start) / 1000 < maxWaitSeconds) {
           const view = await fetchAccountJobView(id, accountAuth.id, access);
@@ -1872,6 +1883,76 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
       )} seconds. Select "Check status" to keep waiting.`
     );
     return null;
+  };
+
+  const runOwnedSequence = async (id: string) => {
+    if (!accountAuth || !accountAccess) return;
+    const parentSignal = accountAccess.signal;
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    parentSignal.addEventListener("abort", abort, { once: true });
+    if (parentSignal.aborted) abort();
+    sequenceController.current = controller;
+    setActiveSequence(id); setMode("video"); setChainSummary(null); setStitchedVideoUrl(undefined);
+    try {
+      const outcome = await runAccountVideoChain(id, accountAuth.id, { request: accountAccess.request, signal: controller.signal }, {
+        onState: (chain, stage) => {
+          setChainProgress({ completed: chain.jobs.filter(job => job.status === "succeeded").length,
+            current: stage === "stitching" ? chain.total : Math.min(chain.total, chain.jobs.length || 1), total: chain.total, stage });
+          if (stage === "stitching") setStatusMessage("Merging your clips...");
+        },
+        waitForJob: async (job, chain, access) => {
+          const usedPrompt = String(chain.template.prompt || "Video sequence");
+          setJobId(job.id); setLastUsedPrompt(usedPrompt);
+          saveActiveCreateJob({ id: job.id, prompt: usedPrompt, mode: "video", startedAt: Date.now() });
+          return Boolean(await pollJob(job.id, usedPrompt, 2400, access.signal));
+        },
+      });
+      controller.signal.throwIfAborted();
+      if (outcome.result) {
+        const usedPrompt = String(outcome.chain.template.prompt || "Video sequence");
+        setJobId(outcome.result.id); setLastUsedPrompt(usedPrompt);
+        const result = await pollJob(outcome.result.id, usedPrompt, 2400, controller.signal);
+        controller.signal.throwIfAborted();
+        if (result) {
+          const stitched = outcome.chain.state === "complete";
+          setChainSummary({ clips: outcome.chain.total, stitched });
+          if (stitched) setStitchedVideoUrl(result.videoUrl);
+        }
+      } else if (outcome.chain.state === "stopped") setStatusMessage("Sequence stopped. Any submitted clip keeps running.");
+      else if (outcome.chain.state === "failed") setStatusMessage("A clip failed. Your completed clips are in Collection.");
+    } finally {
+      parentSignal.removeEventListener("abort", abort);
+      if (sequenceController.current === controller) sequenceController.current = null;
+      if (!parentSignal.aborted) { setActiveSequence(null); setChainProgress(null); setSequenceRevision(value => value + 1); }
+    }
+  };
+
+  const handleResumeSequence = async (id?: string) => {
+    if (!accountAuth || !accountAccess || operation.current) return;
+    operation.current = true; setLoading(true);
+    try {
+      const chainId = id || (await createAccountVideoChain(sessionStorage, accountAuth.id, accountAccess)).id;
+      syncPendingImage(); await runOwnedSequence(chainId);
+    } catch (reason) {
+      if (!accountAccess.signal.aborted && !(reason && typeof reason === "object" && "name" in reason && reason.name === "AbortError"))
+        setStatusMessage(reason instanceof Error ? reason.message : "Could not resume this sequence.");
+    } finally { operation.current = false; syncPendingImage(); setLoading(false); }
+  };
+
+  const handleStopSequence = async (id: string) => {
+    if (!accountAccess || stoppingSequence.current) return;
+    stoppingSequence.current = true;
+    const signal = accountAccess.signal;
+    try {
+      await accountAccess.request(`/v2/video-chains/${encodeURIComponent(id)}`, { method: "DELETE", signal });
+      signal.throwIfAborted();
+      if (id === activeSequence) sequenceController.current?.abort();
+      setStatusMessage("Sequence stopped. Any submitted clip keeps running.");
+      setSequenceRevision(value => value + 1);
+    } catch (reason) {
+      if (!signal.aborted) setStatusMessage(reason instanceof Error ? reason.message : "Could not stop this sequence.");
+    } finally { stoppingSequence.current = false; }
   };
 
   const handleResumeImage = async (kind: "image" | "face_swap" | "create_video") => {
@@ -2822,6 +2903,10 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                   {pendingImage && <p role="status">An image request needs confirmation. <button type="button" className="generator-mini-button" disabled={loading} onClick={() => void handleResumeImage("image")}>Resume image request</button></p>}
                   {pendingFaceSwap && <p role="status">A face-swap request needs confirmation. <button type="button" className="generator-mini-button" disabled={loading} onClick={() => void handleResumeImage("face_swap")}>Resume face swap</button></p>}
                   {pendingVideo && <p role="status">A video request needs confirmation. <button type="button" className="generator-mini-button" disabled={loading} onClick={() => void handleResumeImage("create_video")}>Resume video request</button></p>}
+                  {pendingSequence && <p role="status">A sequence request needs confirmation. <button type="button" className="generator-mini-button" disabled={loading} onClick={() => void handleResumeSequence()}>Resume sequence request</button></p>}
+                  {activeSequence && <button type="button" className="generator-mini-button" onClick={() => void handleStopSequence(activeSequence)}>Stop remaining clips</button>}
+                  {accountAccess && <AccountVideoSequences account={accountAuth.id} access={accountAccess} revision={sequenceRevision} busy={loading}
+                    onResume={id => void handleResumeSequence(id)} onStop={id => void handleStopSequence(id)} />}
                   <p><Link href="/video-studio">Open account Video Studio</Link></p>
                 </section> : <details className="studio-account">
                   <summary><Wallet size={15} aria-hidden="true" /><span>Access & credits</span><span className="studio-account-balance">{credits?.credits_enabled ? credits.balance.toFixed(1) + " cr" : inviteSaved ? "Code saved" : "Account"}</span><ChevronDown size={15} aria-hidden="true" /></summary>
