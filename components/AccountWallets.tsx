@@ -4,6 +4,7 @@ import { AccountRequestError, useAccount } from "./AccountProvider";
 import { useWallet } from "./WalletProvider";
 import { ensureInjectedProvider } from "../lib/wallet";
 import { authorizeAccountWallet } from "../lib/accountWalletProof";
+import { AccountImportReview } from "./AccountImportReview";
 
 const verificationHint = { clerk_error: { type: "forbidden", reason: "reverification-error",
   metadata: { reverification: { level: "first_factor", afterMinutes: 5 } } } } as const;
@@ -15,6 +16,7 @@ export function AccountWallets() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [unlink, setUnlink] = useState<{ id: string; wallet: string } | null>(null);
+  const [reviewLink, setReviewLink] = useState<string | null>(null);
   const active = useRef<AbortController | null>(null);
   const alive = useRef(true);
   useEffect(() => {
@@ -69,6 +71,7 @@ export function AccountWallets() {
     <p>Wallets unlock blockchain rewards, token transfers, and ownership features. You do not need one to create or publish.</p>
     {account.account.wallets.length ? <ul>{account.account.wallets.map(link => <li key={link.id}>
       <code style={{ overflowWrap: "anywhere" }}>{link.wallet}</code>{" "}<button type="button" aria-label={`Unlink wallet ${link.wallet}`} disabled={busy} onClick={() => { setUnlink(link); setError(""); setMessage(""); }}>Unlink wallet</button>
+      {" "}<button type="button" disabled={busy} onClick={() => setReviewLink(link.id)}>Review wallet content</button>
     </li>)}</ul> : <p>No wallets linked.</p>}
     <p>Linking a wallet never moves your existing content or credits automatically.</p>
     {unlink ? <div role="group" aria-label="Confirm unlink wallet">
@@ -82,5 +85,7 @@ export function AccountWallets() {
       if (alive.current) { setError(""); setMessage("Linked wallets refreshed."); }
     }).catch(() => { if (alive.current) setError("Could not refresh linked wallets. Please try again."); })}>Refresh linked wallets</button>}
     {busy && <button type="button" onClick={() => { active.current?.abort(); setMessage("Cancelled here. Close any pending wallet or account verification prompt before trying again."); }}>Cancel request</button>}
+    {account.account.wallets.filter(link => link.id === reviewLink).map(link =>
+      <AccountImportReview key={`${account.account!.id}:${link.id}`} link={link} request={request} onClose={() => setReviewLink(null)} />)}
   </section>;
 }
