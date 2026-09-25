@@ -22,11 +22,12 @@ it("loads account-owned history only on demand and never sends a mutation", asyn
   expect(state.request.mock.calls[0][0]).toBe("/v2/account/import-receipts?limit=10&offset=0");
   expect(host.textContent).toContain("2.125 credits");
   state.request.mockResolvedValueOnce({ scale: 1000, receipt: { id: "import-one", wallet: "0xoriginal-wallet", credit_units: 2125,
-    jobs: [{ id: "job-one" }], publication_ids: ["song-one"], playlist_ids: ["playlist-one"] } });
+    jobs: [{ id: "job-one" }], publication_ids: ["song-one"], playlist_ids: ["playlist-one"], workflow_ids: ["12"] } });
   await act(async () => button("View receipt").click());
   expect(host.textContent).toContain("Creation: job-one");
   expect(host.textContent).toContain("Publication: song-one");
   expect(host.textContent).toContain("Playlist: playlist-one");
+  expect(host.textContent).toContain("Workflow: 12");
   expect(state.request.mock.calls.every(([, init]) => !init.method)).toBe(true);
 });
 

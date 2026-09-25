@@ -84,3 +84,29 @@ it("does not accept a signature after a wallet change", async () => {
   expect(request).toHaveBeenCalledTimes(1);
   expect(events.size).toBe(0);
 });
+
+it.each(['workflow_ids: []', 'workflow_ids: ["99"]', 'workflow_ids: ["12","99"]', ""])("rejects missing or changed workflow selection: %s", async field => {
+  snapshot.workflows = [{ id: "12", title: "My template", published: false }];
+  request.mockResolvedValueOnce({ ...challenge(), message: challenge().message + (field ? "\n" + field : "") });
+  await expect(run()).rejects.toThrow("changed your selected content");
+  expect(rpc.mock.calls.some(([args]) => args.method === "personal_sign")).toBe(false);
+});
+
+it("signs selected workflows and requires the same IDs on recovery receipts", async () => {
+  snapshot.workflows = [{ id: "12", title: "My template", published: true }];
+  request.mockResolvedValueOnce({ ...challenge(), message: challenge().message + '\nworkflow_ids: ["12"]' });
+  const proof = await run();
+  request.mockReset().mockResolvedValue(receipt());
+  await expect(submitImport(request, snapshot, proof, controller.signal)).rejects.toThrow("does not match");
+  const completed = { ...receipt(), receipt: { ...receipt().receipt, workflow_ids: ["12"] } };
+  request.mockReset().mockResolvedValue(completed);
+  await expect(submitImport(request, snapshot, proof, controller.signal)).resolves.toEqual(completed);
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(rpc.mock.calls.filter(([args]) => args.method === "personal_sign")).toHaveLength(1);
+});
+
+it("rejects unexpected workflows in an otherwise valid empty-selection proof", async () => {
+  request.mockResolvedValueOnce({ ...challenge(), message: challenge().message + '\nworkflow_ids: ["12"]' });
+  await expect(run()).rejects.toThrow("changed your selected content");
+  expect(rpc.mock.calls.some(([args]) => args.method === "personal_sign")).toBe(false);
+});

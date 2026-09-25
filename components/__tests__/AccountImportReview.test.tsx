@@ -82,7 +82,7 @@ it("only reads inventory until explicit selection and review", async () => {
     credits: { available_units: 2125, scale: 1000 }, expires_at: Date.now() / 1000 + 300 });
   await act(async () => { input("ready").click(); input("2.125").click(); });
   await act(async () => button("Review selection").click());
-  expect(JSON.parse(review.mock.calls[0][1].body)).toEqual({ job_ids: ["ready"], publication_ids: [], playlist_ids: [], include_credits: true });
+  expect(JSON.parse(review.mock.calls[0][1].body)).toEqual({ job_ids: ["ready"], publication_ids: [], playlist_ids: [], workflow_ids: [], include_credits: true });
   expect(host.textContent).toContain("2.125 credits selected");
   expect(host.textContent).toContain("No content or credits have moved");
   expect(review.mock.calls.every(([path]) => path.endsWith("/import-snapshots"))).toBe(true);
@@ -128,4 +128,21 @@ it("retries failed inventory without preparing or authorizing an import", async 
   expect(review).not.toHaveBeenCalled();
   await act(async () => button("Close review").click());
   expect(close).toHaveBeenCalledTimes(1);
+});
+
+it("reviews workflow-only selections and paginates the workflow inventory", async () => {
+  state.request.mockResolvedValue({ ...inventory, jobs: [], total: 0, playlists: [], playlist_total: 0,
+    workflows: [{ id: "12", title: "Portrait setup", eligible: true }], workflow_total: 60 });
+  review.mockResolvedValue({ id: "snapshot", jobs: [], publications: [], playlists: [], credits: null,
+    workflows: [{ id: "12", title: "Portrait setup", published: true }], expires_at: Date.now() / 1000 + 300 });
+  await act(async () => render());
+  expect(button("Next page").disabled).toBe(false);
+  await act(async () => input("Portrait setup").click());
+  await act(async () => button("Next page").click());
+  expect(input("Portrait setup").checked).toBe(true);
+  await act(async () => button("Review selection").click());
+  expect(JSON.parse(review.mock.calls[0][1].body)).toEqual({ job_ids: [], publication_ids: [], playlist_ids: [], workflow_ids: ["12"], include_credits: false });
+  expect(host.textContent).toContain("1 workflows");
+  expect(host.textContent).toContain("Portrait setup — Published");
+  expect(state.sign).not.toHaveBeenCalled();
 });

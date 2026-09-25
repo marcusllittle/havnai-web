@@ -46,3 +46,13 @@ pins the address/network across signing, and aborts on provider changes.
 Execution first checks for a durable receipt, then sends only the stored proof;
 a lost response triggers receipt recovery rather than another wallet request.
 Signed proofs stay in memory, never browser storage.
+
+Workflow templates are now an explicit selection alongside creations, music
+publications and playlists. Workflow-only reviews are allowed; paging uses the
+workflow inventory count as well as the other counts. The review displays each
+selected workflow's name and existing public/private status. Import preserves
+that status. Workflow IDs must match the signed challenge and recovered receipt
+exactly, including when the reviewed list is empty. Older snapshots and receipts
+without workflow fields remain compatible as empty selections. History summaries
+and receipt details include completed workflow transfers. This requires the core
+version-4 snapshot implementation; the production import switch remains off.
