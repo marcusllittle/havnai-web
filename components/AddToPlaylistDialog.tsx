@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { ListMusic, Plus, X } from "lucide-react";
+import Link from "next/link";
+import { useMusicAccess, withMusicIdentity, MusicAccountNotice } from "./MusicAccountAccess";
 import {
-  addMusicPlaylistItem,
-  createMusicPlaylist,
-  fetchMyMusicPlaylists,
   type MusicPlaylist,
   type MusicPublication,
 } from "../lib/havnai";
 
-export function AddToPlaylistDialog({
+function PlaylistDialog({
   publication,
   walletAddress,
   connectWallet,
@@ -21,8 +20,11 @@ export function AddToPlaylistDialog({
   onClose: () => void;
   onAdded?: (playlist: MusicPlaylist) => void;
 }) {
+  const access = useMusicAccess();
+  const { fetchMyMusicPlaylists, createMusicPlaylist, addMusicPlaylistItem } = access;
+  const listenerId = access.configured ? access.listenerId : walletAddress;
   const [playlists, setPlaylists] = useState<MusicPlaylist[]>([]);
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(access.pendingTitle);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const actionInFlightRef = useRef(false);
@@ -53,9 +55,9 @@ export function AddToPlaylistDialog({
     let active = true;
     setError("");
     setPlaylists([]);
-    if (!publication || !walletAddress) { setBusy(false); return; }
+    if (!publication || !listenerId) { setBusy(false); return; }
     setBusy(true);
-    fetchMyMusicPlaylists(walletAddress)
+    fetchMyMusicPlaylists(listenerId)
       .then((items) => {
         if (active) setPlaylists(items);
       })
@@ -68,11 +70,12 @@ export function AddToPlaylistDialog({
     return () => {
       active = false;
     };
-  }, [publication, walletAddress, refreshKey]);
+  }, [publication, listenerId, refreshKey, fetchMyMusicPlaylists]);
 
   if (!publication) return null;
 
   async function resolveWallet(): Promise<string | null> {
+    if (access.configured) return access.ensureListener();
     if (walletAddress) return walletAddress;
     return connectWallet();
   }
@@ -108,6 +111,7 @@ export function AddToPlaylistDialog({
       if (!signer) return;
       const playlist = await createMusicPlaylist({ wallet: signer, title: nextTitle });
       const updated = await addMusicPlaylistItem(playlist.id, publication.id, signer);
+      access.finishPlaylistCreation(playlist.id);
       onAdded?.(updated);
       setTitle("");
       onClose();
@@ -131,13 +135,14 @@ export function AddToPlaylistDialog({
           <span>{publication.creator}</span>
         </div>
         {error && <p className="music-dialog-error" role="alert">{error}</p>}
-        {error && walletAddress && <button type="button" disabled={busy} onClick={() => setRefreshKey(value => value + 1)}>Reload playlists</button>}
-        {!walletAddress && <button type="button" onClick={() => void connectWallet().catch(() => setError("Wallet connection failed. Please try again."))}>Connect wallet</button>}
+        <MusicAccountNotice message={access.notice} />
+        {error && listenerId && <button type="button" disabled={busy} onClick={() => setRefreshKey(value => value + 1)}>Reload playlists</button>}
+        {!listenerId && (access.configured ? <Link href="/sign-in">Sign in to manage playlists</Link> : <button type="button" onClick={() => void connectWallet().catch(() => setError("Wallet connection failed. Please try again."))}>Connect wallet</button>)}
         <div className="music-playlist-picker">
           {busy && playlists.length === 0 ? (
             <span>Loading playlists</span>
           ) : playlists.length === 0 ? (
-            <span>{error ? "Your playlists are unavailable." : !walletAddress ? "Connect your wallet to see your playlists." : "No playlists yet. Start one below."}</span>
+            <span>{error ? "Your playlists are unavailable." : !listenerId ? "Sign in to see your playlists." : "No playlists yet. Start one below."}</span>
           ) : (
             playlists.map((playlist) => (
               <button key={playlist.id} type="button" disabled={busy} onClick={() => addToPlaylist(playlist.id)}>
@@ -154,8 +159,8 @@ export function AddToPlaylistDialog({
             void createAndAdd();
           }}
         >
-          <input aria-label="New playlist name" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="New playlist name" />
-          <button type="submit" disabled={busy || !title.trim()} aria-label="Create playlist">
+          <input aria-label="New playlist name" maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="New playlist name" />
+          <button type="submit" disabled={busy || !title.trim() || (access.configured && !listenerId)} aria-label="Create playlist">
             <Plus size={18} />
           </button>
         </form>
@@ -163,3 +168,5 @@ export function AddToPlaylistDialog({
     </div>
   );
 }
+
+export const AddToPlaylistDialog = withMusicIdentity(PlaylistDialog);

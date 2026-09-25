@@ -2602,7 +2602,7 @@ export type MusicPublicationProgressStep =
   | "awaiting_signature"
   | "submitting_publication";
 
-function normalizeMusicPublication(raw: any): MusicPublication {
+export function normalizeMusicPublication(raw: any): MusicPublication {
   return {
     id: String(raw?.id || ""),
     job_id: raw?.job_id ? String(raw.job_id) : undefined,
@@ -2631,7 +2631,7 @@ function normalizeMusicPublication(raw: any): MusicPublication {
   };
 }
 
-function normalizeMusicPlaylist(raw: any): MusicPlaylist {
+export function normalizeMusicPlaylist(raw: any): MusicPlaylist {
   return {
     id: String(raw?.id || ""),
     owner_wallet: String(raw?.owner_wallet || ""),

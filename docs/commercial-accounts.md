@@ -7,9 +7,26 @@ contract is `havnai-core/docs/commercial-accounts.md` on branch
 This branch now includes Clerk provider integration, sign-in/sign-up/account pages,
 account-scoped authenticated requests and logout/account-switch isolation. Clerk
 development sign-in is configured and verified. Account checkout and Music Studio
-creation/recovery/publication are implemented; live paid generation acceptance,
-other studios, libraries/playlists, wallet-link UI, and explicit migration remain.
+creation/recovery/publication and music library/playlist management are implemented;
+live paid generation acceptance, other studios and their libraries, wallet-link UI,
+and explicit migration remain.
 Keep HAVN-11 open until the complete acceptance flow has been exercised.
+
+Configured deployments now use account authorization for saves, likes, private
+music libraries, playlist creation/editing/sharing/reordering, and adding songs
+from Discover or creator pages. Guests keep public browsing/playback and receive
+a sign-in option for private actions, even if a wallet extension is connected.
+Private views and dialogs remount on account changes; late account requests are
+aborted and discarded. Playlist creation retains its account-scoped ID through
+ambiguous retries, including a failure while adding the initial song. Saved-song
+pagination exposes tracks beyond the first 80. The frontend does not send a
+wallet address, shared owner token, or signed wallet nonce to these account APIs.
+
+Component tests cover these operations, guest behavior, and account-switch
+isolation with mocked account transport. Core tests independently exercise actual
+SQLite ownership checks and signed-session validation. A mobile guest browser
+check confirms the sign-in UI renders without errors. These are not evidence of
+a live paid generation or production-provider acceptance run.
 
 ## Required web changes in HAVN-19/21/22
 

@@ -8,18 +8,18 @@ import { MusicPublicationCard } from "../components/MusicPublicationCard";
 import { SiteHeader } from "../components/SiteHeader";
 import { useMusicPlayer } from "../components/MusicPlayer";
 import { useWallet } from "../components/WalletProvider";
+import { useMusicAccess, withMusicIdentity, MusicAccountNotice } from "../components/MusicAccountAccess";
 import {
-  fetchMusicDiscover,
-  setMusicPublicationLike,
-  setMusicPublicationSaved,
   type MusicPublication,
 } from "../lib/havnai";
 
 const GENRES = ["All", "Pop", "Hip hop", "Rock", "R&B", "Electronic", "Cinematic", "Country", "Jazz"];
 
-export default function DiscoverPage() {
+function DiscoverPage() {
   const router = useRouter();
   const wallet = useWallet();
+  const access = useMusicAccess();
+  const { fetchMusicDiscover, setMusicPublicationLike, setMusicPublicationSaved } = access;
   const { currentTrack, isPlaying, playTrack, toggle } = useMusicPlayer();
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
@@ -31,7 +31,6 @@ export default function DiscoverPage() {
   const [revision, setRevision] = useState(0);
   const [total, setTotal] = useState(0);
   const [playlistTarget, setPlaylistTarget] = useState<MusicPublication | null>(null);
-  const connectedWallet = wallet.connectedWallet;
 
   useEffect(() => {
     let active = true;
@@ -62,7 +61,7 @@ export default function DiscoverPage() {
     return () => {
       active = false;
     };
-  }, [genre, submittedSearch, sort, revision]);
+  }, [genre, submittedSearch, sort, revision, fetchMusicDiscover]);
 
   const queryTrack = typeof router.query.track === "string" ? router.query.track : "";
   const filtered = Boolean(submittedSearch || genre !== "All");
@@ -100,10 +99,7 @@ export default function DiscoverPage() {
   }
 
   async function likePublication(publication: MusicPublication) {
-    let signerWallet = connectedWallet;
-    if (!signerWallet) {
-      signerWallet = await wallet.connect().catch(() => null);
-    }
+    const signerWallet = await access.ensureListener();
     if (!signerWallet) return;
     const nextLiked = !publication.liked_by_me;
     setPublications((current) =>
@@ -134,10 +130,7 @@ export default function DiscoverPage() {
   }
 
   async function savePublication(publication: MusicPublication) {
-    let signerWallet = connectedWallet;
-    if (!signerWallet) {
-      signerWallet = await wallet.connect().catch(() => null);
-    }
+    const signerWallet = await access.ensureListener();
     if (!signerWallet) return;
     const nextSaved = !publication.saved_by_me;
     patchPublication(publication.id, { saved_by_me: nextSaved });
@@ -156,6 +149,7 @@ export default function DiscoverPage() {
         <meta name="description" content="Listen to public songs created on HavnAI." />
       </Head>
       <SiteHeader />
+      <MusicAccountNotice message={access.notice} />
       <main className="music-discover-page listening-page">
         <header className="listening-heading">
           <div>
@@ -248,10 +242,12 @@ export default function DiscoverPage() {
       </main>
       <AddToPlaylistDialog
         publication={playlistTarget}
-        walletAddress={connectedWallet}
+        walletAddress={wallet.connectedWallet}
         connectWallet={() => wallet.connect().catch(() => null)}
         onClose={() => setPlaylistTarget(null)}
       />
     </>
   );
 }
+
+export default withMusicIdentity(DiscoverPage);

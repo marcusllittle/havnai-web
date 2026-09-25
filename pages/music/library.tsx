@@ -8,13 +8,8 @@ import { MusicPublicationCard } from "../../components/MusicPublicationCard";
 import { SiteHeader } from "../../components/SiteHeader";
 import { useMusicPlayer, type PlayerTrack } from "../../components/MusicPlayer";
 import { useWallet } from "../../components/WalletProvider";
+import { useMusicAccess, withMusicIdentity, MusicAccountNotice } from "../../components/MusicAccountAccess";
 import {
-  createMusicPlaylist,
-  deleteMusicPlaylist,
-  fetchMusicLibrary,
-  setMusicPublicationLike,
-  setMusicPublicationSaved,
-  updateMusicPlaylist,
   type MusicPlaylist,
   type MusicPublication,
 } from "../../lib/havnai";
@@ -33,14 +28,20 @@ function toTrack(publication: MusicPublication): PlayerTrack | null {
   };
 }
 
-export default function MusicLibraryPage() {
+function MusicLibraryPage() {
   const wallet = useWallet();
+  const access = useMusicAccess();
+  const { fetchMusicLibrary, createMusicPlaylist, updateMusicPlaylist, deleteMusicPlaylist,
+    setMusicPublicationLike, setMusicPublicationSaved } = access;
   const { currentTrack, isPlaying, playTrack, playQueue, toggle } = useMusicPlayer();
   const [search, setSearch] = useState("");
   const [savedSongs, setSavedSongs] = useState<MusicPublication[]>([]);
+  const [savedTotal, setSavedTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
   const [recentLiked, setRecentLiked] = useState<MusicPublication[]>([]);
   const [playlists, setPlaylists] = useState<MusicPlaylist[]>([]);
-  const [newPlaylistTitle, setNewPlaylistTitle] = useState("");
+  const [newPlaylistTitle, setNewPlaylistTitle] = useState(access.pendingTitle);
   const [target, setTarget] = useState<MusicPublication | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -48,7 +49,7 @@ export default function MusicLibraryPage() {
   const [actionError, setActionError] = useState("");
   const [busy, setBusy] = useState(false);
   const createPlaylistInFlightRef = useRef(false);
-  const connectedWallet = wallet.connectedWallet;
+  const listenerId = access.listenerId;
 
   useEffect(() => {
     let active = true;
@@ -56,7 +57,7 @@ export default function MusicLibraryPage() {
     setSavedSongs([]);
     setRecentLiked([]);
     setPlaylists([]);
-    if (!connectedWallet) {
+    if (!listenerId) {
       setSavedSongs([]);
       setRecentLiked([]);
       setPlaylists([]);
@@ -65,10 +66,11 @@ export default function MusicLibraryPage() {
     }
     setLoading(true);
     setError("");
-    fetchMusicLibrary({ wallet: connectedWallet, limit: 80 })
+    fetchMusicLibrary({ wallet: listenerId, limit: 80 })
       .then((library) => {
         if (!active) return;
         setSavedSongs(library.publications);
+        setSavedTotal(library.total);
         setRecentLiked(library.recent_liked);
         setPlaylists(library.playlists);
       })
@@ -81,16 +83,32 @@ export default function MusicLibraryPage() {
     return () => {
       active = false;
     };
-  }, [connectedWallet, refreshKey]);
+  }, [listenerId, refreshKey, fetchMusicLibrary]);
 
   const filteredSavedSongs = useMemo(() => {
     return savedSongs.filter((publication) => matchesMusicLibrarySearch(publication, search));
   }, [savedSongs, search]);
   const playableSaved = useMemo(() => filteredSavedSongs.map(toTrack).filter(Boolean) as PlayerTrack[], [filteredSavedSongs]);
 
-  async function ensureWallet(): Promise<string | null> {
-    if (connectedWallet) return connectedWallet;
-    return wallet.connect().catch(() => null);
+  async function ensureListener(): Promise<string | null> {
+    return access.ensureListener();
+  }
+
+  async function loadMoreSaved() {
+    if (!listenerId || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    setActionError("");
+    try {
+      const next = await fetchMusicLibrary({ wallet: listenerId, limit: 80, offset: savedSongs.length });
+      setSavedSongs(current => [...current, ...next.publications.filter(item => !current.some(existing => existing.id === item.id))]);
+      setSavedTotal(next.total);
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : "More songs could not be loaded.");
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
   }
 
   function playPublication(publication: MusicPublication) {
@@ -129,7 +147,7 @@ export default function MusicLibraryPage() {
   }
 
   async function savePublication(publication: MusicPublication) {
-    const signer = await ensureWallet();
+    const signer = await ensureListener();
     if (!signer) return;
     const nextSaved = !publication.saved_by_me;
     updateSavedPublication(publication, nextSaved);
@@ -142,7 +160,7 @@ export default function MusicLibraryPage() {
   }
 
   async function likePublication(publication: MusicPublication) {
-    const signer = await ensureWallet();
+    const signer = await ensureListener();
     if (!signer) return;
     const nextLiked = !publication.liked_by_me;
     updateLikedPublication(publication, nextLiked, Math.max(0, publication.like_count + (nextLiked ? 1 : -1)));
@@ -162,9 +180,10 @@ export default function MusicLibraryPage() {
     setBusy(true);
     setActionError("");
     try {
-      const signer = await ensureWallet();
+      const signer = await ensureListener();
       if (!signer) return;
       const playlist = await createMusicPlaylist({ wallet: signer, title });
+      access.finishPlaylistCreation(playlist.id);
       setPlaylists((current) => [playlist, ...current]);
       setNewPlaylistTitle("");
     } catch (reason) {
@@ -176,14 +195,14 @@ export default function MusicLibraryPage() {
   }
 
   async function togglePlaylistVisibility(playlist: MusicPlaylist) {
-    const signer = await ensureWallet();
+    const signer = await ensureListener();
     if (!signer) return;
     const updated = await updateMusicPlaylist(playlist.id, { wallet: signer, is_public: !playlist.is_public });
     setPlaylists((current) => current.map((item) => item.id === updated.id ? updated : item));
   }
 
   async function removePlaylist(playlist: MusicPlaylist) {
-    const signer = await ensureWallet();
+    const signer = await ensureListener();
     if (!signer) return;
     await deleteMusicPlaylist(playlist.id, signer);
     setPlaylists((current) => current.filter((item) => item.id !== playlist.id));
@@ -214,18 +233,24 @@ export default function MusicLibraryPage() {
           <Link className="listening-create" href="/discover">Discover music</Link>
         </section>
 
-        {!connectedWallet && (
+        {!listenerId && (
           <section className="listening-empty">
             <span className="listening-state-icon"><Music2 size={30} aria-hidden="true" /></span>
             <h2>Your music, in one place.</h2>
-            <p>Connect your wallet to find your saved songs and build your own playlists. The signature verifies ownership; it does not spend credits.</p>
-            <button className="listening-create" disabled={wallet.connecting} onClick={() => { setActionError(""); void wallet.connect().catch(reason => setActionError(reason instanceof Error ? reason.message : "Wallet connection failed. Please try again.")); }}>{wallet.connecting ? "Connecting..." : "Connect wallet"}</button>
+            {access.configured ? <>
+              <p>{access.loadingAccount ? "Loading your account…" : access.accountError || "Sign in to find your saved songs and build your own playlists."}</p>
+              <Link className="listening-create" href="/sign-in">Sign in</Link>
+            </> : <>
+              <p>Connect your wallet to find your saved songs and build your own playlists. The signature verifies ownership; it does not spend credits.</p>
+              <button className="listening-create" disabled={wallet.connecting} onClick={() => { setActionError(""); void wallet.connect().catch(reason => setActionError(reason instanceof Error ? reason.message : "Wallet connection failed. Please try again.")); }}>{wallet.connecting ? "Connecting..." : "Connect wallet"}</button>
+            </>}
           </section>
         )}
         {error && <div className="listening-empty" role="alert"><h2>Your library is out of reach.</h2><p>{error}</p><button className="listening-create" onClick={() => setRefreshKey(value => value + 1)}>Try again</button></div>}
         {actionError && <p className="music-alert" role="alert">{actionError}</p>}
+        <MusicAccountNotice message={access.notice} />
 
-        {connectedWallet && !error && (
+        {listenerId && !error && (
           <>
           <form className="listening-search shelf-search" onSubmit={(event) => event.preventDefault()}>
             <Search size={18} aria-hidden="true" />
@@ -236,7 +261,7 @@ export default function MusicLibraryPage() {
                 <ListMusic size={17} /> Play All
               </button>
               <form onSubmit={(event) => { event.preventDefault(); void createPlaylist(); }}>
-                <input value={newPlaylistTitle} onChange={(event) => setNewPlaylistTitle(event.target.value)} aria-label="New playlist name" placeholder="Name a new playlist" />
+                <input value={newPlaylistTitle} maxLength={120} onChange={(event) => setNewPlaylistTitle(event.target.value)} aria-label="New playlist name" placeholder="Name a new playlist" />
                 <button type="submit" disabled={busy || !newPlaylistTitle.trim()} aria-label="Create playlist"><Plus size={18} aria-hidden="true" /><span>Create playlist</span></button>
               </form>
             </section>
@@ -266,6 +291,8 @@ export default function MusicLibraryPage() {
                 </div>
               )}
             </section>
+
+            {savedSongs.length < savedTotal && <button type="button" disabled={loading || loadingMore} onClick={() => void loadMoreSaved()}>{loadingMore ? "Loading songs…" : "Load more saved songs"}</button>}
 
             <section className="discover-rail">
               <div className="listening-section-heading"><h2>Your playlists</h2></div>
@@ -312,7 +339,7 @@ export default function MusicLibraryPage() {
       </main>
       <AddToPlaylistDialog
         publication={target}
-        walletAddress={connectedWallet}
+        walletAddress={wallet.connectedWallet}
         connectWallet={() => wallet.connect().catch(() => null)}
         onClose={() => setTarget(null)}
         onAdded={(playlist) => setPlaylists((current) => current.some((item) => item.id === playlist.id) ? current.map((item) => item.id === playlist.id ? playlist : item) : [playlist, ...current])}
@@ -320,3 +347,5 @@ export default function MusicLibraryPage() {
     </>
   );
 }
+
+export default withMusicIdentity(MusicLibraryPage);

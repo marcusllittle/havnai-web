@@ -9,14 +9,8 @@ import { MusicPublicationCard } from "../../components/MusicPublicationCard";
 import { SiteHeader } from "../../components/SiteHeader";
 import { useMusicPlayer, type PlayerTrack } from "../../components/MusicPlayer";
 import { useWallet } from "../../components/WalletProvider";
+import { useMusicAccess, withMusicIdentity, MusicAccountNotice } from "../../components/MusicAccountAccess";
 import {
-  deleteMusicPlaylist,
-  fetchMusicPlaylist,
-  removeMusicPlaylistItem,
-  reorderMusicPlaylistItems,
-  setMusicPublicationLike,
-  setMusicPublicationSaved,
-  updateMusicPlaylist,
   type MusicPlaylist,
   type MusicPublication,
 } from "../../lib/havnai";
@@ -35,9 +29,12 @@ function toTrack(publication: MusicPublication): PlayerTrack | null {
   };
 }
 
-export default function PlaylistPage() {
+function PlaylistPage() {
   const router = useRouter();
   const wallet = useWallet();
+  const access = useMusicAccess();
+  const { fetchMusicPlaylist, updateMusicPlaylist, deleteMusicPlaylist, removeMusicPlaylistItem,
+    reorderMusicPlaylistItems, setMusicPublicationLike, setMusicPublicationSaved } = access;
   const { currentTrack, isPlaying, playTrack, playQueue, toggle } = useMusicPlayer();
   const [playlist, setPlaylist] = useState<MusicPlaylist | null>(null);
   const [title, setTitle] = useState("");
@@ -49,7 +46,7 @@ export default function PlaylistPage() {
   const [actionError, setActionError] = useState("");
   const [busy, setBusy] = useState(false);
   const actionRef = useRef(false);
-  const connectedWallet = wallet.connectedWallet;
+  const listenerId = access.listenerId;
   const playlistId = typeof router.query.id === "string" ? router.query.id : "";
 
   useEffect(() => {
@@ -57,7 +54,7 @@ export default function PlaylistPage() {
     if (!playlistId) return;
     setLoading(true);
     setError("");
-    fetchMusicPlaylist(playlistId, connectedWallet)
+    fetchMusicPlaylist(playlistId, listenerId)
       .then((result) => {
         if (!active) return;
         setPlaylist(result);
@@ -73,13 +70,12 @@ export default function PlaylistPage() {
     return () => {
       active = false;
     };
-  }, [connectedWallet, playlistId, refreshKey]);
+  }, [listenerId, playlistId, refreshKey, fetchMusicPlaylist]);
 
   const queue = useMemo(() => (playlist?.publications || []).map(toTrack).filter(Boolean) as PlayerTrack[], [playlist]);
 
-  async function ensureWallet(): Promise<string | null> {
-    if (connectedWallet) return connectedWallet;
-    return wallet.connect().catch(() => null);
+  async function ensureListener(): Promise<string | null> {
+    return access.ensureListener();
   }
 
   function playPublication(publication: MusicPublication) {
@@ -101,7 +97,7 @@ export default function PlaylistPage() {
   }
 
   async function likePublication(publication: MusicPublication) {
-    const signer = await ensureWallet();
+    const signer = await ensureListener();
     if (!signer) return;
     const nextLiked = !publication.liked_by_me;
     await updatePublication(publication, { liked_by_me: nextLiked, like_count: Math.max(0, publication.like_count + (nextLiked ? 1 : -1)) });
@@ -114,7 +110,7 @@ export default function PlaylistPage() {
   }
 
   async function savePublication(publication: MusicPublication) {
-    const signer = await ensureWallet();
+    const signer = await ensureListener();
     if (!signer) return;
     const nextSaved = !publication.saved_by_me;
     await updatePublication(publication, { saved_by_me: nextSaved });
@@ -136,7 +132,7 @@ export default function PlaylistPage() {
 
   async function saveDetails() {
     if (!playlist) return;
-    const signer = await ensureWallet();
+    const signer = await ensureListener();
     if (!signer) return;
     const updated = await updateMusicPlaylist(playlist.id, { wallet: signer, title, description });
     setPlaylist(updated);
@@ -144,7 +140,7 @@ export default function PlaylistPage() {
 
   async function togglePublic() {
     if (!playlist) return;
-    const signer = await ensureWallet();
+    const signer = await ensureListener();
     if (!signer) return;
     const updated = await updateMusicPlaylist(playlist.id, { wallet: signer, is_public: !playlist.is_public });
     setPlaylist(updated);
@@ -152,7 +148,7 @@ export default function PlaylistPage() {
 
   async function deletePlaylist() {
     if (!playlist) return;
-    const signer = await ensureWallet();
+    const signer = await ensureListener();
     if (!signer) return;
     await deleteMusicPlaylist(playlist.id, signer);
     await router.push("/music/library");
@@ -160,7 +156,7 @@ export default function PlaylistPage() {
 
   async function removeTrack(publication: MusicPublication) {
     if (!playlist) return;
-    const signer = await ensureWallet();
+    const signer = await ensureListener();
     if (!signer) return;
     setPlaylist(await removeMusicPlaylistItem(playlist.id, publication.id, signer));
   }
@@ -173,7 +169,7 @@ export default function PlaylistPage() {
     if (index < 0 || nextIndex < 0 || nextIndex >= ids.length) return;
     const nextIds = [...ids];
     [nextIds[index], nextIds[nextIndex]] = [nextIds[nextIndex], nextIds[index]];
-    const signer = await ensureWallet();
+    const signer = await ensureListener();
     if (!signer) return;
     setPlaylist(await reorderMusicPlaylistItems(playlist.id, nextIds, signer));
   }
@@ -184,6 +180,7 @@ export default function PlaylistPage() {
         <title>{playlist ? `${playlist.title} | HavnAI` : "Playlist | HavnAI"}</title>
       </Head>
       <SiteHeader />
+      <MusicAccountNotice message={access.notice} />
       <main className="listening-page music-shelf-page music-playlist-page">
         <nav className="shelf-breadcrumbs" aria-label="Music navigation"><Link href="/discover">Discover</Link><span>/</span><Link href="/music/library">Your library</Link></nav>
         {loading ? (
@@ -216,8 +213,8 @@ export default function PlaylistPage() {
 
             {playlist.is_owner && (
               <details className="shelf-editor"><summary>Edit playlist</summary><section className="music-playlist-editor">
-                <input value={title} onChange={(event) => setTitle(event.target.value)} aria-label="Playlist title" />
-                <input value={description} onChange={(event) => setDescription(event.target.value)} aria-label="Playlist description" placeholder="Description" />
+                <input value={title} maxLength={120} onChange={(event) => setTitle(event.target.value)} aria-label="Playlist title" />
+                <input value={description} maxLength={1000} onChange={(event) => setDescription(event.target.value)} aria-label="Playlist description" placeholder="Description" />
                 <button type="button" disabled={busy || !title.trim()} onClick={() => void runAction(saveDetails)}>Save</button>
                 <button type="button" disabled={busy} onClick={() => void runAction(togglePublic)}>{playlist.is_public ? "Make Private" : "Make Public"}</button>
                 <button type="button" disabled={busy} onClick={() => void runAction(deletePlaylist)} aria-label="Delete playlist"><Trash2 size={16} /></button>
@@ -252,10 +249,12 @@ export default function PlaylistPage() {
       </main>
       <AddToPlaylistDialog
         publication={target}
-        walletAddress={connectedWallet}
+        walletAddress={wallet.connectedWallet}
         connectWallet={() => wallet.connect().catch(() => null)}
         onClose={() => setTarget(null)}
       />
     </>
   );
 }
+
+export default withMusicIdentity(PlaylistPage);

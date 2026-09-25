@@ -9,10 +9,8 @@ import { MusicPublicationCard } from "../../components/MusicPublicationCard";
 import { SiteHeader } from "../../components/SiteHeader";
 import { useMusicPlayer, type PlayerTrack } from "../../components/MusicPlayer";
 import { useWallet } from "../../components/WalletProvider";
+import { useMusicAccess, withMusicIdentity, MusicAccountNotice } from "../../components/MusicAccountAccess";
 import {
-  fetchMusicCreator,
-  setMusicPublicationLike,
-  setMusicPublicationSaved,
   type MusicCreatorProfile,
   type MusicPublication,
 } from "../../lib/havnai";
@@ -37,9 +35,11 @@ function toTrack(publication: MusicPublication): PlayerTrack | null {
   };
 }
 
-export default function CreatorPage() {
+function CreatorPage() {
   const router = useRouter();
   const wallet = useWallet();
+  const access = useMusicAccess();
+  const { fetchMusicCreator, setMusicPublicationLike, setMusicPublicationSaved } = access;
   const { currentTrack, isPlaying, playTrack, playQueue, toggle } = useMusicPlayer();
   const [sort, setSort] = useState("newest");
   const [profile, setProfile] = useState<MusicCreatorProfile | null>(null);
@@ -48,14 +48,14 @@ export default function CreatorPage() {
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const creatorWallet = typeof router.query.wallet === "string" ? router.query.wallet : "";
-  const connectedWallet = wallet.connectedWallet;
+  const listenerId = access.listenerId;
 
   useEffect(() => {
     let active = true;
     if (!creatorWallet) return;
     setLoading(true);
     setError("");
-    fetchMusicCreator(creatorWallet, { sort, viewerWallet: connectedWallet })
+    fetchMusicCreator(creatorWallet, { sort, viewerWallet: listenerId })
       .then((result) => {
         if (active) setProfile(result);
       })
@@ -68,13 +68,12 @@ export default function CreatorPage() {
     return () => {
       active = false;
     };
-  }, [connectedWallet, creatorWallet, sort, refreshKey]);
+  }, [listenerId, creatorWallet, sort, refreshKey, fetchMusicCreator]);
 
   const queue = useMemo(() => (profile?.publications || []).map(toTrack).filter(Boolean) as PlayerTrack[], [profile]);
 
-  async function ensureWallet(): Promise<string | null> {
-    if (connectedWallet) return connectedWallet;
-    return wallet.connect().catch(() => null);
+  async function ensureListener(): Promise<string | null> {
+    return access.ensureListener();
   }
 
   function patchPublication(publication: MusicPublication, patch: Partial<MusicPublication>) {
@@ -96,7 +95,7 @@ export default function CreatorPage() {
   }
 
   async function likePublication(publication: MusicPublication) {
-    const signer = await ensureWallet();
+    const signer = await ensureListener();
     if (!signer) return;
     const nextLiked = !publication.liked_by_me;
     patchPublication(publication, { liked_by_me: nextLiked, like_count: Math.max(0, publication.like_count + (nextLiked ? 1 : -1)) });
@@ -109,7 +108,7 @@ export default function CreatorPage() {
   }
 
   async function savePublication(publication: MusicPublication) {
-    const signer = await ensureWallet();
+    const signer = await ensureListener();
     if (!signer) return;
     const nextSaved = !publication.saved_by_me;
     patchPublication(publication, { saved_by_me: nextSaved });
@@ -127,6 +126,7 @@ export default function CreatorPage() {
         <title>{profile ? `${profile.display_name} | HavnAI` : "Creator | HavnAI"}</title>
       </Head>
       <SiteHeader />
+      <MusicAccountNotice message={access.notice} />
       <main className="listening-page music-shelf-page music-creator-page">
         <nav className="shelf-breadcrumbs" aria-label="Music navigation"><Link href="/discover">Discover</Link><span>/</span><Link href="/music/library">Your library</Link></nav>
         {loading ? (
@@ -209,10 +209,12 @@ export default function CreatorPage() {
       </main>
       <AddToPlaylistDialog
         publication={target}
-        walletAddress={connectedWallet}
+        walletAddress={wallet.connectedWallet}
         connectWallet={() => wallet.connect().catch(() => null)}
         onClose={() => setTarget(null)}
       />
     </>
   );
 }
+
+export default withMusicIdentity(CreatorPage);
