@@ -28,6 +28,7 @@ interface PlayerContextValue {
   hasNext: boolean;
   hasPrevious: boolean;
   toggle: () => void;
+  clear: () => void;
   /** Playback position of the current track, in seconds. */
   currentTime: number;
   /** Duration of the current track, in seconds; 0 until metadata loads. */
@@ -202,14 +203,21 @@ function ScopedMusicPlayer({ children, scope }: { children: React.ReactNode; sco
     setCurrentTime(target);
   }, []);
 
+  const clear = useCallback(() => {
+    audioRef.current?.pause();
+    if (audioRef.current) { audioRef.current.removeAttribute("src"); audioRef.current.load(); }
+    setCurrentTrack(null); setQueue([]); setQueueIndex(0); setPlayerError("");
+    try { window.localStorage.removeItem(STORAGE_KEY); window.localStorage.removeItem(QUEUE_STORAGE_KEY); } catch { /* storage unavailable */ }
+  }, []);
+
   const contextValue = useMemo(
     () => ({
       currentTrack, isPlaying, queue, queueIndex, playTrack, playQueue, next, previous,
-      hasNext, hasPrevious, toggle, currentTime, duration: displayedDuration, seek,
+      hasNext, hasPrevious, toggle, clear, currentTime, duration: displayedDuration, seek,
     }),
     [
       currentTime, currentTrack, displayedDuration, hasNext, hasPrevious, isPlaying, next,
-      playQueue, playTrack, previous, queue, queueIndex, seek, toggle,
+      playQueue, playTrack, previous, queue, queueIndex, seek, toggle, clear,
     ]
   );
 

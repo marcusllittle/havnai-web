@@ -11,7 +11,7 @@ vi.mock("../WalletProvider", () => ({ useWallet: () => ({ activeWallet: "0xfallb
 vi.mock("../SiteHeader", () => ({ SiteHeader: () => null }));
 vi.mock("next/image", () => ({ default: ({ fill, priority, ...props }: any) => <img {...props} /> }));
 vi.mock("../MusicWaveform", () => ({ MusicWaveform: () => null }));
-vi.mock("../MusicPlayer", () => ({ useMusicPlayer: () => ({ currentTrack: null, isPlaying: false, playTrack: vi.fn(), toggle: vi.fn() }) }));
+vi.mock("../MusicPlayer", () => ({ useMusicPlayer: () => ({ currentTrack: null, isPlaying: false, playTrack: vi.fn(), toggle: vi.fn(), clear: vi.fn() }) }));
 vi.mock("../MusicComposer", () => ({ MusicComposer: ({ form, onSubmit, blocker, submitting }: any) =>
   <form onSubmit={onSubmit}><span data-draft>{form.prompt}</span><button disabled={Boolean(blocker || submitting)} type="submit">Create song</button></form> }));
 vi.mock("../../lib/havnai", () => ({ fetchMusicDiscover: vi.fn(), publishMusicJob: state.legacyPublish, unpublishMusicPublication: vi.fn() }));
@@ -65,6 +65,47 @@ it("publishes and unpublishes without signing and uses protected media URLs", as
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!.click());
   await act(async () => button("Unpublish").click());
   expect(state.request).toHaveBeenCalledWith("/v2/music/publications/publication-one", expect.objectContaining({ method: "DELETE" }));
+});
+
+it("confirms deletion, prevents duplicate clicks and does not resurrect a song after remount", async () => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  const original = state.request.getMockImplementation()!;
+  let finish!: () => void;
+  let deleted = false;
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === "/v2/jobs/job-one" && init?.method === "DELETE") {
+      await new Promise<void>(resolve => { finish = resolve; }); deleted = true; return {};
+    }
+    if (deleted && path.startsWith("/v2/jobs?")) return { jobs: [] };
+    return original(path, init);
+  });
+  await act(async () => root.render(<MusicPage />));
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!.click());
+  await act(async () => button("Delete artifact").click());
+  expect(state.request.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(0);
+  confirm.mockReturnValue(true);
+  await act(async () => { button("Delete artifact").click(); button("Delete artifact").click(); });
+  expect(button("Deleting…").disabled).toBe(true);
+  expect(state.request.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("30 days"));
+  await act(async () => finish());
+  expect(host.querySelector('a[href="/api/account-media/artifact-one"]')).toBeNull();
+  await act(async () => root.render(<MusicPage key="reload" />));
+  expect(host.querySelector('a[href="/api/account-media/artifact-one"]')).toBeNull();
+  expect(state.connect).not.toHaveBeenCalled();
+  confirm.mockRestore();
+});
+
+it("keeps the song when deletion fails", async () => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  await act(async () => root.render(<MusicPage />));
+  state.request.mockRejectedValueOnce(new Error("Deletion unavailable"));
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!.click());
+  await act(async () => button("Delete artifact").click());
+  expect(host.textContent).toContain("Deletion unavailable");
+  expect(host.querySelector('a[href="/api/account-media/artifact-one"]')).not.toBeNull();
+  expect(button("Delete artifact").disabled).toBe(false);
+  confirm.mockRestore();
 });
 
 it("unblocks the composer when a resumed request is definitively rejected", async () => {

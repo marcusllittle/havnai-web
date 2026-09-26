@@ -146,7 +146,11 @@ function MusicStudioWorkspace({ accountAuth }: { accountAuth?: { id: string; req
   const [publishError, setPublishError] = useState("");
   const publishInFlight = useRef(false);
   const mountedRef = useRef(false);
-  const { currentTrack, isPlaying, playTrack, toggle, currentTime, duration, seek } = useMusicPlayer();
+  const { currentTrack, isPlaying, playTrack, toggle, clear, currentTime, duration, seek } = useMusicPlayer();
+  const deletedIds = useRef(new Set<string>());
+  const deleteInFlight = useRef(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState("");
   const wallet = useWallet();
   const activeWallet = wallet.activeWallet;
   const connectedWallet = wallet.connectedWallet;
@@ -222,7 +226,9 @@ function MusicStudioWorkspace({ accountAuth }: { accountAuth?: { id: string; req
         fetchMusicCapabilities(studioAccess),
       ])
         .then(([recent, nextCapabilities]) => {
-          setJobs((current) => mergeJobs(current, recent));
+          setJobs((current) => accountAuth
+            ? mergeJobs(current.filter(job => job.id.startsWith("pending-")), recent).filter(job => !deletedIds.current.has(job.id))
+            : mergeJobs(current, recent));
           setCapabilities(nextCapabilities);
         })
         .catch(() => undefined);
@@ -388,6 +394,23 @@ function MusicStudioWorkspace({ accountAuth }: { accountAuth?: { id: string; req
     }
   }
 
+  async function deleteSong(job: MusicJob) {
+    if (!accountAuth || deleteInFlight.current) return;
+    if (!window.confirm("Delete this song and all its takes? It disappears from your studio and public surfaces immediately and stops counting toward active collection quotas. You can recover it for 30 days. Receipts, ledgers, audit records and anchored references are retained. Storage is reclaimed after the recovery window, unless a hold applies. Restoring returns it privately; publishing, listing and playlist placement require a new action.")) return;
+    deleteInFlight.current = true; setDeleting(true); setError("");
+    try {
+      await accountAuth.request(`/v2/jobs/${encodeURIComponent(job.id)}`, { method: "DELETE", signal: controller.current.signal });
+      if (controller.current.signal.aborted) return;
+      deletedIds.current.add(job.id);
+      setJobs(current => current.filter(item => item.id !== job.id));
+      setPublications(current => current.filter(item => item.job_id !== job.id));
+      clear();
+      setOpenMenu(null);
+      setDeleteNotice("Song deleted. You can restore it from Deleted creations for 30 days.");
+    } catch (reason) { if (!controller.current.signal.aborted) setError(friendlyError(reason)); }
+    finally { deleteInFlight.current = false; if (!controller.current.signal.aborted) setDeleting(false); }
+  }
+
   async function cancel(job: MusicJob) {
     try {
       await cancelMusicJob(job.id, studioAccess);
@@ -489,6 +512,8 @@ function MusicStudioWorkspace({ accountAuth }: { accountAuth?: { id: string; req
       <Head><title>Music Studio | HavnAI</title><meta name="description" content="Create original music on the HavnAI network." /></Head>
       <SiteHeader />
       <main className="music-studio-page studio-workspace-music">
+        {deleteNotice && <p role="status">{deleteNotice}</p>}
+        {accountAuth && <Link href="/account/deleted">Deleted creations</Link>}
         <header className="music-studio-heading">
           <div><span><Music2 size={14} aria-hidden="true" /> Music Studio</span><h1>Make a little noise.</h1><p>A feeling, a scene, a sound. Start with what moves you.</p></div>
           <div className="music-runtime-row">
@@ -643,6 +668,7 @@ function MusicStudioWorkspace({ accountAuth }: { accountAuth?: { id: string; req
                         </button>
                         {openMenu === job.id && (
                           <div role="menu" onClick={(event) => event.stopPropagation()}>
+                            {accountAuth && !active && !job.id.startsWith("pending-") && <button type="button" role="menuitem" disabled={deleting} onClick={() => void deleteSong(job)}>{deleting ? "Deleting…" : "Delete artifact"}</button>}
                             {audio ? <a href={audio} target="_blank" rel="noreferrer" role="menuitem">Open audio</a> : <span>{musicStageLabel(job)}</span>}
                             {audio && !active && MUSIC_MODES_NEEDING_SOURCE.size > 0 && (
                               <button
