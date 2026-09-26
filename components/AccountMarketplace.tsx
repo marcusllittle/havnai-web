@@ -21,6 +21,7 @@ function AccountMarketplaceWorkspace({ listJob }: { listJob?: string }) {
   const [listings, setListings] = useState<AccountMarketListing[]>([]); const [receipts, setReceipts] = useState<MarketReceipt[]>([]);
   const [total, setTotal] = useState(0); const [selected, setSelected] = useState<AccountMarketListing | null>(null);
   const [loading, setLoading] = useState(true); const [error, setError] = useState("");
+  const [errorAction, setErrorAction] = useState<"fund_credits" | "reload_marketplace" | "open_collection" | "review_pending_request" | "">("");
   const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
   const [recoveryError, setRecoveryError] = useState("");
   const [pending, setPending] = useState<ReturnType<typeof pendingMarketIntent>>(null);
@@ -43,7 +44,7 @@ function AccountMarketplaceWorkspace({ listJob }: { listJob?: string }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    setListings([]); setReceipts([]); setTotal(0); setSelected(null); setError("");
+    setListings([]); setReceipts([]); setTotal(0); setSelected(null); setError(""); setErrorAction("");
     if (view !== "browse" && !account) { setLoading(false); return () => controller.abort(); }
     setLoading(true);
     const query = new URLSearchParams({ limit: "24", offset: String(page * 24), search, sort });
@@ -66,7 +67,7 @@ function AccountMarketplaceWorkspace({ listJob }: { listJob?: string }) {
   const act = async (kind: "purchase" | "resume" | "delist") => {
     if (!account || !lifetime.current || mutating.current || (kind !== "resume" && !selected)) return;
     const signal = lifetime.current.signal;
-    mutating.current = true; setBusy(true); setError(""); setMessage("");
+    mutating.current = true; setBusy(true); setError(""); setErrorAction(""); setMessage("");
     try {
       if (kind === "delist") {
         await auth.request<void>(`/v2/marketplace/listings/${selected!.id}`, { method: "DELETE", signal });
@@ -78,7 +79,14 @@ function AccountMarketplaceWorkspace({ listJob }: { listJob?: string }) {
       setMessage(kind === "delist" ? "Listing removed from the marketplace." : "Request completed. Your creations and receipts are updated.");
       setSelected(null); setListingDraft(null); setPage(0); setRevision(value => value + 1);
     } catch (reason) {
-      if (!signal.aborted) setError(reason instanceof Error ? reason.message : "Could not complete this request.");
+      if (!signal.aborted) {
+        const code = reason instanceof Error && "code" in reason ? String(reason.code) : "";
+        if (code === "insufficient_credits") setErrorAction("fund_credits");
+        else if (["listing_not_found", "listing_price_changed", "marketplace_artifact_unavailable"].includes(code)) setErrorAction("reload_marketplace");
+        else if (code === "cannot_buy_own_listing") setErrorAction("open_collection");
+        else if (code === "idempotency_conflict") setErrorAction("review_pending_request");
+        setError(reason instanceof Error ? reason.message : "Could not complete this request.");
+      }
     } finally {
       mutating.current = false;
       if (!signal.aborted) {
@@ -88,7 +96,7 @@ function AccountMarketplaceWorkspace({ listJob }: { listJob?: string }) {
       }
     }
   };
-  const changeView = (next: View) => { setView(next); setPage(0); setSelected(null); setMessage(""); };
+  const changeView = (next: View) => { setView(next); setPage(0); setSelected(null); setMessage(""); setErrorAction(""); };
   const needsAccount = view !== "browse" && !account;
   const original = (item: AccountMarketListing) => account && item.owner_account_id === account && item.artifact_id && /^[a-zA-Z0-9_-]{1,128}$/.test(item.artifact_id)
     ? `/api/account-media/${item.artifact_id}` : undefined;
@@ -115,7 +123,10 @@ function AccountMarketplaceWorkspace({ listJob }: { listJob?: string }) {
           <button type="submit">Search</button>
         </form>}
         {message && <p role="status">{message} <Link href="/library">Open Collection</Link></p>}
-        {error && <p role="alert">{error} <button type="button" onClick={() => setRevision(value => value + 1)}>Reload marketplace</button></p>}
+        {error && <p role="alert">{error} {errorAction === "fund_credits" ? <Link href="/pricing">Get credits</Link>
+          : errorAction === "open_collection" ? <Link href="/library">Open Collection</Link>
+          : errorAction === "review_pending_request" ? <button type="button" onClick={refreshPending}>Review saved request</button>
+          : <button type="button" onClick={() => setRevision(value => value + 1)}>Reload marketplace</button>}</p>}
         {needsAccount ? <p>{auth.loading ? "Loading your account..." : <>Sign in to see your listings and receipts. <Link href="/sign-in?redirect_url=%2Fmarketplace">Sign in</Link></>}</p>
           : loading ? <p role="status">Loading marketplace...</p> : !error && total === 0 ? <p>No {view === "receipts" ? "marketplace receipts" : "listings"} to show yet.</p> : null}
         <div className="marketplace-gallery-grid">{listings.map(item => <button type="button" key={item.id} className="marketplace-gallery-card" onClick={() => setSelected(item)}>
