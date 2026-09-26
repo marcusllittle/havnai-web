@@ -5,6 +5,7 @@ import { ArrowUpRight, ChevronDown, Download, FolderOpen, Images, LoaderCircle, 
 import { CollectionPreview } from "../components/CollectionPreview";
 import { SeoHead } from "../components/SeoHead";
 import { useAccount } from "../components/AccountProvider";
+import { DELETE_ARTIFACT_CONFIRMATION } from "../lib/artifactLifecycle";
 import type { AccountStudioAccess } from "../lib/musicStudioApi";
 import type { V1Job } from "../lib/videoStudioApi";
 import { accountJobView } from "../lib/accountImageStudio";
@@ -158,6 +159,8 @@ async function fetchLibraryDetails(
 type CollectionAccount = { id: string; request: AccountStudioAccess["request"] };
 const LibraryPage: React.FC<{ accountAuth?: CollectionAccount }> = ({ accountAuth }) => {
   const accountItems = useRef<LibraryViewItem[]>([]);
+  const deletedIds = useRef(new Set<string>());
+  const [deleteNotice, setDeleteNotice] = useState("");
   const mutation = useRef(false);
   const lifetime = useRef(new AbortController());
   useEffect(() => {
@@ -350,7 +353,8 @@ const LibraryPage: React.FC<{ accountAuth?: CollectionAccount }> = ({ accountAut
           type: job.type === "image_to_video" || /video|animatediff/i.test(job.type || "") ? "video" : "image",
         }, controller.signal, accountJobView(job, accountAuth.id))));
         if (controller.signal.aborted) return;
-        const next = [...new Map([...(accountOffset ? accountItems.current : []), ...page].map(item => [item.entry.job_id, item])).values()];
+        const next = [...new Map([...(accountOffset ? accountItems.current : []), ...page].map(item => [item.entry.job_id, item])).values()]
+          .filter(item => !deletedIds.current.has(item.entry.job_id));
         accountItems.current = next;
         setItems(next); setEntries(next.map(item => item.entry));
         setAccountTotal(response.total); setHasMore(accountOffset + response.jobs.length < response.total);
@@ -358,6 +362,29 @@ const LibraryPage: React.FC<{ accountAuth?: CollectionAccount }> = ({ accountAut
       .finally(() => { if (!controller.signal.aborted) { setLoading(false); setSyncing(false); } });
     return () => controller.abort();
   }, [accountAuth?.id, accountAuth?.request, accountQuery, accountOffset]);
+
+  const deleteArtifact = async (jobId: string) => {
+    if (!accountAuth || mutation.current || !window.confirm(DELETE_ARTIFACT_CONFIRMATION)) return;
+    mutation.current = true; setCollectionBusy(true); setConnectionError("");
+    const signal = lifetime.current.signal;
+    try {
+      await accountAuth.request(`/v2/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE", signal });
+      signal.throwIfAborted();
+      deletedIds.current.add(jobId);
+      accountItems.current = accountItems.current.filter(item => item.entry.job_id !== jobId);
+      setItems(current => current.filter(item => item.entry.job_id !== jobId));
+      setEntries(current => current.filter(item => item.job_id !== jobId));
+      setDrawerOpen(false); setDrawerJob(null); setDrawerResult(null); setDrawerSummary(null);
+      setSelectedIds(current => { const next = new Set(current); next.delete(jobId); return next; });
+      setDeleteNotice("Creation deleted. You can recover it from Deleted creations for 30 days.");
+      setRefreshRevision(value => value + 1);
+    } catch (reason) {
+      if (!signal.aborted) {
+        const message = reason instanceof Error ? reason.message : "Could not delete this creation.";
+        setConnectionError(message); setDrawerError(message);
+      }
+    } finally { mutation.current = false; if (!signal.aborted) setCollectionBusy(false); }
+  };
 
   const changeAccountCollection = async (ids: string[], hidden: boolean) => {
     if (!accountAuth) return;
@@ -524,6 +551,8 @@ const LibraryPage: React.FC<{ accountAuth?: CollectionAccount }> = ({ accountAut
           </div>
         </header>
         <div className="collection-context">
+          {deleteNotice && <p role="status">{deleteNotice}</p>}
+          {accountAuth && <Link href="/account/deleted">Deleted creations</Link>}
           {accountAuth ? <Link href="/account">Your account</Link> : <details className="collection-account">
             <summary><Wallet size={14} aria-hidden="true" />{walletSourceLabel}<ChevronDown size={14} aria-hidden="true" /></summary>
           <div className="wallet-status-card wallet-status-card-inline">
@@ -719,6 +748,7 @@ const LibraryPage: React.FC<{ accountAuth?: CollectionAccount }> = ({ accountAut
                             {item.available && !accountAuth && <button type="button" onClick={() => openSellForm(item)}>List for sale</button>}
                             {item.available && accountAuth && item.job?.task_type === "IMAGE_GEN" && item.statusClass === "ready" && <Link href={`/marketplace?listJob=${encodeURIComponent(item.entry.job_id)}`}>List for sale</Link>}
                             <button type="button" disabled={collectionBusy} onClick={() => handleRemove(item.entry.job_id)}>Remove from collection</button>
+                            {accountAuth && ["ready", "failed"].includes(item.statusClass) && <button type="button" disabled={collectionBusy} onClick={() => void deleteArtifact(item.entry.job_id)}>Delete artifact</button>}
                           </div>
                         </details>
                       </div>}
@@ -742,6 +772,8 @@ const LibraryPage: React.FC<{ accountAuth?: CollectionAccount }> = ({ accountAut
         error={drawerError}
         accountId={accountAuth?.id}
         onCollectionChange={accountAuth ? changeAccountCollection : undefined}
+        onDeleteArtifact={accountAuth ? deleteArtifact : undefined}
+        deletingArtifact={collectionBusy}
         marketplace={accountAuth ? undefined : {
           wallet: wallet.activeWallet,
           canSign: Boolean(wallet.connectedWallet),

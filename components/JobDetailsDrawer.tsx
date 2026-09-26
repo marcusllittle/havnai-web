@@ -49,6 +49,8 @@ interface JobDetailsDrawerProps {
   error?: string;
   accountId?: string;
   onCollectionChange?: (ids: string[], hidden: boolean) => Promise<void>;
+  onDeleteArtifact?: (jobId: string) => Promise<void>;
+  deletingArtifact?: boolean;
   marketplace?: {
     wallet?: string | null;
     canSign?: boolean;
@@ -173,6 +175,8 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
   marketplace,
   accountId,
   onCollectionChange,
+  onDeleteArtifact,
+  deletingArtifact,
   onClose,
 }) => {
   const resolvedId = job?.id || summary?.job_id || summary?.id || jobId;
@@ -614,6 +618,7 @@ export const JobDetailsDrawer: React.FC<JobDetailsDrawerProps> = ({
                 </button>
               )}
               {accountId && resolvedId && normalized.pill === "Ready" && job?.task_type === "IMAGE_GEN" && previewImage && <a className="job-action-button secondary" href={`/marketplace?listJob=${encodeURIComponent(resolvedId)}`}>Publish to Marketplace</a>}
+              {accountId && resolvedId && onDeleteArtifact && (normalized.pill === "Ready" || normalized.isFailed) && <button type="button" className="job-action-button secondary" disabled={deletingArtifact} onClick={() => void onDeleteArtifact(resolvedId)}>{deletingArtifact ? "Deleting…" : "Delete artifact"}</button>}
             </div>
             {actionNotice && <p className="result-action-notice" role="status">{actionNotice}</p>}
             {loading && <p className="job-hint">Loading job details...</p>}

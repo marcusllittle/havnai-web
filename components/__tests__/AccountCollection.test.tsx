@@ -102,3 +102,30 @@ it("retains work after rejected removal and persists successful removal across r
   expect(host.querySelector('img[src="/api/account-media/art-0"]')).toBeNull();
   expect(host.querySelectorAll(".library-card")).toHaveLength(50);
 });
+
+it("keeps deletion separate from hiding and removes deleted creations across refresh", async () => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  const original = state.request.getMockImplementation()!;
+  let finish!: () => void;
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === "/v2/jobs/job-0" && init?.method === "DELETE") {
+      await new Promise<void>(resolve => { finish = resolve; }); hidden.add("job-0"); return {};
+    }
+    return original(path, init);
+  });
+  await act(async () => root.render(<Collection />));
+  expect(button("Remove from collection")).toBeDefined();
+  await act(async () => button("Delete artifact").click());
+  expect(state.request.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(0);
+  confirm.mockReturnValue(true);
+  await act(async () => { button("Delete artifact").click(); button("Delete artifact").click(); });
+  expect(state.request.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+  expect(button("Delete artifact").disabled).toBe(true);
+  await act(async () => finish());
+  expect(host.querySelector('img[src="/api/account-media/art-0"]')).toBeNull();
+  expect(host.textContent).toContain("30 days");
+  await act(async () => root.render(<Collection key="reload" />));
+  expect(host.querySelector('img[src="/api/account-media/art-0"]')).toBeNull();
+  expect(state.connect).not.toHaveBeenCalled();
+  confirm.mockRestore();
+});

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { SiteHeader } from "../components/SiteHeader";
 import { useAccount } from "../components/AccountProvider";
+import { DELETE_ARTIFACT_CONFIRMATION } from "../lib/artifactLifecycle";
 import { pendingAccountMusicJob, submitAccountMusicJob } from "../lib/accountJobSubmission";
 import { StudioAccessGate } from "../components/StudioAccessGate";
 import { useMusicPlayer } from "../components/MusicPlayer";
@@ -396,7 +397,7 @@ function MusicStudioWorkspace({ accountAuth }: { accountAuth?: { id: string; req
 
   async function deleteSong(job: MusicJob) {
     if (!accountAuth || deleteInFlight.current) return;
-    if (!window.confirm("Delete this song and all its takes? It disappears from your studio and public surfaces immediately and stops counting toward active collection quotas. You can recover it for 30 days. Receipts, ledgers, audit records and anchored references are retained. Storage is reclaimed after the recovery window, unless a hold applies. Restoring returns it privately; publishing, listing and playlist placement require a new action.")) return;
+    if (!window.confirm(DELETE_ARTIFACT_CONFIRMATION)) return;
     deleteInFlight.current = true; setDeleting(true); setError("");
     try {
       await accountAuth.request(`/v2/jobs/${encodeURIComponent(job.id)}`, { method: "DELETE", signal: controller.current.signal });

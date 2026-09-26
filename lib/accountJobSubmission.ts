@@ -44,9 +44,10 @@ export async function submitAccountJob<T extends { id: string; owner_account_id?
     storage.removeItem(storageKey(account, kind));
     return job;
   } catch (reason) {
-    // Only explicit pre-enqueue failures may discard an intent. Unknown failures keep it.
+    // Explicit rejection or confirmed deletion can clear an intent; ambiguous
+    // failures retain the original key so retry cannot charge for a second job.
     const code = reason instanceof Error && "code" in reason ? String(reason.code) : "";
-    if (!access.signal.aborted && ["insufficient_credits", "invalid_payload", "invalid_asset", "asset_not_found",
+    if (!access.signal.aborted && ["generation_deleted", "insufficient_credits", "invalid_payload", "invalid_asset", "asset_not_found",
       "unsupported_type", "unknown_model", "model_task_mismatch", "invalid_duration", "invalid_bpm", "invalid_seed",
       "source_audio_required", "source_image_required", "missing_prompt", "invalid_job_type", "feature_disabled",
       "owned_image_asset_required", "invalid_face_conditioning", "invalid_image_strength",
