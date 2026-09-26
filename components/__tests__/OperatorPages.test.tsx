@@ -19,7 +19,7 @@ vi.mock("../../lib/node-reward-claims", () => ({ claimNodeRewardOnSepolia: vi.fn
 vi.mock("../../lib/receipt-anchors", () => ({ anchorReceiptBatchOnSepolia: vi.fn(), verifyPendingReceiptBatchAnchor: vi.fn() }));
 const walletA = `0x${"1".repeat(40)}`; const walletB = `0x${"2".repeat(40)}`; const rootHash = `0x${"a".repeat(64)}`;
 const claim = { batch_id: 8, leaf_index: 0, wallet: walletA, amount_hai: "12.5", payout_count: 10, node_ids: ["north"], valid: true, claimed: false, batch_status: "published", minimum_confirmations: 2 } as api.NodeRewardClaim;
-const release = { tag_name: "desktop-1.2", assets: [{ name: "havnai-setup.exe", size: 12000000, browser_download_url: "https://example.test/havnai.exe" }, { name: "havnai-aarch64.dmg", size: 15000000, browser_download_url: "https://example.test/havnai.dmg" }] };
+const release = { tag_name: "desktop-v1.2", assets: [{ name: "havnai-setup.exe", size: 12000000, browser_download_url: "https://example.test/havnai.exe" }, { name: "havnai-aarch64.dmg", size: 15000000, browser_download_url: "https://example.test/havnai.dmg" }] };
 
 describe("Operator setup and ledgers", () => {
   let container: HTMLDivElement; let root: Root; let copy: ReturnType<typeof vi.fn>;
@@ -30,7 +30,7 @@ describe("Operator setup and ledgers", () => {
     wallet.activeWallet = null; wallet.connectedWallet = null; wallet.source = "none";
     copy = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { userAgent: "iPhone", clipboard: { writeText: copy } });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => release }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [release] }));
     vi.mocked(api.fetchNodeRewardBatches).mockResolvedValue({ batches: [], unbatched_payout_count: 0, treasury_wallet: walletB, minimum_confirmations: 2 } as api.NodeRewardBatchesResponse);
     vi.mocked(api.fetchNodeRewardClaims).mockResolvedValue({ claims: [] } as unknown as api.NodeRewardClaimsResponse);
     vi.mocked(api.fetchAstraReceiptBatches).mockResolvedValue({ batches: [], unbatched_receipt_count: 0, treasury_wallet: walletB, minimum_confirmations: 2 } as api.AstraReceiptBatchesResponse);
@@ -41,7 +41,8 @@ describe("Operator setup and ledgers", () => {
   it("offers release assets and makes Windows installation requirements visible", async () => {
     await render(<NodeAppDownload />);
     expect(container.querySelectorAll(".setup-downloads a")).toHaveLength(2);
-    expect(container.textContent).toContain("automated installation requires WSL2");
+    expect(container.textContent).toContain("the app installs the node natively");
+    expect(container.textContent).toContain("Version 1.2");
     expect(container.querySelector<HTMLAnchorElement>('.setup-downloads a')?.href).toBe("https://example.test/havnai.exe");
     expect(container.querySelector(".is-recommended")).toBeNull();
   });

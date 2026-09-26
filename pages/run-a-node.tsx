@@ -36,7 +36,7 @@ const setupSteps = [
 const faqs = [
   {
     q: "What hardware do I need to run a JoinHavn node?",
-    a: "A 64-bit Linux or macOS machine with Python 3.10+, stable internet, and ideally an NVIDIA GPU with at least 12 GB VRAM. On Windows, use WSL2 for installation. CPU-only nodes can run, but GPU nodes are the practical target for meaningful throughput.",
+    a: "A 64-bit Linux or macOS machine with Python 3.10+, stable internet, and ideally an NVIDIA GPU with at least 12 GB VRAM. On Windows, use the desktop app, or WSL2 for the terminal installer. CPU-only nodes can run, but GPU nodes are the practical target for meaningful throughput.",
   },
   {
     q: "Can I run video jobs too?",
@@ -160,7 +160,7 @@ const RunANodePage: NextPage = () => {
           <div className="network-section-heading"><h2 id="requirements-title">Check your machine</h2><span>Use the preflight check to confirm workload readiness.</span></div>
           <div className="setup-requirement-grid">
             <article><span>01 / Compute</span><h3>12 GB+ GPU memory</h3><p>NVIDIA GPU recommended for image jobs. Plan for 16 GB+ VRAM for video workloads.</p></article>
-            <article><span>02 / Runtime</span><h3>Linux or macOS</h3><p>64-bit system, Python 3.10+, and stable internet. Windows installation requires WSL2.</p></article>
+            <article><span>02 / Runtime</span><h3>Linux or macOS</h3><p>64-bit system, Python 3.10+, and stable internet. On Windows, use the desktop app.</p></article>
             <article><span>03 / Storage</span><h3>Room for your models</h3><p>25 GB free minimum. Allow 150 GB+ when serving many models; checkpoints are several GB each.</p></article>
           </div>
           <p className="network-caption">Use an EVM-compatible wallet address for Public Alpha operator attribution.</p>
