@@ -30,11 +30,15 @@ describe("Site navigation", () => {
     const links = Array.from(container.querySelectorAll("nav a"));
     expect(links.map(link => link.textContent)).toEqual([
       "Astra", "Create", "Music", "Discover", "Library", "Video", "Collection",
-      "Marketplace", "Network", "Credits", "Run a Node", "Wallet", "How it works",
+      "Marketplace", "Network", "Credits", "Support", "Run a Node", "Wallet", "How it works",
     ]);
-    expect(new Set(links.map(link => link.getAttribute("href"))).size).toBe(13);
+    expect(new Set(links.map(link => link.getAttribute("href"))).size).toBe(14);
     expect(container.querySelector("nav button")).toBeNull();
     expect(container.querySelector('a[href="/templates"]')).toBeNull();
     expect(container.querySelectorAll("button")).toHaveLength(1);
+    expect(links.map(link => link.getAttribute("href"))).toEqual([
+      "/astra", "/create", "/music", "/discover", "/music/library", "/video-studio", "/library",
+      "/marketplace", "/nodes", "/pricing", "/support", "/run-a-node", "/wallet", "/how-it-works",
+    ]);
   });
 });

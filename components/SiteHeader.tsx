@@ -14,6 +14,7 @@ const NAV = [
   { href: "/marketplace", label: "Marketplace" },
   { href: "/nodes", label: "Network" },
   { href: "/pricing", label: "Credits" },
+  { href: "/support", label: "Support" },
   { href: "/run-a-node", label: "Run a Node" },
   { href: "/wallet", label: "Wallet" },
   { href: "/how-it-works", label: "How it works" },
