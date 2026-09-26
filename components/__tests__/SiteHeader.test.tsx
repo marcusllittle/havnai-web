@@ -30,16 +30,16 @@ describe("Site navigation", () => {
     const links = Array.from(container.querySelectorAll("nav a"));
     expect(links.map(link => link.textContent)).toEqual([
       "Image", "Video", "Music", "Discover", "Astra", "Marketplace", "Network overview",
-      "Run a Node", "How it works", "Your account", "Library", "Collection", "Deleted creations", "Wallet", "Credits",
+      "Run a Node", "How it works", "Your account", "Library", "Collection", "Deleted creations", "Wallet", "Credits", "Support",
     ]);
-    expect(new Set(links.map(link => link.getAttribute("href"))).size).toBe(15);
+    expect(new Set(links.map(link => link.getAttribute("href"))).size).toBe(16);
     expect(container.querySelector("nav button")).toBeNull();
     expect(container.querySelector('a[href="/templates"]')).toBeNull();
     expect(container.querySelectorAll("button")).toHaveLength(1);
     expect(Array.from(container.querySelectorAll("summary")).map(item => item.textContent)).toEqual(["Create", "Network", "Your Havn"]);
     expect(links.map(link => link.getAttribute("href"))).toEqual([
       "/create", "/video-studio", "/music", "/discover", "/astra", "/marketplace", "/nodes",
-      "/run-a-node", "/how-it-works", "/account", "/music/library", "/library", "/account/deleted", "/wallet", "/pricing",
+      "/run-a-node", "/how-it-works", "/account", "/music/library", "/library", "/account/deleted", "/wallet", "/pricing", "/support",
     ]);
   });
 

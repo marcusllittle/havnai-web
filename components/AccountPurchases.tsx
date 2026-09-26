@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { useAccount } from "./AccountProvider";
 import { publicPolicyUrl } from "../lib/accountCheckout";
 
@@ -89,6 +90,7 @@ export function AccountPurchases() {
           </p>)}
         </> : <p>A receipt will appear here once payment is confirmed.</p>}
       </>}
+      <p><Link href="/support#payment-help">Get help with this purchase</Link></p>
     </div>}
   </section>;
 }

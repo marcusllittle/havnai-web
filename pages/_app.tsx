@@ -23,6 +23,7 @@ import "../styles/product.css";
 import "../styles/guides.css";
 import "../styles/templates.css";
 import "../styles/results.css";
+import "../styles/policies.css";
 
 interface ErrorBoundaryState {
   hasError: boolean;

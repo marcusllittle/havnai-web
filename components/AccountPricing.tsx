@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import { useAccount } from "./AccountProvider";
 import { SiteHeader } from "./SiteHeader";
 import { SeoHead } from "./SeoHead";
+import { CommercialFooter } from "./CommercialFooter";
 import { checkoutFinished, parseCreditCatalog, publicPolicyUrl, readCheckoutAttempt, startAccountCheckout,
   type AccountCreditCatalog, type AccountCreditPackage, type CheckoutAttempt } from "../lib/accountCheckout";
 
@@ -98,5 +99,5 @@ export function AccountPricing() {
         <button disabled={Boolean(buying)} onClick={() => setRevision(value => value + 1)}>Reload prices</button></div></div>}
       <section className="account-panel"><h2>How credits work</h2><p>Generation costs depend on the model and settings. Credits are reserved when a job starts, charged when it succeeds, and released if it fails or is cancelled.</p>
         <p>Your account keeps the purchase receipt and any payment adjustments. Browsing public work is free.</p></section>
-    </main><footer className="account-footer"><Link href="/account">Account and receipts</Link><Link href="/how-it-works">How HavnAI works</Link><Link href="/wallet">Optional wallet features</Link></footer></>;
+    </main><CommercialFooter className="account-footer" /></>;
 }

@@ -88,3 +88,12 @@ This overrides the API for that process without replacing the saved coordinator
 URL. Visit `http://localhost:3100/sign-up` and complete email/social verification.
 The website account is separate from the Clerk dashboard operator login.
 Checkout is deliberately unavailable in this preview; it cannot charge a card.
+
+## Commercial policy release
+
+Public credit terms, refund and support routes are implemented on this branch;
+see [HAVN-32 release evidence](credit-policy-release.md) for browser/build checks,
+the proposed wording, exact required coordinator policy URLs, and the outstanding
+owner approval/deployment/configuration gates. Local sandbox purchases keep their
+original development-policy URLs. Public footer links do not enable checkout or
+replace the policy revision quoted by the coordinator.

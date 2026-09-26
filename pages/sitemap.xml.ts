@@ -1,5 +1,6 @@
 import type { GetServerSideProps } from "next";
 import { absoluteUrl } from "../lib/seo";
+import { CREDIT_REFUND_PATH, CREDIT_TERMS_PATH } from "../lib/creditPolicies";
 
 const routes = [
   "/",
@@ -13,6 +14,9 @@ const routes = [
   "/marketplace",
   "/pricing",
   "/nodes",
+  CREDIT_TERMS_PATH,
+  CREDIT_REFUND_PATH,
+  "/support",
 ];
 
 function buildSitemapXml() {

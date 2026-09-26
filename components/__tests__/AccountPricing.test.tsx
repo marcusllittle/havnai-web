@@ -12,7 +12,7 @@ import { AccountPricing } from "../AccountPricing";
 
 const catalog = { packages: [{ id: "starter", name: "Starter", units: 50_000, price_cents: 500 }], currency: "usd", scale: 1000,
   checkout_available: true, terms_version: "terms-v1", catalog_version: "quote-v1",
-  terms_url: "https://joinhavn.io/terms/v1", refund_url: "https://joinhavn.io/refunds/v1" };
+  terms_url: "https://joinhavn.io/terms/credits-v1", refund_url: "https://joinhavn.io/refunds/credits-v1" };
 
 describe("Account pricing", () => {
   let root: Root;
@@ -33,7 +33,8 @@ describe("Account pricing", () => {
     await render();
     expect(container.textContent).toContain("$5.00");
     expect(buyButton().disabled).toBe(true);
-    expect(container.querySelector('a[href="https://joinhavn.io/terms/v1"]')).not.toBeNull();
+    expect(container.querySelector('a[href="https://joinhavn.io/terms/credits-v1"]')).not.toBeNull();
+    expect(container.querySelector('a[href="https://joinhavn.io/refunds/credits-v1"]')).not.toBeNull();
     state.request.mockResolvedValueOnce({ purchase_id: "pur_1", state: "paid", checkout_url: null });
     await act(async () => container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
     await act(async () => buyButton().click());
@@ -68,5 +69,18 @@ describe("Account pricing", () => {
     expect(container.textContent).toContain("Card checkout is not available yet");
     expect(buyButton().disabled).toBe(true);
     expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(container.querySelector('footer a[href="/terms/credits-v1"]')).not.toBeNull();
+    expect(container.querySelector('footer a[href="/refunds/credits-v1"]')).not.toBeNull();
+    expect(container.querySelector('footer a[href="/support"]')).not.toBeNull();
+  });
+
+  it.each([null, "javascript:alert(1)", "https://user:password@joinhavn.io/terms"])("does not use public footer policies to repair an invalid checkout quote (%s)", async termsUrl => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ ...catalog, terms_url: termsUrl })));
+    await render();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Pricing is temporarily unavailable");
+    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(buyButton()).toBeUndefined();
+    expect(container.querySelector('footer a[href="/terms/credits-v1"]')).not.toBeNull();
+    expect(state.request).not.toHaveBeenCalled();
   });
 });

@@ -44,6 +44,28 @@ describe("Account purchase receipts", () => {
     history.replaceState(null, "", "/");
   });
 
+  it("keeps the receipt's accepted policy links when newer public policies exist", async () => {
+    await render();
+    account.request.mockResolvedValueOnce({ purchase_id: "pur_alice", state: "paid", scale: 1000,
+      receipt: { id: 1, price_cents: 500, currency: "usd", units: 50_000, terms_version: "older-terms",
+        terms_url: "https://joinhavn.io/terms/older-terms", refund_url: "https://joinhavn.io/refunds/older-terms", created_at: 1 }, adjustments: [] });
+    await act(async () => [...container.querySelectorAll("button")].find(item => item.textContent === "View receipt")!.click());
+    const details = container.querySelector('[aria-label="Purchase details"]')!;
+    expect(details.querySelector('a[href="https://joinhavn.io/terms/older-terms"]')).not.toBeNull();
+    expect(details.querySelector('a[href="https://joinhavn.io/refunds/older-terms"]')).not.toBeNull();
+    expect(details.querySelector('a[href="/terms/credits-v1"]')).toBeNull();
+    expect(details.querySelector('a[href="/support#payment-help"]')).not.toBeNull();
+  });
+
+  it("offers support without inventing policy acceptance for old receipts", async () => {
+    await render();
+    account.request.mockResolvedValueOnce({ purchase_id: "pur_alice", state: "paid", scale: 1000,
+      receipt: { id: 1, price_cents: 500, currency: "usd", units: 50_000, terms_version: "older-terms", created_at: 1 }, adjustments: [] });
+    await act(async () => [...container.querySelectorAll("button")].find(item => item.textContent === "View receipt")!.click());
+    const links = container.querySelectorAll('[aria-label="Purchase details"] a');
+    expect([...links].map(link => link.getAttribute("href"))).toEqual(["/support#payment-help"]);
+  });
+
   it("aborts old requests and clears purchases when the account key changes", async () => {
     let resolveAlice!: (value: typeof list) => void;
     account.request.mockImplementationOnce(() => new Promise(resolve => { resolveAlice = resolve; }));

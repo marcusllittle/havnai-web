@@ -9,7 +9,7 @@ import { AccountSessionButton } from "./AccountSessionButton";
 const GROUPS = {
   Create: [{ href: "/create", label: "Image" }, { href: "/video-studio", label: "Video" }, { href: "/music", label: "Music" }],
   Network: [{ href: "/nodes", label: "Network overview" }, { href: "/run-a-node", label: "Run a Node" }, { href: "/how-it-works", label: "How it works" }],
-  "Your Havn": [{ href: "/account", label: "Your account" }, { href: "/music/library", label: "Library" }, { href: "/library", label: "Collection" }, { href: "/account/deleted", label: "Deleted creations" }, { href: "/wallet", label: "Wallet" }, { href: "/pricing", label: "Credits" }],
+  "Your Havn": [{ href: "/account", label: "Your account" }, { href: "/music/library", label: "Library" }, { href: "/library", label: "Collection" }, { href: "/account/deleted", label: "Deleted creations" }, { href: "/wallet", label: "Wallet" }, { href: "/pricing", label: "Credits" }, { href: "/support", label: "Support" }],
 };
 
 function isActive(pathname: string, href: string): boolean {

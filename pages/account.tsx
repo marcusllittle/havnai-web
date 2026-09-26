@@ -6,6 +6,7 @@ import { useAccount } from "../components/AccountProvider";
 import { AccountPurchases } from "../components/AccountPurchases";
 import { AccountWallets } from "../components/AccountWallets";
 import { AccountImportReceipts } from "../components/AccountImportReceipts";
+import { CommercialFooter } from "../components/CommercialFooter";
 
 interface CreditBalance {
   scale: number;
@@ -55,5 +56,5 @@ export default function AccountPage() {
           <AccountWallets key={account.id} />
           <AccountImportReceipts key={account.id} />
         </>}
-    </main></>;
+    </main><CommercialFooter className="account-footer" /></>;
 }
