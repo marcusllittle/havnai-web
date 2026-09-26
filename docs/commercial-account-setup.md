@@ -115,9 +115,13 @@ No subscription upgrade or feature removal was performed.
 The configuration check found MFA disabled, multi-session disabled, a seven-day
 maximum session lifetime, and Clerk branding enabled. Google's email-subaddress
 blocking is enabled, but Clerk's published pricing lists that capability as
-included. The CLI error does not identify an offending feature; do not infer
-one or weaken authentication to work around this message. The dashboard's
-detailed production/plan message is needed to resolve the mismatch.
+included. The operator's dashboard subsequently identified **Biometric sign-in**
+as the enabled paid feature. This is native mobile biometric authentication,
+separate from passkeys (`used_for_sign_in` is already false). The CLI config
+schema does not expose the biometric toggle. The operator was directed to
+Configure → User & Authentication → Biometric to disable **Sign-in with mobile
+biometrics** and save. That change and a successful production creation retry
+have not yet been verified. Email/password and Google settings remain unchanged.
 
 After resolving that provider rejection, production still needs its domain/DNS,
 Google OAuth credentials, production-only keys, matching coordinator issuer and
