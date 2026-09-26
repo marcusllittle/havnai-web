@@ -8,6 +8,7 @@ import { StudioAccessGate } from "../components/StudioAccessGate";
 import { useAccount } from "../components/AccountProvider";
 import type { AccountStudioAccess, StudioAccess } from "../lib/musicStudioApi";
 import { pendingAccountJob, submitAccountJob } from "../lib/accountJobSubmission";
+import { DELETE_ARTIFACT_CONFIRMATION } from "../lib/artifactLifecycle";
 import {
   cancelV1Job,
   createVideoJob,
@@ -77,6 +78,9 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
   const [checkingAccess, setCheckingAccess] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const operationRef = useRef(false);
+  const deletedJobs = useRef(new Set<string>());
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState("");
   const lifetime = useRef(new AbortController());
   const [pendingSubmission, setPendingSubmission] = useState(false);
   const activeJobStorageKey = accountId ? `${legacyJobStorageKey}:${accountId}` : legacyJobStorageKey;
@@ -109,6 +113,7 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
     pollRef.current = setTimeout(() => {
       fetchV1Job(job.id, access)
         .then((next) => {
+          if (lifetime.current.signal.aborted || deletedJobs.current.has(next.id)) return;
           setJob(next);
           setRecentJobs((current) => mergeJobs(current, next));
         })
@@ -122,7 +127,9 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
   useEffect(() => {
     if (!studioUnlocked || (!accountId && !studioKey)) return;
     const refresh = () => {
-      void fetchV1Jobs(access).then((jobs) => {
+      void fetchV1Jobs(access).then((result) => {
+        if (lifetime.current.signal.aborted) return;
+        const jobs = result.filter(item => !deletedJobs.current.has(item.id));
         setRecentJobs(jobs);
         setJob((current) => {
           const active = jobs.find((item) => !finalStates.has(item.status));
@@ -291,6 +298,32 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
     }
   }
 
+  async function deleteRender() {
+    if (!request || !accountId || !job || !finalStates.has(job.status) || operationRef.current) return;
+    if (!window.confirm(DELETE_ARTIFACT_CONFIRMATION)) return;
+    const id = job.id;
+    const signal = lifetime.current.signal;
+    operationRef.current = true; setDeleteBusy(true); setBusy(true); setError(""); setDeleteNotice("");
+    try {
+      await request(`/v2/jobs/${encodeURIComponent(id)}`, { method: "DELETE", signal });
+      if (signal.aborted) return;
+      deletedJobs.current.add(id);
+      setRecentJobs(current => current.filter(item => item.id !== id));
+      setJob(current => current?.id === id ? null : current);
+      if (window.localStorage.getItem(activeJobStorageKey) === id) window.localStorage.removeItem(activeJobStorageKey);
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("job") === id) {
+        url.searchParams.delete("job");
+        window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+      setDeleteNotice("Video deleted. You can restore it privately from Deleted creations within 30 days.");
+    } catch {
+      if (!signal.aborted) setError("Could not delete this video. Please try again.");
+    } finally {
+      if (!signal.aborted) { operationRef.current = false; setDeleteBusy(false); setBusy(false); }
+    }
+  }
+
   if (!studioUnlocked) {
     return (
       <>
@@ -374,6 +407,11 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
           </form>
 
           <section className="video-output" aria-live="polite">
+            {accountId && <div className="video-lifecycle-actions">
+              {job && finalStates.has(job.status) && <button className="video-cancel" type="button" disabled={busy} onClick={() => void deleteRender()}>{deleteBusy ? "Deleting…" : "Delete video"}</button>}
+              <Link href="/account/deleted">Deleted creations<ArrowUpRight size={15} aria-hidden="true" /></Link>
+            </div>}
+            {deleteNotice && <p role="status">{deleteNotice}</p>}
             {!job && !sourcePreview ? <div className="studio-video-inspiration"><div><Image src="/create/coastal-light.webp" alt="Sunlit Mediterranean coast" fill sizes="(max-width: 760px) 100vw, 700px" /><span>AI-made inspiration · still image</span></div><h2>Every scene starts somewhere.</h2><p>Choose your starting frame and describe the motion. Your clip will appear here.</p></div> : <div className={`video-frame aspect-${frameAspect.replace(":", "-")}`}>
               {output ? <video src={output} controls playsInline /> : sourcePreview ? <img src={sourcePreview} alt="Video source" /> : <div className="video-empty">No active render</div>}
             </div>}

@@ -35,7 +35,51 @@ beforeEach(() => {
   });
   host = document.createElement("div"); document.body.appendChild(host); root = createRoot(host);
 });
-afterEach(() => { act(() => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
+afterEach(() => { act(() => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+it("deletes a finished video once and excludes a stale history response", async () => {
+  window.history.replaceState({}, "", "/video-studio?job=video-one");
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  let refresh: (() => void) | undefined;
+  vi.spyOn(window, "setInterval").mockImplementation(((callback: () => void) => { refresh = callback; return 123; }) as typeof window.setInterval);
+  const normal = state.request.getMockImplementation()!;
+  let finishDelete!: (value: unknown) => void;
+  let finishHistory!: (value: unknown) => void;
+  let stale = false;
+  state.request.mockImplementation((path, init) => {
+    if (init?.method === "DELETE") return new Promise(resolve => { finishDelete = resolve; });
+    if (path.startsWith("/v2/jobs?") && stale) return new Promise(resolve => { finishHistory = resolve; });
+    return normal(path, init);
+  });
+  await act(async () => root.render(<VideoPage />));
+  stale = true;
+  await act(async () => refresh?.());
+  await act(async () => { button("Delete video").click(); button("Delete video")?.click(); });
+  expect(state.request.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+  await act(async () => finishDelete({}));
+  await act(async () => finishHistory({ jobs: [job] }));
+  expect(host.querySelector("video")).toBeNull();
+  expect(host.textContent).toContain("Video deleted.");
+  expect(host.querySelector('.video-job-row')).toBeNull();
+  expect(localStorage.getItem("havnai_video_studio_job_id:alice")).toBeNull();
+  expect(window.location.search).not.toContain("job=");
+  expect(host.querySelector('a[href="/account/deleted"]')).not.toBeNull();
+});
+
+it("keeps a video when deletion is cancelled or fails, and allows retry", async () => {
+  window.history.replaceState({}, "", "/video-studio?job=video-one");
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  const normal = state.request.getMockImplementation()!;
+  state.request.mockImplementation((path, init) => init?.method === "DELETE" ? Promise.reject(new Error("unavailable")) : normal(path, init));
+  await act(async () => root.render(<VideoPage />));
+  await act(async () => button("Delete video").click());
+  expect(state.request.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+  confirm.mockReturnValue(true);
+  await act(async () => button("Delete video").click());
+  expect(host.querySelector("video")).not.toBeNull();
+  expect(host.textContent).toContain("Could not delete this video.");
+  expect(button("Delete video").disabled).toBe(false);
+});
 
 it("submits one account-owned clip without reading the legacy studio key or render", async () => {
   await act(async () => root.render(<StrictMode><VideoPage /></StrictMode>));
