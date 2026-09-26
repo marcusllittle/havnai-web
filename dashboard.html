@@ -601,16 +601,6 @@
           try {
             const jobRes = await fetch(`${API_BASE}/jobs/${encodeURIComponent(summary.job_id)}`);
             const job = jobRes.ok ? await jobRes.json() : null;
-            let result = null;
-            try {
-              const resultRes = await fetch(`${API_BASE}/result/${encodeURIComponent(summary.job_id)}`);
-              if (resultRes.ok) {
-                result = await resultRes.json();
-              }
-            } catch {
-              result = null;
-            }
-
             const jobData = parseJobData(job && job.data);
             const promptText = truncateText(jobData.prompt, 500) || "--";
             const negativeText = truncateText(jobData.negative_prompt, 500) || "--";
@@ -656,8 +646,6 @@
             `;
             drawerRaw.textContent = JSON.stringify(job?.data || summary, null, 2);
 
-            const outputImage = resolveAssetUrl(result?.image_url || summary.image_url);
-            const outputVideo = resolveAssetUrl(result?.video_url || summary.video_url);
             drawerState.downloadUrl = "";
             drawerDownload.disabled = true;
 
@@ -675,11 +663,6 @@
               params,
               prompt: promptText,
               negative_prompt: negativeText,
-              output_urls: {
-                image_url: outputImage,
-                video_url: outputVideo,
-              },
-              preview_url: outputImage || outputVideo,
               error_message: jobData.error_message || jobData.error || jobData.failure_reason || undefined,
             };
 
@@ -750,12 +733,10 @@
                     typeof completedRaw === "number" ? completedRaw * 1000 : completedRaw
                   ).toLocaleTimeString()
                 : "—";
-              const imageUrl = job.image_url || job.preview_url || "";
-              const videoUrl = job.video_url || "";
               const preview = `<div class="jobs-preview-tile jobs-preview-withheld">Withheld</div>`;
 
               return `
-                <tr class="jobs-row-clickable" data-job-id="${id}" data-job-model="${model}" data-job-status="${status}" data-job-task="${job.task_type || ""}" data-job-submitted="${job.submitted_at || ""}" data-job-completed="${job.completed_at || ""}" data-job-image="${imageUrl}" data-job-video="${videoUrl}">
+                <tr class="jobs-row-clickable" data-job-id="${id}" data-job-model="${model}" data-job-status="${status}" data-job-task="${job.task_type || ""}" data-job-submitted="${job.submitted_at || ""}" data-job-completed="${job.completed_at || ""}">
                   <td><code>${id}</code></td>
                   <td>${model}</td>
                   <td>${reward}</td>
@@ -929,8 +910,6 @@
             task_type: row.getAttribute("data-job-task") || "",
             submitted_at: row.getAttribute("data-job-submitted") || "",
             completed_at: row.getAttribute("data-job-completed") || "",
-            image_url: row.getAttribute("data-job-image") || "",
-            video_url: row.getAttribute("data-job-video") || "",
           };
           openJobDrawer(summary);
         });
