@@ -4,14 +4,14 @@ import React, { useEffect, useMemo, useState } from "react";
  * Download panel for the HavnAI Node desktop app.
  *
  * Installers are published as GitHub release assets on the public havnai-core
- * repo, so this reads the latest release directly and offers the file matching
- * the visitor's system. Everything degrades: if no release exists yet, or the
+ * repo, so this reads the newest desktop release directly and offers the file
+ * matching the visitor's system. Everything degrades: if no release exists yet, or the
  * API is unreachable, the panel says so and points at the terminal installer
  * rather than showing a dead button.
  */
 
 const RELEASES_API =
-  "https://api.github.com/repos/marcusllittle/havnai-core/releases/latest";
+  "https://api.github.com/repos/marcusllittle/havnai-core/releases?per_page=30";
 const RELEASES_PAGE = "https://github.com/marcusllittle/havnai-core/releases";
 
 export type Platform = "windows" | "macos-arm" | "macos-intel" | "linux-deb" | "linux-appimage";
@@ -20,6 +20,13 @@ type ReleaseAsset = {
   name: string;
   browser_download_url: string;
   size: number;
+};
+
+export type Release = {
+  tag_name?: string;
+  draft?: boolean;
+  prerelease?: boolean;
+  assets?: ReleaseAsset[];
 };
 
 export type DownloadOption = {
@@ -69,6 +76,22 @@ export function toDownloadOptions(assets: ReleaseAsset[]): DownloadOption[] {
   return options.sort((a, b) => order.indexOf(a.platform) - order.indexOf(b.platform));
 }
 
+/**
+ * The newest published desktop release that actually carries installers.
+ *
+ * havnai-core publishes other releases too, and GitHub's "latest" is whichever
+ * came last - so reading it showed an unrelated release with no files and told
+ * visitors there were no desktop installers. GitHub lists newest first.
+ */
+export function pickDesktopRelease(releases: Release[]): Release | null {
+  return releases.find(release =>
+    !release.draft
+    && !release.prerelease
+    && String(release.tag_name ?? "").startsWith("desktop-v")
+    && toDownloadOptions(release.assets ?? []).length > 0,
+  ) ?? null;
+}
+
 /** Best guess at the visitor's system, used only to pick the primary button. */
 export function detectPlatform(userAgent: string): Platform | null {
   const ua = userAgent.toLowerCase();
@@ -103,14 +126,15 @@ export const NodeAppDownload: React.FC = () => {
     setState("loading");
     fetch(RELEASES_API, { signal: controller.signal, headers: { Accept: "application/vnd.github+json" } })
       .then(async response => {
-        if (response.status === 404) return null;
+        if (response.status === 404) return [];
         if (!response.ok) throw new Error("Release lookup failed");
         return response.json();
-      }).then(release => {
+      }).then(releases => {
         if (cancelled) return;
+        const release = pickDesktopRelease(Array.isArray(releases) ? releases : []);
         const parsed = toDownloadOptions(release?.assets ?? []);
         setOptions(parsed);
-        setVersion(String(release?.tag_name ?? "").replace(/^desktop-/, ""));
+        setVersion(String(release?.tag_name ?? "").replace(/^desktop-v?/, ""));
         setState(parsed.length ? "ready" : "empty");
       }).catch(() => { if (!cancelled) setState("unavailable"); })
       .finally(() => window.clearTimeout(timer));
@@ -124,13 +148,13 @@ export const NodeAppDownload: React.FC = () => {
     <p>Set up your wallet, download models, and check what your machine can serve from one control panel.</p>
     {state === "loading" && <p role="status" className="network-empty">Checking desktop releases...</p>}
     {state === "unavailable" && <div className="network-notice" role="alert"><p>Desktop downloads could not be loaded. Try again or check the releases page.</p><button className="network-secondary" onClick={() => setRefreshKey(value => value + 1)}>Retry downloads</button></div>}
-    {state === "empty" && <p className="network-empty">No desktop installers are listed in the latest release. You can use the terminal installer.</p>}
+    {state === "empty" && <p className="network-empty">No desktop installers have been published yet. You can use the terminal installer.</p>}
     {state === "ready" && <>
       <div className="setup-downloads">{sortedOptions.map(option => <a key={option.platform} className={option.platform === detected ? "is-recommended" : undefined} href={option.url}><span>Download for {option.label}</span><small>{humanSize(option.size)}{option.platform === detected ? " / Your system" : ""}</small></a>)}</div>
       {version && <p className="network-caption">Version {version}</p>}
       <details className="network-disclosure"><summary>Opening the desktop app</summary><p>These builds are not yet signed. On macOS, right-click the app and choose Open. On Windows, choose More info, then Run anyway, if you trust the downloaded release.</p></details>
     </>}
-    <p className="network-caption">Windows operators: automated installation requires WSL2. The Windows app does not install the runtime directly.</p>
+    <p className="network-caption">Windows operators: the app installs the node natively. Install Python 3.12 from python.org first, with Add python.exe to PATH checked.</p>
     <a className="setup-release-link" href={RELEASES_PAGE} target="_blank" rel="noreferrer">View releases on GitHub</a>
   </section>;
 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyAsset, detectPlatform, toDownloadOptions } from "../NodeAppDownload";
+import { classifyAsset, detectPlatform, pickDesktopRelease, toDownloadOptions } from "../NodeAppDownload";
 
 // Filenames exactly as Tauri's bundler emits them, so a naming change upstream
 // shows up here rather than as a download button that silently disappears.
@@ -68,5 +68,35 @@ describe("detectPlatform", () => {
   it("does not mistake iOS's Mac OS compatibility text for a desktop", () => {
     expect(detectPlatform("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)")).toBeNull();
     expect(detectPlatform("Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X)")).toBeNull();
+  });
+});
+
+describe("pickDesktopRelease", () => {
+  const installers = RELEASE_ASSETS.slice(0, 2);
+
+  it("skips unrelated releases that GitHub may mark as latest", () => {
+    // The real repo's "latest" was a non-desktop release with no files, which
+    // made the panel report that no installers existed.
+    const picked = pickDesktopRelease([
+      { tag_name: "1.0.0", assets: [] },
+      { tag_name: "desktop-v0.2.0", assets: installers },
+      { tag_name: "desktop-v0.1.0", assets: installers },
+    ]);
+    expect(picked?.tag_name).toBe("desktop-v0.2.0");
+  });
+
+  it("ignores drafts, prereleases and desktop releases without installers", () => {
+    const picked = pickDesktopRelease([
+      { tag_name: "desktop-v0.4.0", draft: true, assets: installers },
+      { tag_name: "desktop-v0.3.0", prerelease: true, assets: installers },
+      { tag_name: "desktop-v0.2.1", assets: [RELEASE_ASSETS[5]] },
+      { tag_name: "desktop-v0.2.0", assets: installers },
+    ]);
+    expect(picked?.tag_name).toBe("desktop-v0.2.0");
+  });
+
+  it("returns null when no desktop release is usable", () => {
+    expect(pickDesktopRelease([])).toBeNull();
+    expect(pickDesktopRelease([{ tag_name: "1.0.0", assets: installers }])).toBeNull();
   });
 });
