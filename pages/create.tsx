@@ -1602,7 +1602,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
           const cost = err?.data?.cost ?? "?";
           setStatusMessage(`Not enough credits for this request. Need ${cost}, available ${bal}.`);
         } else if (code === "invite_required") {
-          setStatusMessage("This generation path currently requires a Public Alpha access code.");
+          setStatusMessage("This coordinator is still running legacy access-code gating. Try again after the launch configuration is refreshed.");
           setInviteOpen(true);
         } else if (code === "rate_limited") {
           const resetLabel = formatResetAt(err?.data?.reset_at);
@@ -2909,11 +2909,11 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                     onResume={id => void handleResumeSequence(id)} onStop={id => void handleStopSequence(id)} />}
                   <p><Link href="/video-studio">Open account Video Studio</Link></p>
                 </section> : <details className="studio-account">
-                  <summary><Wallet size={15} aria-hidden="true" /><span>Access & credits</span><span className="studio-account-balance">{credits?.credits_enabled ? credits.balance.toFixed(1) + " cr" : inviteSaved ? "Code saved" : "Account"}</span><ChevronDown size={15} aria-hidden="true" /></summary>
+                  <summary><Wallet size={15} aria-hidden="true" /><span>Account & credits</span><span className="studio-account-balance">{credits?.credits_enabled ? credits.balance.toFixed(1) + " cr" : inviteSaved ? "Legacy code saved" : "Account"}</span><ChevronDown size={15} aria-hidden="true" /></summary>
                   <div className="studio-account-content">
                 <div className="invite-panel">
                   <div className={`invite-badge${inviteSaved ? " is-ok" : " is-missing"}`}>
-                    {inviteSaved ? "Access code saved" : "No access code added"}
+                    {inviteSaved ? "Legacy access code saved" : "No access code needed"}
                   </div>
                   {quota && (
                     <div className="quota-bars">
@@ -2993,22 +2993,22 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                     className="invite-toggle"
                     onClick={() => setInviteOpen((prev) => !prev)}
                   >
-                    {inviteSaved ? "Edit access code" : "Add access code"}
+                    {inviteSaved ? "Edit legacy code" : "Add legacy code"}
                   </button>
                   <p className="generator-help" style={{ marginTop: "0.75rem" }}>
-                    Add an access code here if your Public Alpha invite included one.
+                    Public launch access uses your account and credits. This field only supports older alpha codes while legacy coordinators are being retired.
                   </p>
                 </div>
                 {inviteOpen && (
                   <div className="invite-form">
                     <label className="generator-label" htmlFor="invite-code">
-                      Public Alpha access code (if provided)
+                      Legacy alpha access code
                     </label>
                     <input
                       id="invite-code"
                       type="text"
                       className="generator-input"
-                      placeholder="Enter your access code"
+                      placeholder="Optional legacy code"
                       value={inviteCode}
                       onChange={(e) => setInviteCodeState(e.target.value)}
                     />
