@@ -93,7 +93,7 @@ Checkout is deliberately unavailable in this preview; it cannot charge a card.
 
 Public credit terms, refund and support routes are implemented on this branch;
 see [HAVN-32 release evidence](credit-policy-release.md) for browser/build checks,
-the proposed wording, exact required coordinator policy URLs, and the outstanding
-owner approval/deployment/configuration gates. Local sandbox purchases keep their
+the approved wording, exact required coordinator policy URLs, and the outstanding
+deployment/configuration gates. Local sandbox purchases keep their
 original development-policy URLs. Public footer links do not enable checkout or
 replace the policy revision quoted by the coordinator.

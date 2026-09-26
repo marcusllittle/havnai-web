@@ -101,3 +101,26 @@ Reference checks used the implementation in `server/account_payments.py` and
 and [dispute lifecycle](https://docs.stripe.com/disputes/how-disputes-work).
 These references establish provider mechanics, not approval of HavnAI's business
 policy or compliance in every jurisdiction.
+
+## Verified deployment boundary
+
+Vercel inspection after commit `558487a` confirmed:
+
+- Production `joinhavn.io` resolves to READY deployment
+  `dpl_9zMwRjwbVxHdcyTH1yLmDiYg1PSw`, from `feat/music-studio-modes`
+  at `6083ff2d88f3a812f3eaf1c3ad8708940402198f`.
+- The HAVN-11 preview is READY at
+  `https://havnai-iihhnwqdy-marcus-littles-projects.vercel.app`, deployment
+  `dpl_EXP7fe5rX2yL1mpeUWkp3mhw4bSX`, commit `558487a`.
+- The feature branch differs from production in 117 files, including Clerk,
+  payments, media ownership and studio paths. Promoting it is a full application
+  release, not just publication of these three pages. The support page itself
+  links to account, sign-in and recovery routes absent from the old production
+  version; copying only policy files would leave those links broken.
+- The connected Vercel app can read deployments. Local Vercel CLI 60.1.3 reports
+  logged out. No deployment, domain alias, provider configuration, or production
+  coordinator was changed during this inspection.
+
+Complete the full application rollout checks before promotion. A READY preview
+proves the hosted build completed, not production account/provider compatibility.
+The owner's copy approval does not need to be requested again.
