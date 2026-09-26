@@ -1,0 +1,61 @@
+.site-header { background: #080f14f5; border-color: #ffffff13; box-shadow: none; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.site-header .header-inner { max-width: 1440px; min-height: 94px; padding: 12px 24px; gap: 16px; }
+.site-header .brand { flex: 0 0 auto; }
+.site-header .brand-logo { width: 64px; height: 64px; border: 1px solid #2bc4dd42; border-radius: 20px; box-shadow: 0 0 24px #19c8e414; }
+.site-header .nav-links { position: relative; inset: auto; display: flex; flex: 1; min-width: 0; flex-direction: row; align-items: center; justify-content: flex-start; gap: 4px; margin: 0; padding: 8px; min-height: 64px; max-height: none; overflow: visible; border: 1px solid #b5dce51a; border-radius: 32px; background: linear-gradient(180deg, #11191f, #0d151b); box-shadow: inset 0 1px 0 #ffffff06; scrollbar-width: thin; scrollbar-color: #365765 transparent; }
+.site-header .nav-links a, .site-header .nav-links summary { display: flex; flex: 1 0 auto; align-items: center; justify-content: center; width: auto; min-height: 46px; padding: 10px 11px; border: 1px solid transparent; border-radius: 999px; background: transparent; color: #a9bfca; font: 600 14px/1.3 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; text-decoration: none; white-space: nowrap; }
+.site-header .nav-links a:hover { color: #e1f7fc; background: #ffffff08; transform: none; box-shadow: none; }
+.site-header .nav-links .nav-active { color: #04232d; background: #28c6e2; border-color: transparent; box-shadow: 0 5px 22px #20cbe218; }
+.site-header .nav-wallet { flex: 0 0 auto; }
+.site-header .account-session-control { position: relative; }
+.site-header .account-session-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-width: 118px; min-height: 46px; padding: 12px 18px; border: 1px solid #8bd1ff; border-radius: 999px; background: linear-gradient(135deg, #8bd5ff, #56b9f5); color: #072239; font: 650 14px/1.3 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; text-decoration: none; white-space: nowrap; cursor: pointer; box-shadow: inset 0 1px 0 #ffffff40, 0 3px 14px #258eda12; transition: background .15s ease, box-shadow .15s ease; }
+.site-header .account-session-button:hover:not(:disabled) { background: #a6dfff; color: #072239; box-shadow: 0 3px 18px #258eda25; }
+.site-header .account-session-button:disabled { opacity: .6; cursor: wait; }
+.site-header .account-session-button svg { flex-shrink: 0; }
+.account-session-spinner { animation: account-session-spin 1s linear infinite; }
+.account-session-error { position: absolute; top: calc(100% + 12px); right: 0; width: 260px; max-width: calc(100vw - 24px); padding: 14px 16px; margin: 0; border: 1px solid #754556; border-radius: 12px; background: #251d29; color: #f5c6d2; font-size: 13px; line-height: 1.7; box-shadow: 0 12px 30px #0005; }
+@keyframes account-session-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .account-session-spinner { animation: none; } }
+.site-header .wallet-connect-btn { min-height: 46px; padding: 10px 18px; border: 1px solid #26b5cc99; border-radius: 999px; background: #142931; color: #e1f4f8; box-shadow: none; font: 600 14px/1.3 system-ui, sans-serif; white-space: nowrap; }
+.site-header .wallet-connect-btn:hover { background: #1b3944; transform: none; box-shadow: none; }
+.site-header :is(a, button, summary):focus-visible { outline: 2px solid #59ddf2; outline-offset: 3px; }
+.site-header .wallet-dropdown { min-width: 260px; padding: 12px; border: 1px solid #42616d; border-radius: 12px; background: #101d24; box-shadow: 0 15px 40px #0006; }
+.site-header .wallet-dropdown-item { min-height: 44px; width: 100%; padding: 11px 10px; border: 0; border-radius: 7px; background: transparent; color: #cee4ed; font: inherit; font-size: 12px; text-align: left; justify-content: flex-start; }
+.site-header .wallet-dropdown-item:hover { background: #233b46; color: #e3f6f9; }
+.site-header .wallet-dropdown-disconnect { color: #f4b6b6; }
+.wallet-menu-label { display: block; font-size: 10px; color: #aac1cd; padding: 8px 10px 0; }
+.wallet-menu-address { color: #d5e5eb; font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; white-space: normal; margin: 9px 10px 15px; user-select: all; }
+.wallet-menu-feedback, .wallet-connect-feedback { color: #f3c1b5; font-size: 12px; line-height: 1.7; white-space: normal; overflow-wrap: anywhere; }
+.wallet-menu-feedback { margin: 9px 10px; }
+.wallet-connect-feedback { position: absolute; top: 100%; right: 0; width: 280px; max-width: calc(100vw - 32px); margin: 10px 0 0; background: #152831; border: 1px solid #587080; border-radius: 10px; padding: 16px; }
+
+@media (max-width: 1000px) {
+  .site-header .header-inner { display: grid; grid-template-columns: auto 1fr auto; gap: 10px 16px; padding: 10px 24px; }
+  .site-header .brand-logo { width: 48px; height: 48px; border-radius: 15px; }
+  .site-header .nav-wallet { grid-column: 3; grid-row: 1; }
+  .site-header .nav-links { grid-column: 1 / -1; grid-row: 2; min-height: 56px; padding: 5px; }
+  .site-header .nav-links a, .site-header .nav-links summary { min-height: 44px; padding: 10px 11px; font-size: 13px; }
+}
+@media (max-width: 600px) {
+  .site-header .header-inner { padding: 10px 12px; gap: 8px; }
+  .site-header .wallet-connect-btn { padding: 10px 16px; font-size: 13px; min-height: 44px; }
+  .site-header .nav-links { border-radius: 26px; }
+  .site-header .nav-links a { flex-grow: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .site-header * { transition: none !important; } }
+
+.site-header .nav-group { position: relative; flex: 1 0 auto; }
+.site-header .nav-group summary { cursor: pointer; list-style: none; gap: 7px; }
+.site-header .nav-group summary::-webkit-details-marker { display: none; }
+.site-header .nav-group summary:hover, .site-header .nav-group[open] summary { background: #ffffff0c; color: #e1f7fc; }
+.site-header .nav-group summary.nav-group-active { color: #62d6f3; }
+.site-header .nav-group[open] summary svg { transform: rotate(180deg); }
+.site-header .nav-group-panel { position: absolute; top: calc(100% + 12px); left: 0; min-width: 210px; padding: 8px; background: #0e1b29; border: 1px solid #344d66; border-radius: 14px; box-shadow: 0 16px 40px #0006; }
+.site-header .nav-group:last-child .nav-group-panel { left: auto; right: 0; }
+.site-header .nav-group-panel a { justify-content: flex-start; border-radius: 8px; min-height: 46px; }
+@media (max-width: 600px) {
+  .site-header .nav-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; border-radius: 16px; overflow: visible; }
+  .site-header .nav-links > a, .site-header .nav-links summary { padding: 10px 6px; font-size: 12px; min-height: 44px; }
+  .site-header .nav-group { position: static; min-width: 0; }
+  .site-header .nav-group-panel, .site-header .nav-group:last-child .nav-group-panel { left: 0; right: 0; top: calc(100% + 8px); min-width: 0; }
+}

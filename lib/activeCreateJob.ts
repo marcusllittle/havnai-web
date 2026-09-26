@@ -10,6 +10,8 @@ export type ActiveCreateJob = {
   startedAt: number;
 };
 
+const storageKey = (account?: string) => account ? `${ACTIVE_CREATE_JOB_KEY}:${account}` : ACTIVE_CREATE_JOB_KEY;
+
 const isActiveCreateJob = (value: unknown, now: number): value is ActiveCreateJob => {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<ActiveCreateJob>;
@@ -29,19 +31,19 @@ const isActiveCreateJob = (value: unknown, now: number): value is ActiveCreateJo
   );
 };
 
-export const saveActiveCreateJob = (job: ActiveCreateJob): void => {
+export const saveActiveCreateJob = (job: ActiveCreateJob, account?: string): void => {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(ACTIVE_CREATE_JOB_KEY, JSON.stringify(job));
+    window.localStorage.setItem(storageKey(account), JSON.stringify(job));
   } catch {
     // Generation must continue when browser storage is unavailable.
   }
 };
 
-export const loadActiveCreateJob = (now = Date.now()): ActiveCreateJob | null => {
+export const loadActiveCreateJob = (now = Date.now(), account?: string): ActiveCreateJob | null => {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(ACTIVE_CREATE_JOB_KEY);
+    const raw = window.localStorage.getItem(storageKey(account));
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (isActiveCreateJob(parsed, now)) return parsed;
@@ -49,21 +51,21 @@ export const loadActiveCreateJob = (now = Date.now()): ActiveCreateJob | null =>
     // Invalid or unavailable browser storage should not break the generator.
   }
   try {
-    window.localStorage.removeItem(ACTIVE_CREATE_JOB_KEY);
+    window.localStorage.removeItem(storageKey(account));
   } catch {
     // Ignore unavailable browser storage.
   }
   return null;
 };
 
-export const clearActiveCreateJob = (expectedJobId?: string): void => {
+export const clearActiveCreateJob = (expectedJobId?: string, account?: string): void => {
   if (typeof window === "undefined") return;
   try {
     if (expectedJobId) {
-      const active = loadActiveCreateJob();
+      const active = loadActiveCreateJob(Date.now(), account);
       if (active && active.id !== expectedJobId) return;
     }
-    window.localStorage.removeItem(ACTIVE_CREATE_JOB_KEY);
+    window.localStorage.removeItem(storageKey(account));
   } catch {
     // Ignore unavailable browser storage.
   }

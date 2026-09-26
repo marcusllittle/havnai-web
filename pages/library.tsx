@@ -1,8 +1,14 @@
-import type { NextPage } from "next";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { CinematicPageHero } from "../components/CinematicPageHero";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import Image from "next/image";
+import { ArrowUpRight, ChevronDown, Download, FolderOpen, Images, LoaderCircle, MoreHorizontal, Plus, RefreshCw, Search, SlidersHorizontal, Wallet, X } from "lucide-react";
+import { CollectionPreview } from "../components/CollectionPreview";
 import { SeoHead } from "../components/SeoHead";
+import { useAccount } from "../components/AccountProvider";
+import { DELETE_ARTIFACT_CONFIRMATION } from "../lib/artifactLifecycle";
+import type { AccountStudioAccess } from "../lib/musicStudioApi";
+import type { V1Job } from "../lib/videoStudioApi";
+import { accountJobView } from "../lib/accountImageStudio";
 import { useWallet } from "../components/WalletProvider";
 import { JobDetailsDrawer, JobSummary } from "../components/JobDetailsDrawer";
 import { SiteHeader } from "../components/SiteHeader";
@@ -27,7 +33,7 @@ import {
 } from "../lib/libraryStore";
 import { normalizeJobStatus } from "../lib/jobStatus";
 import { getConnectButtonLabel } from "../lib/wallet";
-import { getWalletIdentityLabel, getWalletSourceLabel, getWalletStatusCopy, PUBLIC_ALPHA_LABEL } from "../lib/publicAlpha";
+import { getWalletIdentityLabel, getWalletSourceLabel, getWalletStatusCopy } from "../lib/publicAlpha";
 
 type StatusFilter = "all" | "ready" | "running" | "failed";
 type TypeFilter = "all" | "image" | "video";
@@ -48,7 +54,7 @@ type LibraryViewItem = {
 
 const CONCURRENCY_LIMIT = 5;
 
-async function buildViewItem(entry: LibraryEntry): Promise<LibraryViewItem> {
+async function buildViewItem(entry: LibraryEntry, signal?: AbortSignal, owned?: ReturnType<typeof accountJobView>): Promise<LibraryViewItem> {
   let job: JobDetailResponse | null = null;
   let result: ResultResponse | null = null;
   let available = false;
@@ -57,8 +63,14 @@ async function buildViewItem(entry: LibraryEntry): Promise<LibraryViewItem> {
   let model: string | undefined;
   let prompt: string | undefined;
 
+  const [jobResponse, resultResponse] = await Promise.allSettled([
+    owned ? Promise.resolve(owned.job) : fetchJob(entry.job_id, { signal }),
+    owned ? Promise.resolve(owned.result) : fetchResult(entry.job_id, { signal }),
+  ]);
+
   try {
-    job = await fetchJob(entry.job_id);
+    if (jobResponse.status === "rejected") throw jobResponse.reason;
+    job = jobResponse.value;
     const normalized = normalizeJobStatus(job.status);
     statusLabel = normalized.isFailed
       ? "Failed"
@@ -82,7 +94,8 @@ async function buildViewItem(entry: LibraryEntry): Promise<LibraryViewItem> {
   }
 
   try {
-    result = await fetchResult(entry.job_id);
+    if (resultResponse.status === "rejected") throw resultResponse.reason;
+    result = resultResponse.value;
     if (result.image_url || result.video_url) {
       available = true;
       if (!job) {
@@ -121,17 +134,18 @@ async function buildViewItem(entry: LibraryEntry): Promise<LibraryViewItem> {
 }
 
 async function fetchLibraryDetails(
-  entries: LibraryEntry[]
-): Promise<LibraryViewItem[]> {
-  const results: LibraryViewItem[] = new Array(entries.length);
+  entries: LibraryEntry[],
+  signal: AbortSignal,
+  onItem: (item: LibraryViewItem) => void
+): Promise<void> {
   let index = 0;
 
   const worker = async () => {
     while (true) {
       const current = index;
       index += 1;
-      if (current >= entries.length) break;
-      results[current] = await buildViewItem(entries[current]);
+      if (current >= entries.length || signal.aborted) break;
+      onItem(await buildViewItem(entries[current], signal));
     }
   };
 
@@ -140,14 +154,31 @@ async function fetchLibraryDetails(
     () => worker()
   );
   await Promise.all(workers);
-  return results.filter(Boolean);
 }
 
-const LibraryPage: NextPage = () => {
+type CollectionAccount = { id: string; request: AccountStudioAccess["request"] };
+const LibraryPage: React.FC<{ accountAuth?: CollectionAccount }> = ({ accountAuth }) => {
+  const accountItems = useRef<LibraryViewItem[]>([]);
+  const deletedIds = useRef(new Set<string>());
+  const [deleteNotice, setDeleteNotice] = useState("");
+  const mutation = useRef(false);
+  const lifetime = useRef(new AbortController());
+  useEffect(() => {
+    if (lifetime.current.signal.aborted) lifetime.current = new AbortController();
+    return () => lifetime.current.abort();
+  }, []);
+  const [accountTotal, setAccountTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [paging, setPaging] = useState({ query: "", offset: 0 });
+  const [collectionBusy, setCollectionBusy] = useState(false);
   const wallet = useWallet();
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
   const [items, setItems] = useState<LibraryViewItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
+  const [refreshRevision, setRefreshRevision] = useState(0);
 
   // Toolbar state
   const [searchQuery, setSearchQuery] = useState("");
@@ -234,13 +265,20 @@ const LibraryPage: NextPage = () => {
   // private window, or a second device showed nothing, and generation 201
   // silently evicted the oldest entry.
   useEffect(() => {
-    setEntries(loadLibrary());
+    if (!accountAuth) setEntries(loadLibrary());
   }, []);
 
   const activeWallet = wallet.activeWallet;
   useEffect(() => {
-    if (!activeWallet) return;
+    if (accountAuth) return;
+    if (!activeWallet) {
+      setSyncing(false);
+      setSyncError(false);
+      return;
+    }
     let active = true;
+    setSyncing(true);
+    setSyncError(false);
     (async () => {
       try {
         const jobs = await fetchMyJobs(activeWallet, { limit: 500 });
@@ -255,35 +293,117 @@ const LibraryPage: NextPage = () => {
           )
         );
       } catch {
-        // Offline or an older backend without /jobs/mine: the local cache
-        // is still showing, so there is nothing useful to surface here.
+        if (active) setSyncError(true);
+      } finally {
+        if (active) setSyncing(false);
       }
     })();
     return () => {
       active = false;
     };
-  }, [activeWallet]);
+  }, [activeWallet, refreshRevision]);
 
   useEffect(() => {
+    if (accountAuth) return;
     let active = true;
-    const load = async () => {
-      setLoading(true);
-      const next = await fetchLibraryDetails(entries);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    setLoading(entries.length > 0);
+    setItems(current => {
+      const existing = new Map(current.map(item => [item.entry.job_id, item]));
+      return entries.map(entry => existing.get(entry.job_id) || {
+        entry,
+        previewUrl: resolveAssetUrl(entry.preview_hint),
+        statusLabel: "Checking",
+        statusClass: "checking",
+        type: entry.type,
+        available: false,
+      });
+    });
+    void fetchLibraryDetails(entries, controller.signal, item => {
+      if (active) setItems(current => current.map(previous => previous.entry.job_id === item.entry.job_id ? item : previous));
+    }).finally(() => {
+      window.clearTimeout(timeout);
       if (active) {
-        setItems(next);
+        setItems(current => current.map(item => item.statusClass === "checking" ? { ...item, statusLabel: "Unavailable", statusClass: "unavailable" } : item));
         setLoading(false);
       }
-    };
-    if (entries.length) {
-      load();
-    } else {
-      setItems([]);
-      setLoading(false);
-    }
+    });
     return () => {
       active = false;
+      window.clearTimeout(timeout);
+      controller.abort();
     };
-  }, [entries]);
+  }, [entries, refreshRevision]);
+
+  const accountQuery = JSON.stringify([searchQuery.trim(), statusFilter, typeFilter, sortOption, refreshRevision]);
+  const accountOffset = paging.query === accountQuery ? paging.offset : 0;
+  useEffect(() => {
+    if (!accountAuth) return;
+    const controller = new AbortController();
+    setLoading(true); setSyncing(true); setSyncError(false);
+    const params = new URLSearchParams({ collection: "1", limit: "50", offset: String(accountOffset),
+      type: typeFilter === "image" ? "visual_image" : typeFilter === "video" ? "image_to_video" : "visual",
+      sort: sortOption, search: searchQuery.trim() });
+    if (statusFilter !== "all") params.set("status", statusFilter === "ready" ? "succeeded" : statusFilter === "running" ? "active" : "failed");
+    void accountAuth.request<{ jobs: V1Job[]; total: number }>(`/v2/jobs?${params}`, { signal: controller.signal, cache: "no-store" })
+      .then(async response => {
+        const page = await Promise.all(response.jobs.map(job => buildViewItem({ job_id: job.id,
+          created_at: new Date((job.created_at || 0) * 1000).toISOString(),
+          type: job.type === "image_to_video" || /video|animatediff/i.test(job.type || "") ? "video" : "image",
+        }, controller.signal, accountJobView(job, accountAuth.id))));
+        if (controller.signal.aborted) return;
+        const next = [...new Map([...(accountOffset ? accountItems.current : []), ...page].map(item => [item.entry.job_id, item])).values()]
+          .filter(item => !deletedIds.current.has(item.entry.job_id));
+        accountItems.current = next;
+        setItems(next); setEntries(next.map(item => item.entry));
+        setAccountTotal(response.total); setHasMore(accountOffset + response.jobs.length < response.total);
+      }).catch(() => { if (!controller.signal.aborted) setSyncError(true); })
+      .finally(() => { if (!controller.signal.aborted) { setLoading(false); setSyncing(false); } });
+    return () => controller.abort();
+  }, [accountAuth?.id, accountAuth?.request, accountQuery, accountOffset]);
+
+  const deleteArtifact = async (jobId: string) => {
+    if (!accountAuth || mutation.current || !window.confirm(DELETE_ARTIFACT_CONFIRMATION)) return;
+    mutation.current = true; setCollectionBusy(true); setConnectionError("");
+    const signal = lifetime.current.signal;
+    try {
+      await accountAuth.request(`/v2/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE", signal });
+      signal.throwIfAborted();
+      deletedIds.current.add(jobId);
+      accountItems.current = accountItems.current.filter(item => item.entry.job_id !== jobId);
+      setItems(current => current.filter(item => item.entry.job_id !== jobId));
+      setEntries(current => current.filter(item => item.job_id !== jobId));
+      setDrawerOpen(false); setDrawerJob(null); setDrawerResult(null); setDrawerSummary(null);
+      setSelectedIds(current => { const next = new Set(current); next.delete(jobId); return next; });
+      setDeleteNotice("Creation deleted. You can recover it from Deleted creations for 30 days.");
+      setRefreshRevision(value => value + 1);
+    } catch (reason) {
+      if (!signal.aborted) {
+        const message = reason instanceof Error ? reason.message : "Could not delete this creation.";
+        setConnectionError(message); setDrawerError(message);
+      }
+    } finally { mutation.current = false; if (!signal.aborted) setCollectionBusy(false); }
+  };
+
+  const changeAccountCollection = async (ids: string[], hidden: boolean) => {
+    if (!accountAuth) return;
+    const signal = lifetime.current.signal;
+    await accountAuth.request("/v2/account/collection", { method: "PUT", signal,
+      body: JSON.stringify({ job_ids: ids, hidden }) });
+    signal.throwIfAborted();
+    setRefreshRevision(value => value + 1);
+  };
+  const removeAccountItems = async (ids: string[]) => {
+    if (mutation.current) return;
+    mutation.current = true; setCollectionBusy(true); setConnectionError("");
+    try {
+      await changeAccountCollection(ids, true);
+      setSelectedIds(new Set()); setBulkMode(false); setConfirmBulkDelete(false);
+    } catch (reason) {
+      if (!lifetime.current.signal.aborted) setConnectionError(reason instanceof Error ? reason.message : "Could not update your collection.");
+    } finally { mutation.current = false; setCollectionBusy(false); }
+  };
 
   // Filter + sort logic
   const filteredItems = useMemo(() => {
@@ -320,8 +440,9 @@ const LibraryPage: NextPage = () => {
     return result;
   }, [items, searchQuery, statusFilter, typeFilter, sortOption]);
 
-  const emptyState = !loading && entries.length === 0;
-  const noResults = !loading && entries.length > 0 && filteredItems.length === 0;
+  const hasFilters = Boolean(searchQuery.trim() || statusFilter !== "all" || typeFilter !== "all");
+  const emptyState = !loading && !syncing && entries.length === 0 && (!accountAuth || (!hasFilters && !syncError));
+  const noResults = !loading && !syncing && !syncError && filteredItems.length === 0 && (entries.length > 0 || Boolean(accountAuth && hasFilters));
 
   const toggleSelect = useCallback((jobId: string) => {
     setSelectedIds((prev) => {
@@ -349,12 +470,13 @@ const LibraryPage: NextPage = () => {
       setTimeout(() => setConfirmBulkDelete(false), 3000);
       return;
     }
+    if (accountAuth) { void removeAccountItems([...selectedIds]); return; }
     const next = bulkRemoveFromLibrary(selectedIds);
     setEntries(next);
     setSelectedIds(new Set());
     setBulkMode(false);
     setConfirmBulkDelete(false);
-  }, [selectedIds, confirmBulkDelete]);
+  }, [selectedIds, confirmBulkDelete, accountAuth?.id, accountAuth?.request]);
 
   const exitBulkMode = useCallback(() => {
     setBulkMode(false);
@@ -387,6 +509,7 @@ const LibraryPage: NextPage = () => {
   };
 
   const handleRemove = (jobId: string) => {
+    if (accountAuth) { void removeAccountItems([jobId]); return; }
     const next = removeFromLibrary(jobId);
     setEntries(next);
     setSelectedIds((prev) => {
@@ -395,17 +518,6 @@ const LibraryPage: NextPage = () => {
       return updated;
     });
   };
-
-  // Status counts for filter chips
-  const statusCounts = useMemo(() => {
-    const counts = { all: items.length, ready: 0, running: 0, failed: 0 };
-    for (const item of items) {
-      if (item.statusClass === "ready") counts.ready++;
-      else if (item.statusClass === "running") counts.running++;
-      else if (item.statusClass === "failed") counts.failed++;
-    }
-    return counts;
-  }, [items]);
 
   const typeCounts = useMemo(() => {
     const counts = { all: items.length, image: 0, video: 0 };
@@ -426,45 +538,23 @@ const LibraryPage: NextPage = () => {
       />
       <SiteHeader />
 
-      <main className="library-page jh-page-shell">
-        <CinematicPageHero
-          eyebrow="Collection"
-          title="Own the renders you keep."
-          description="Your library is the private ownership hub for browser-saved outputs, finished jobs, and the pieces you want to move into the marketplace on your terms."
-          mediaVariant="library"
-          panelEyebrow="Ownership Hub"
-          panelTitle="Local first. Publish when ready."
-          panelDescription="Every saved result stays staged in this browser until you decide to download it, inspect it, or list it for sale."
-          stats={[
-            {
-              label: "Saved",
-              value: items.length.toLocaleString(),
-              detail: "Tracked in this browser",
-            },
-            {
-              label: "Ready",
-              value: statusCounts.ready.toLocaleString(),
-              detail: "Available for download or sale",
-            },
-            {
-              label: "Video",
-              value: typeCounts.video.toLocaleString(),
-              detail: "Motion renders in your archive",
-            },
-          ]}
-          actions={
-            <>
-              <Link href="/create" className="jh-btn jh-btn-primary">
-                Create New Work
-              </Link>
-              <Link href="/marketplace?tab=gallery&galleryView=my-listings" className="jh-btn jh-btn-secondary">
-                Open Storefront
-              </Link>
-            </>
-          }
-        />
-
-        <section className="page-container">
+      <main className="collection-page">
+        <header className="collection-heading">
+          <div>
+            <span className="collection-eyebrow"><Images size={14} aria-hidden="true" /> Your creative archive</span>
+            <h1>Collection<span>{accountAuth ? accountTotal : entries.length}</span></h1>
+            <p>A home for the things you make.</p>
+          </div>
+          <div className="collection-heading-actions">
+            <button type="button" className="collection-refresh" onClick={() => setRefreshRevision(value => value + 1)} disabled={loading || syncing} aria-label="Refresh collection"><RefreshCw size={17} aria-hidden="true" /></button>
+            <Link href="/create" className="collection-primary"><Plus size={17} aria-hidden="true" /> New creation</Link>
+          </div>
+        </header>
+        <div className="collection-context">
+          {deleteNotice && <p role="status">{deleteNotice} <Link href="/account/deleted">Restore deleted creations</Link></p>}
+          {accountAuth && <Link href="/account/deleted">Deleted creations</Link>}
+          {accountAuth ? <Link href="/account">Your account</Link> : <details className="collection-account">
+            <summary><Wallet size={14} aria-hidden="true" />{walletSourceLabel}<ChevronDown size={14} aria-hidden="true" /></summary>
           <div className="wallet-status-card wallet-status-card-inline">
             <div className="wallet-status-copy-block">
               <div className="wallet-status-heading-row">
@@ -480,24 +570,30 @@ const LibraryPage: NextPage = () => {
               <button
                 type="button"
                 className="job-action-button secondary"
-                onClick={() => void wallet.connect()}
+                onClick={() => { setConnectionError(""); void wallet.connect().catch(reason => setConnectionError(reason instanceof Error ? reason.message : "Wallet connection failed. Please try again.")); }}
                 disabled={wallet.connecting}
               >
                 {connectLabel}
               </button>
             </div>
           </div>
-        </section>
+          </details>}
+          {connectionError && <p className="collection-sync-note" role="alert">{connectionError}</p>}
+          <Link href="/marketplace?tab=gallery&galleryView=my-listings" className="collection-storefront">My storefront <ArrowUpRight size={14} aria-hidden="true" /></Link>
+        </div>
+        {syncError && <p className="collection-sync-note" role="status">Couldn’t refresh your history. {entries.length ? "Your saved previews are still here." : "You can try again using Refresh collection."}</p>}
 
-        {!emptyState && (
+        {(accountAuth || entries.length > 0) && (
           <section className="library-toolbar">
             <div className="library-toolbar-inner">
               {/* Search */}
               <div className="library-search-wrapper">
+                <Search size={17} aria-hidden="true" />
                 <input
-                  type="text"
+                  type="search"
+                  aria-label="Search collection"
                   className="library-search"
-                  placeholder="Search by prompt, model, or job ID..."
+                  placeholder="Search your creations…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -508,78 +604,25 @@ const LibraryPage: NextPage = () => {
                     onClick={() => setSearchQuery("")}
                     aria-label="Clear search"
                   >
-                    x
+                    <X size={15} aria-hidden="true" />
                   </button>
                 )}
               </div>
 
-              {/* Filter row */}
-              <div className="library-filters">
-                <div className="library-filter-group">
-                  <span className="library-filter-label">Status</span>
-                  {(
-                    [
-                      ["all", "All"],
-                      ["ready", "Ready"],
-                      ["running", "Running"],
-                      ["failed", "Failed"],
-                    ] as [StatusFilter, string][]
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={`library-chip ${
-                        statusFilter === value ? "is-active" : ""
-                      }`}
-                      onClick={() => setStatusFilter(value)}
-                    >
-                      {label}
-                      <span className="library-chip-count">
-                        {statusCounts[value]}
-                      </span>
-                    </button>
+              <div className="collection-filter-row">
+                <div className="collection-type-tabs" role="group" aria-label="Media type">
+                  {([["all", "All work"], ["image", "Images"], ["video", "Videos"]] as [TypeFilter, string][]).map(([value, label]) => (
+                    <button key={value} type="button" className={typeFilter === value ? "is-active" : ""} aria-pressed={typeFilter === value} onClick={() => setTypeFilter(value)}>{label}{!accountAuth && <span>{typeCounts[value]}</span>}</button>
                   ))}
                 </div>
-
-                <div className="library-filter-group">
-                  <span className="library-filter-label">Type</span>
-                  {(
-                    [
-                      ["all", "All"],
-                      ["image", "Image"],
-                      ["video", "Video"],
-                    ] as [TypeFilter, string][]
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={`library-chip ${
-                        typeFilter === value ? "is-active" : ""
-                      }`}
-                      onClick={() => setTypeFilter(value)}
-                    >
-                      {label}
-                      <span className="library-chip-count">
-                        {typeCounts[value]}
-                      </span>
-                    </button>
-                  ))}
+                <div className="collection-filter-options">
+                  <label className="collection-select-label"><SlidersHorizontal size={14} aria-hidden="true" /><span className="collection-sr-only">Status</span>
+                    <select aria-label="Filter by status" value={statusFilter} onChange={event => setStatusFilter(event.target.value as StatusFilter)}>
+                      <option value="all">All statuses</option><option value="ready">Ready</option><option value="running">Running</option><option value="failed">Failed</option>
+                    </select>
+                  </label>
+                  <select className="library-sort-select" aria-label="Sort collection" value={sortOption} onChange={event => setSortOption(event.target.value as SortOption)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select>
                 </div>
-
-                <div className="library-filter-group">
-                  <span className="library-filter-label">Sort</span>
-                  <select
-                    className="library-sort-select"
-                    value={sortOption}
-                    onChange={(e) =>
-                      setSortOption(e.target.value as SortOption)
-                    }
-                  >
-                    <option value="newest">Newest first</option>
-                    <option value="oldest">Oldest first</option>
-                  </select>
-                </div>
-
                 {/* Bulk mode toggle */}
                 <div className="library-filter-group library-bulk-toggle">
                   {!bulkMode ? (
@@ -597,26 +640,26 @@ const LibraryPage: NextPage = () => {
                         className="library-chip is-active"
                         onClick={selectAll}
                       >
-                        All
+                        Select all
                       </button>
                       <button
                         type="button"
                         className="library-chip"
                         onClick={deselectAll}
                       >
-                        None
+                        Deselect all
                       </button>
                       <button
                         type="button"
                         className={`library-chip library-chip-danger ${
                           confirmBulkDelete ? "is-confirm" : ""
                         }`}
-                        disabled={selectedIds.size === 0}
+                        disabled={collectionBusy || selectedIds.size === 0}
                         onClick={handleBulkDelete}
                       >
                         {confirmBulkDelete
-                          ? `Delete ${selectedIds.size}?`
-                          : `Delete (${selectedIds.size})`}
+                          ? `Remove ${selectedIds.size}?`
+                          : `Remove (${selectedIds.size})`}
                       </button>
                       <button
                         type="button"
@@ -632,7 +675,7 @@ const LibraryPage: NextPage = () => {
 
               {/* Results count */}
               <div className="library-results-count">
-                {filteredItems.length} of {items.length} items
+                {filteredItems.length} of {accountAuth ? accountTotal : items.length} items
                 {searchQuery && ` matching "${searchQuery}"`}
               </div>
             </div>
@@ -640,18 +683,26 @@ const LibraryPage: NextPage = () => {
         )}
 
         <section className="library-section">
-          {loading && <p className="library-loading">Loading library...</p>}
+          {(loading || syncing) && <p className="collection-loading" role="status"><LoaderCircle size={15} aria-hidden="true" /> {entries.length ? "Refreshing your creations…" : "Looking for your saved work…"}</p>}
+          {syncing && entries.length === 0 && <div className="collection-skeletons" aria-hidden="true">{Array.from({ length: 4 }, (_, index) => <div key={index} />)}</div>}
           {emptyState && (
-            <div className="library-empty">
-              <p>
-                No saved items yet. Render something in Public Alpha, then save the results you want
-                to revisit or publish later.
-              </p>
+            <div className="collection-empty">
+              <div className="collection-empty-art" aria-hidden="true">
+                <div><Image src="/create/amber-still-life.webp" alt="" fill sizes="200px" /></div>
+                <div><Image src="/create/coastal-light.webp" alt="" fill sizes="260px" /></div>
+              </div>
+              <div className="collection-empty-copy">
+                <span className="collection-eyebrow">Every collection begins with an idea</span>
+                <h2>Your next favorite<br />starts here.</h2>
+                <p>{syncError ? "Nothing is saved in this browser yet. Refresh to check your full history, or start something new." : "Create an image or a video. Your saved work will be waiting here, ready to revisit, download, or share."}</p>
+                <Link href="/create" className="collection-primary">Make your first creation <ArrowUpRight size={16} aria-hidden="true" /></Link>
+                <span className="collection-empty-caption">Inspiration imagery · your collection is empty</span>
+              </div>
             </div>
           )}
           {noResults && (
             <div className="library-empty">
-              <p>No saved items match this view. Clear the filters to return to your full library.</p>
+              <FolderOpen size={28} aria-hidden="true" /><h2>No matches this time.</h2><p>Try another search or clear your filters to see all your work.</p>
               <button
                 type="button"
                 className="job-action-button"
@@ -665,7 +716,7 @@ const LibraryPage: NextPage = () => {
               </button>
             </div>
           )}
-          {!loading && filteredItems.length > 0 && (
+          {filteredItems.length > 0 && (
             <div className="library-grid">
               {filteredItems.map((item) => {
                 const downloadUrl = resolveAssetUrl(
@@ -673,108 +724,34 @@ const LibraryPage: NextPage = () => {
                     item.result?.image_url ||
                     item.entry.preview_hint
                 );
-                const createdLabel = new Date(
-                  item.entry.created_at
-                ).toLocaleString();
+                const created = new Date(item.entry.created_at);
+                const title = item.prompt || (item.type === "video" ? "Untitled video" : "Untitled creation");
                 const isSelected = selectedIds.has(item.entry.job_id);
                 return (
-                  <article
-                    key={item.entry.job_id}
-                    className={`library-card ${
-                      bulkMode && isSelected ? "is-selected" : ""
-                    }`}
-                    onClick={
-                      bulkMode
-                        ? () => toggleSelect(item.entry.job_id)
-                        : undefined
-                    }
-                  >
-                    {bulkMode && (
-                      <div className="library-select-overlay">
-                        <span
-                          className={`library-checkbox ${
-                            isSelected ? "is-checked" : ""
-                          }`}
-                        />
-                      </div>
-                    )}
-                    <div className="library-preview">
-                      {item.previewUrl ? (
-                        item.type === "video" ? (
-                          <video src={item.previewUrl} muted playsInline />
-                        ) : (
-                          <img
-                            src={item.previewUrl}
-                            alt={item.entry.job_id}
-                            loading="lazy"
-                          />
-                        )
-                      ) : (
-                        <div className="library-preview-empty">Preview unavailable</div>
-                      )}
-                      <span
-                        className={`library-badge library-type-${item.type}`}
-                      >
-                        {item.type}
-                      </span>
-                    </div>
+                  <article key={item.entry.job_id} className={`library-card ${bulkMode && isSelected ? "is-selected" : ""}`}>
+                    {bulkMode && <label className="collection-selection"><input type="checkbox" checked={isSelected} onChange={() => toggleSelect(item.entry.job_id)} aria-label={`Select ${title}`} /></label>}
+                    <button type="button" className="collection-preview-button" onClick={() => bulkMode ? toggleSelect(item.entry.job_id) : openDrawer(item)} aria-label={`${bulkMode ? "Select" : "View"} ${title}`}>
+                      <CollectionPreview src={item.previewUrl} type={item.type} label={title} />
+                    </button>
                     <div className="library-body">
-                      {item.model && (
-                        <div className="library-model">{item.model}</div>
-                      )}
-                      {item.prompt && (
-                        <div className="library-prompt" title={item.prompt}>
-                          {item.prompt.length > 60
-                            ? item.prompt.slice(0, 60) + "..."
-                            : item.prompt}
-                        </div>
-                      )}
+                      <h2 className="collection-card-title" title={title}>{title}</h2>
                       <div className="library-meta">
-                        <span
-                          className={`library-status status-${item.statusClass}`}
-                        >
-                          {item.statusLabel}
-                        </span>
-                        <span className="library-date">{createdLabel}</span>
+                        <span className={`library-status status-${item.statusClass}`}>{item.statusLabel}</span>
+                        <time dateTime={item.entry.created_at} title={created.toLocaleString()}>{created.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time>
                       </div>
-                      <code className="library-id">{item.entry.job_id}</code>
-                      {!bulkMode && (
-                        <div className="library-actions">
-                          <button
-                            type="button"
-                            className="job-action-button"
-                            onClick={() => openDrawer(item)}
-                          >
-                            View
-                          </button>
-                          <button
-                            type="button"
-                            className="job-action-button secondary"
-                            disabled={!downloadUrl}
-                            onClick={() =>
-                              downloadUrl && downloadAsset(downloadUrl)
-                            }
-                          >
-                            Download
-                          </button>
-                          {item.available && (
-                            <button
-                              type="button"
-                              className="job-action-button secondary"
-                              onClick={() => openSellForm(item)}
-                            >
-                              List for Sale
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            className="job-action-button secondary"
-                            onClick={() => handleRemove(item.entry.job_id)}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
+                      {!bulkMode && <div className="collection-card-actions">
+                        <button type="button" className="collection-download" disabled={!downloadUrl} onClick={() => downloadUrl && downloadAsset(downloadUrl)} aria-label={`Download ${title}`}><Download size={15} aria-hidden="true" /><span>Download</span></button>
+                        <details className="collection-more">
+                          <summary aria-label={`More actions for ${title}`}><MoreHorizontal size={19} aria-hidden="true" /></summary>
+                          <div>
+                            <button type="button" onClick={() => openDrawer(item)}>View details</button>
+                            {item.available && !accountAuth && <button type="button" onClick={() => openSellForm(item)}>List for sale</button>}
+                            {item.available && accountAuth && item.job?.task_type === "IMAGE_GEN" && item.statusClass === "ready" && <Link href={`/marketplace?listJob=${encodeURIComponent(item.entry.job_id)}`}>List for sale</Link>}
+                            <button type="button" disabled={collectionBusy} onClick={() => handleRemove(item.entry.job_id)}>Remove from collection</button>
+                            {accountAuth && ["ready", "failed"].includes(item.statusClass) && <button type="button" disabled={collectionBusy} onClick={() => void deleteArtifact(item.entry.job_id)}>Delete artifact</button>}
+                          </div>
+                        </details>
+                      </div>}
                     </div>
                   </article>
                 );
@@ -782,6 +759,7 @@ const LibraryPage: NextPage = () => {
             </div>
           )}
         </section>
+        {accountAuth && hasMore && <button type="button" className="collection-refresh" disabled={loading || syncing || collectionBusy} onClick={() => setPaging({ query: accountQuery, offset: accountOffset + 50 })}>Load more creations</button>}
       </main>
 
       <JobDetailsDrawer
@@ -792,7 +770,11 @@ const LibraryPage: NextPage = () => {
         result={drawerResult}
         loading={drawerLoading}
         error={drawerError}
-        marketplace={{
+        accountId={accountAuth?.id}
+        onCollectionChange={accountAuth ? changeAccountCollection : undefined}
+        onDeleteArtifact={accountAuth ? deleteArtifact : undefined}
+        deletingArtifact={collectionBusy}
+        marketplace={accountAuth ? undefined : {
           wallet: wallet.activeWallet,
           canSign: Boolean(wallet.connectedWallet),
           source: wallet.source,
@@ -865,4 +847,11 @@ const LibraryPage: NextPage = () => {
   );
 };
 
-export default LibraryPage;
+export default function AccountCollectionPage() {
+  const account = useAccount();
+  if (!account.configured) return <LibraryPage />;
+  if (!account.signedIn || !account.account) return <><SeoHead title="Collection" noindex /><SiteHeader />
+    <main className="collection-page"><h1>Your collection</h1><p>{account.error || (account.loading ? "Loading your account..." : "Sign in to find your images and videos on any device.")}</p>
+    {!account.loading && <><Link href="/sign-in">Sign in</Link> | <Link href="/sign-up">Create account</Link></>}</main></>;
+  return <LibraryPage key={account.account.id} accountAuth={{ id: account.account.id, request: account.request }} />;
+}

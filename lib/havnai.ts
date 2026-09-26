@@ -1,9 +1,10 @@
+import { getMusicReadSession, clearMusicReadSession, type MusicReadSession } from "./musicReadSession";
+import { cachedMusicLibrary, clearMusicLibraryCache } from "./musicLibraryCache";
 import type { NextPage } from "next";
 import { getInviteCode } from "./invite";
 import { BrowserProvider, getAddress } from "ethers";
 import {
   ensureInjectedProvider,
-  getAllProviders,
   isUsableWallet,
   normalizeWalletError,
   readConnectedAccounts,
@@ -26,6 +27,7 @@ export interface SubmitJobResponse {
 export interface JobDetail {
   id: string;
   status: string;
+  collection_hidden?: boolean;
   model: string;
   wallet?: string;
   task_type?: string;
@@ -527,6 +529,10 @@ const API_REQUEST_TIMEOUT_MS = Number.parseInt(
   String(process.env.NEXT_PUBLIC_API_TIMEOUT_MS || "25000"),
   10
 );
+const MUSIC_READ_TIMEOUT_MS = Number.parseInt(
+  String(process.env.NEXT_PUBLIC_MUSIC_READ_TIMEOUT_MS || "12000"),
+  10
+);
 const WALLET_SIGN_TIMEOUT_MS = Number.parseInt(
   String(process.env.NEXT_PUBLIC_WALLET_SIGN_TIMEOUT_MS || "45000"),
   10
@@ -572,7 +578,16 @@ async function fetchWithTimeout(
   }
 }
 
+let pendingWalletSignature: Promise<string> | null = null;
+
 async function signMessageWithTimeout(signer: any, message: string): Promise<string> {
+  if (pendingWalletSignature) throw new HavnaiApiError(
+    "A signature request is already open. Finish or cancel it in MetaMask before trying again.", "wallet_request_pending"
+  );
+  const signing = Promise.resolve().then(() => signer.signMessage(message) as Promise<string>);
+  pendingWalletSignature = signing;
+  const clear = () => { if (pendingWalletSignature === signing) pendingWalletSignature = null; };
+  void signing.then(clear, clear);
   let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<string>((_, reject) => {
     timeoutHandle = setTimeout(() => {
@@ -586,7 +601,7 @@ async function signMessageWithTimeout(signer: any, message: string): Promise<str
   });
   try {
     return await Promise.race([
-      signer.signMessage(message) as Promise<string>,
+      signing,
       timeoutPromise,
     ]);
   } catch (error: any) {
@@ -862,9 +877,10 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   return json.job_id;
 }
 
-export async function fetchJob(jobId: string): Promise<JobDetailResponse> {
+export async function fetchJob(jobId: string, options?: { signal?: AbortSignal }): Promise<JobDetailResponse> {
   const res = await fetch(apiUrl(`/jobs/${encodeURIComponent(jobId)}`), {
     headers: buildHeaders(true),
+    signal: options?.signal,
   });
   if (!res.ok) {
     const text = await res.text();
@@ -1093,8 +1109,8 @@ export async function fetchMyJobs(
   return Array.isArray(data?.jobs) ? data.jobs : [];
 }
 
-export async function fetchResult(jobId: string): Promise<ResultResponse> {
-  const res = await fetch(apiUrl(`/result/${encodeURIComponent(jobId)}`));
+export async function fetchResult(jobId: string, options?: { signal?: AbortSignal }): Promise<ResultResponse> {
+  const res = await fetch(apiUrl(`/result/${encodeURIComponent(jobId)}`), { signal: options?.signal });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`fetch result failed: ${res.status} ${text}`);
@@ -1341,6 +1357,20 @@ type WalletNoncePurpose =
   | "gallery_list"
   | "gallery_relist"
   | "gallery_delist"
+  | "music_publish"
+  | "music_unpublish"
+  | "music_like"
+  | "music_read_session"
+  | "music_library_read"
+  | "music_save"
+  | "music_unsave"
+  | "playlist_read"
+  | "playlist_create"
+  | "playlist_update"
+  | "playlist_delete"
+  | "playlist_add"
+  | "playlist_remove"
+  | "playlist_reorder"
   | "identity_anchor_create"
   | "identity_anchor_delete"
   | "receipt_batch_flush"
@@ -1352,6 +1382,8 @@ interface WalletNonceRequest {
   purpose: WalletNoncePurpose;
   listing_id?: number;
   job_id?: string;
+  publication_id?: string;
+  playlist_id?: string;
   slug?: string;
   anchor_id?: number;
 }
@@ -1379,10 +1411,7 @@ async function signWalletNonce(
   signature: string;
 }> {
   const preferred = await ensureInjectedProvider();
-  const candidates = getAllProviders();
-  if (preferred.provider && !candidates.includes(preferred.provider)) {
-    candidates.unshift(preferred.provider);
-  }
+  const candidates = preferred.provider ? [preferred.provider] : [];
   if (candidates.length === 0) {
     const ensured = await ensureInjectedProvider();
     if (ensured.provider) {
@@ -1442,6 +1471,16 @@ async function signWalletNonce(
         signature,
       };
     } catch (error) {
+      // API validation/deployment failures are not wallet-provider conflicts.
+      if (error instanceof HavnaiApiError && error.status !== undefined) {
+        if (error.code === "unsupported_purpose" && payload.purpose.startsWith("music_")) {
+          throw new HavnaiApiError(
+            "This coordinator needs the music update before your library can load. No credits were charged.",
+            error.code, error.data, error.status
+          );
+        }
+        throw error;
+      }
       lastError = error;
       // If MetaMask itself timed out, don't try other providers — they share
       // the same stuck state and will just cascade more timeouts.
@@ -1452,11 +1491,7 @@ async function signWalletNonce(
   }
 
   if (lastError instanceof HavnaiApiError) {
-    const hint =
-      lastError.code === "wallet_request_timeout"
-        ? "Open MetaMask, complete/cancel pending requests, and disable extra wallet extensions."
-        : "If multiple wallet extensions are installed, disable extras and keep only MetaMask enabled.";
-    throw new HavnaiApiError(`${lastError.message} ${hint}`, lastError.code, lastError.data, lastError.status);
+    throw lastError;
   }
 
   throw new HavnaiApiError(
@@ -1813,22 +1848,22 @@ export interface AnalyticsRewardsResponse {
   total: number;
 }
 
-export async function fetchAnalyticsOverview(): Promise<AnalyticsOverview> {
-  const res = await fetch(apiUrl("/analytics/overview"), { headers: buildHeaders(true) });
+export async function fetchAnalyticsOverview(signal?: AbortSignal): Promise<AnalyticsOverview> {
+  const res = await fetch(apiUrl("/analytics/overview"), { signal, headers: buildHeaders(true) });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as AnalyticsOverview;
 }
 
-export async function fetchAnalyticsJobs(days = 30): Promise<AnalyticsJobsResponse> {
-  const res = await fetch(apiUrl(`/analytics/jobs?days=${days}`), { headers: buildHeaders(true) });
+export async function fetchAnalyticsJobs(days = 30, signal?: AbortSignal): Promise<AnalyticsJobsResponse> {
+  const res = await fetch(apiUrl(`/analytics/jobs?days=${days}`), { signal, headers: buildHeaders(true) });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as AnalyticsJobsResponse;
 }
 
-export async function fetchAnalyticsCosts(days = 30): Promise<AnalyticsCostsResponse> {
+export async function fetchAnalyticsCosts(days = 30, signal?: AbortSignal): Promise<AnalyticsCostsResponse> {
   const res = await fetch(
     apiUrl(`/analytics/costs?days=${days}&wallet=${encodeURIComponent(WALLET)}`),
-    { headers: buildHeaders(true) }
+    { signal, headers: buildHeaders(true) }
   );
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as AnalyticsCostsResponse;
@@ -1840,8 +1875,8 @@ export async function fetchAnalyticsNodes(): Promise<AnalyticsNodesResponse> {
   return (await res.json()) as AnalyticsNodesResponse;
 }
 
-export async function fetchAnalyticsRewards(): Promise<AnalyticsRewardsResponse> {
-  const res = await fetch(apiUrl("/analytics/rewards"), { headers: buildHeaders(true) });
+export async function fetchAnalyticsRewards(signal?: AbortSignal): Promise<AnalyticsRewardsResponse> {
+  const res = await fetch(apiUrl("/analytics/rewards"), { signal, headers: buildHeaders(true) });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as AnalyticsRewardsResponse;
 }
@@ -1959,6 +1994,7 @@ export interface OperatorWorkersResponse {
 }
 
 export interface NetworkSummary {
+  source?: "legacy";
   schema_version: "network-summary.v1";
   generated_at: string;
   coordinator: {
@@ -1979,14 +2015,14 @@ export interface NetworkSummary {
   queue: {
     queued: number;
     running: number;
-    completed: number;
-    failed: number;
+    completed: number | null;
+    failed: number | null;
   };
   recovery: {
     lease_seconds: number;
-    max_retries: number;
-    jobs_retried: number;
-    expired_claims: number;
+    max_retries: number | null;
+    jobs_retried: number | null;
+    expired_claims: number | null;
   };
   scheduler: {
     strategy: string;
@@ -2006,10 +2042,10 @@ export interface NetworkControlPlane {
   queue: { queued: number; running: number; failed: number; oldest_wait_seconds: number };
   latency_24h: {
     sample_size: number;
-    queue_p50_seconds: number;
-    queue_p95_seconds: number;
-    run_p50_seconds: number;
-    run_p95_seconds: number;
+    queue_p50_seconds: number | null;
+    queue_p95_seconds: number | null;
+    run_p50_seconds: number | null;
+    run_p95_seconds: number | null;
   };
   claims: {
     at_risk: number;
@@ -2021,7 +2057,7 @@ export interface NetworkControlPlane {
       assigned_at?: number | null;
       lease_expires_at?: number | null;
       lease_remaining_seconds: number;
-      retry_count: number;
+      retry_count: number | null;
       dispatch_score?: number | null;
       dispatch_reason?: string | null;
       at_risk: boolean;
@@ -2030,8 +2066,8 @@ export interface NetworkControlPlane {
   scheduler_24h: {
     strategy: string;
     decisions: Record<string, number>;
-    preferred: number;
-    fallback: number;
+    preferred: number | null;
+    fallback: number | null;
   };
   receipts: {
     unbatched: number;
@@ -2139,8 +2175,8 @@ function normalizeNodeInfo(raw: any): NodeInfo {
   };
 }
 
-export async function fetchNodes(): Promise<NodeInfo[]> {
-  const res = await fetch(apiUrl("/nodes"), { headers: buildHeaders(false) });
+export async function fetchNodes(signal?: AbortSignal): Promise<NodeInfo[]> {
+  const res = await fetch(apiUrl("/nodes"), { signal, headers: buildHeaders(false) });
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();
   const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
@@ -2163,14 +2199,14 @@ export async function fetchNodeDetail(nodeId: string): Promise<NodeDetail> {
   };
 }
 
-export async function fetchOperatorWorkers(limit = 200, status?: string): Promise<OperatorWorkersResponse> {
+export async function fetchOperatorWorkers(limit = 200, status?: string, signal?: AbortSignal): Promise<OperatorWorkersResponse> {
   const qs = new URLSearchParams();
   qs.set("limit", String(Math.max(1, Math.min(1000, Number(limit) || 200))));
   if (status && status.trim().length > 0) {
     qs.set("status", status.trim().toLowerCase());
   }
   const res = await fetch(apiUrl(`/operators/workers?${qs.toString()}`), {
-    headers: buildHeaders(false),
+    signal, headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();
@@ -2181,24 +2217,54 @@ export async function fetchOperatorWorkers(limit = 200, status?: string): Promis
   } as OperatorWorkersResponse;
 }
 
-export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
-  const res = await fetch(apiUrl("/network/leaderboard"), { headers: buildHeaders(false) });
+export async function fetchLeaderboard(signal?: AbortSignal): Promise<LeaderboardEntry[]> {
+  const res = await fetch(apiUrl("/network/leaderboard?format=json"), { signal, headers: buildHeaders(false) });
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();
   return (data.leaderboard || []) as LeaderboardEntry[];
 }
 
-export async function fetchNetworkSummary(): Promise<NetworkSummary> {
+export async function fetchNetworkSummary(signal?: AbortSignal): Promise<NetworkSummary> {
   const res = await fetch(apiUrl("/v1/network/summary"), {
-    headers: buildHeaders(false),
+    signal, headers: buildHeaders(false),
   });
+  if (res.status === 404) {
+    // Older coordinators expose the same live node/queue data through public APIs.
+    const [nodes, jobsResponse] = await Promise.all([
+      fetchNodes(signal),
+      fetch(apiUrl("/jobs/recent?limit=1"), { signal, headers: buildHeaders(false) }),
+    ]);
+    if (!jobsResponse.ok) throw await parseErrorResponse(jobsResponse);
+    const { summary } = await jobsResponse.json();
+    if (!summary || !Number.isFinite(summary.queued_jobs) || !Number.isFinite(summary.active_jobs)) {
+      throw new Error("Coordinator returned an invalid queue summary.");
+    }
+    const online = nodes.filter(node => node.online);
+    const byJobType: Record<string, number> = {};
+    const aliases: Record<string, string> = { image: "IMAGE_GEN", video: "VIDEO_GEN", face_swap: "FACE_SWAP", animatediff: "ANIMATEDIFF", music: "MUSIC_GEN" };
+    for (const node of online) {
+      const types = node.supported_job_types?.length ? node.supported_job_types : (node.supports || []).map(type => aliases[type] || type);
+      for (const type of new Set(types)) byJobType[type] = (byJobType[type] || 0) + 1;
+    }
+    return {
+      schema_version: "network-summary.v1", source: "legacy", generated_at: new Date().toISOString(),
+      coordinator: { status: "online", version: "legacy" },
+      nodes: { total: nodes.length, online: online.length, offline: nodes.length - online.length,
+        operators_online: new Set(online.map(node => node.operator?.wallet || node.wallet).filter(Boolean)).size },
+      capacity: { by_job_type: byJobType, total_vram_mb: online.reduce((sum, node) => sum + (node.gpu.memory_total_mb || 0), 0),
+        average_gpu_utilization: online.length ? online.reduce((sum, node) => sum + node.utilization, 0) / online.length : 0 },
+      queue: { queued: summary.queued_jobs, running: summary.active_jobs, completed: null, failed: null },
+      recovery: { lease_seconds: 0, max_retries: 0, jobs_retried: null, expired_claims: null },
+      scheduler: { strategy: "unavailable", preference_grace_seconds: 0, signals: [] },
+    };
+  }
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as NetworkSummary;
 }
 
-export async function fetchNetworkControlPlane(): Promise<NetworkControlPlane> {
+export async function fetchNetworkControlPlane(signal?: AbortSignal): Promise<NetworkControlPlane> {
   const res = await fetch(apiUrl("/v1/network/control-plane"), {
-    headers: buildHeaders(false),
+    signal, headers: buildHeaders(false),
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as NetworkControlPlane;
@@ -2457,6 +2523,590 @@ export async function fetchGalleryBrowse(
   };
 }
 
+export interface MusicPublication {
+  id: string;
+  job_id?: string;
+  audio_artifact_id?: string;
+  creator_wallet: string;
+  creator: string;
+  creator_url?: string;
+  title: string;
+  style: string;
+  tags: string[];
+  duration?: number | null;
+  bpm?: number | null;
+  key?: string;
+  instrumental: boolean;
+  model?: string;
+  cover_art_seed?: string;
+  cover_art_url?: string;
+  audio_url?: string;
+  play_count: number;
+  like_count: number;
+  liked_by_me: boolean;
+  saved_by_me: boolean;
+  already_published?: boolean;
+  published_at: number;
+  updated_at: number;
+}
+
+export interface MusicDiscoverResponse {
+  publications: MusicPublication[];
+  total: number;
+  limit: number;
+  offset: number;
+  sort: string;
+}
+
+export interface MusicPlaylist {
+  id: string;
+  owner_wallet: string;
+  owner: string;
+  owner_url?: string;
+  title: string;
+  description: string;
+  is_public: boolean;
+  is_owner: boolean;
+  artwork_seed: string;
+  artwork_url?: string;
+  artwork_tiles: string[];
+  track_count: number;
+  duration?: number | null;
+  publications: MusicPublication[];
+  created_at: number;
+  updated_at: number;
+}
+
+export interface MusicLibraryResponse {
+  publications: MusicPublication[];
+  recent_liked: MusicPublication[];
+  playlists: MusicPlaylist[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface MusicCreatorProfile {
+  wallet: string;
+  display_name: string;
+  track_count: number;
+  play_count: number;
+  like_count: number;
+  publications: MusicPublication[];
+  playlists: MusicPlaylist[];
+  sort: string;
+}
+
+export type MusicPublicationProgressStep =
+  | "resolving_wallet"
+  | "requesting_nonce"
+  | "awaiting_signature"
+  | "submitting_publication";
+
+export function normalizeMusicPublication(raw: any): MusicPublication {
+  return {
+    id: String(raw?.id || ""),
+    job_id: raw?.job_id ? String(raw.job_id) : undefined,
+    audio_artifact_id: raw?.audio_artifact_id ? String(raw.audio_artifact_id) : undefined,
+    creator_wallet: String(raw?.creator_wallet || ""),
+    creator: String(raw?.creator || ""),
+    title: String(raw?.title || "Untitled HavnAI Song"),
+    style: String(raw?.style || ""),
+    tags: Array.isArray(raw?.tags) ? raw.tags.map((tag: any) => String(tag)).filter(Boolean) : [],
+    duration: raw?.duration == null ? null : Number(raw.duration),
+    bpm: raw?.bpm == null ? null : Number(raw.bpm),
+    key: raw?.key ? String(raw.key) : "",
+    instrumental: Boolean(raw?.instrumental),
+    model: raw?.model ? String(raw.model) : undefined,
+    cover_art_seed: raw?.cover_art_seed ? String(raw.cover_art_seed) : undefined,
+    cover_art_url: resolveAssetUrl(raw?.cover_art_url),
+    audio_url: resolveAssetUrl(raw?.audio_url),
+    play_count: Number(raw?.play_count || 0),
+    like_count: Number(raw?.like_count || 0),
+    liked_by_me: Boolean(raw?.liked_by_me),
+    saved_by_me: Boolean(raw?.saved_by_me),
+    already_published: raw?.already_published === true,
+    creator_url: raw?.creator_url ? String(raw.creator_url) : undefined,
+    published_at: Number(raw?.published_at || 0),
+    updated_at: Number(raw?.updated_at || 0),
+  };
+}
+
+export function normalizeMusicPlaylist(raw: any): MusicPlaylist {
+  return {
+    id: String(raw?.id || ""),
+    owner_wallet: String(raw?.owner_wallet || ""),
+    owner: String(raw?.owner || ""),
+    owner_url: raw?.owner_url ? String(raw.owner_url) : undefined,
+    title: String(raw?.title || "Untitled playlist"),
+    description: String(raw?.description || ""),
+    is_public: Boolean(raw?.is_public),
+    is_owner: Boolean(raw?.is_owner),
+    artwork_seed: String(raw?.artwork_seed || ""),
+    artwork_url: resolveAssetUrl(raw?.artwork_url),
+    artwork_tiles: Array.isArray(raw?.artwork_tiles) ? raw.artwork_tiles.map(resolveAssetUrl).filter(Boolean) : [],
+    track_count: Number(raw?.track_count || 0),
+    duration: raw?.duration == null ? null : Number(raw.duration),
+    publications: Array.isArray(raw?.publications) ? raw.publications.map(normalizeMusicPublication) : [],
+    created_at: Number(raw?.created_at || 0),
+    updated_at: Number(raw?.updated_at || 0),
+  };
+}
+
+async function musicReadAccess(wallet: string): Promise<{ wallet: string; read_session: string }> {
+  const session = await getMusicReadSession(wallet, async () => {
+    const signed = await signWalletNonce({ wallet, purpose: "music_read_session" });
+    const response = await fetchWithTimeout(apiUrl("/music/session"), {
+      method: "POST", headers: buildHeaders(true), body: JSON.stringify(signed),
+    });
+    if (!response.ok) throw await parseErrorResponse(response);
+    return await response.json() as MusicReadSession;
+  });
+  return { wallet: session.wallet, read_session: session.token };
+}
+
+async function fetchMusicRead(input: string, init: RequestInit): Promise<Response> {
+  const response = await fetchWithTimeout(input, init, MUSIC_READ_TIMEOUT_MS);
+  // Never open another wallet prompt automatically after an expired/revoked session.
+  if (response.status === 401) clearMusicReadSession();
+  return response;
+}
+
+export async function fetchMusicDiscover(
+  opts: {
+    search?: string;
+    style?: string;
+    sort?: string;
+    offset?: number;
+    limit?: number;
+    wallet?: string | null;
+    creator_wallet?: string | null;
+  } = {}
+): Promise<MusicDiscoverResponse> {
+  const params = new URLSearchParams();
+  if (opts.search) params.set("search", opts.search);
+  if (opts.style) params.set("style", opts.style);
+  if (opts.sort) params.set("sort", opts.sort);
+  if (opts.offset != null) params.set("offset", String(opts.offset));
+  if (opts.limit != null) params.set("limit", String(opts.limit));
+  if (opts.creator_wallet) params.set("creator_wallet", opts.creator_wallet);
+  let res: Response;
+  if (opts.wallet) {
+    const signed = await musicReadAccess(opts.wallet);
+    res = await fetchMusicRead(apiUrl("/music/discover"), {
+      method: "POST",
+      headers: buildHeaders(true),
+      body: JSON.stringify({
+        ...signed,
+        search: opts.search,
+        style: opts.style,
+        sort: opts.sort,
+        offset: opts.offset,
+        limit: opts.limit,
+        creator_wallet: opts.creator_wallet,
+      }),
+    });
+  } else {
+    const qs = params.toString();
+    res = await fetchMusicRead(apiUrl(`/music/discover${qs ? `?${qs}` : ""}`), {
+      headers: buildHeaders(false),
+    });
+  }
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return {
+    publications: Array.isArray(data?.publications) ? data.publications.map(normalizeMusicPublication) : [],
+    total: Number(data?.total || 0),
+    limit: Number(data?.limit || 0),
+    offset: Number(data?.offset || 0),
+    sort: String(data?.sort || opts.sort || "newest"),
+  };
+}
+
+export async function fetchMusicLibrary(
+  opts: { wallet: string; search?: string; offset?: number; limit?: number }
+): Promise<MusicLibraryResponse> {
+  return cachedMusicLibrary(JSON.stringify([opts.wallet.toLowerCase(), opts.search || "", opts.offset || 0, opts.limit || 0]), async () => {
+    const signed = await musicReadAccess(opts.wallet);
+    const res = await fetchMusicRead(apiUrl("/music/library"), {
+      method: "POST",
+      headers: buildHeaders(true),
+      body: JSON.stringify({
+        ...signed,
+        search: opts.search,
+        offset: opts.offset,
+        limit: opts.limit,
+      }),
+    });
+    if (!res.ok) throw await parseErrorResponse(res);
+    const data = await res.json();
+    return {
+      publications: Array.isArray(data?.publications) ? data.publications.map(normalizeMusicPublication) : [],
+      recent_liked: Array.isArray(data?.recent_liked) ? data.recent_liked.map(normalizeMusicPublication) : [],
+      playlists: Array.isArray(data?.playlists) ? data.playlists.map(normalizeMusicPlaylist) : [],
+      total: Number(data?.total || 0),
+      limit: Number(data?.limit || 0),
+      offset: Number(data?.offset || 0),
+    };
+  });
+}
+
+export async function fetchMyMusicPlaylists(wallet: string = WALLET): Promise<MusicPlaylist[]> {
+  const signed = await musicReadAccess(wallet);
+  const res = await fetchMusicRead(apiUrl("/music/playlists/mine"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      ...signed,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return Array.isArray(data?.playlists) ? data.playlists.map(normalizeMusicPlaylist) : [];
+}
+
+export async function setMusicPublicationSaved(
+  publicationId: string,
+  saved: boolean,
+  wallet: string = WALLET
+): Promise<{ ok: boolean; saved: boolean }> {
+  clearMusicLibraryCache();
+  const signed = await signWalletNonce({
+    wallet,
+    amount: 1,
+    purpose: saved ? "music_save" : "music_unsave",
+    publication_id: publicationId,
+  });
+  const res = await fetchWithTimeout(apiUrl(`/music/publications/${encodeURIComponent(publicationId)}/save`), {
+    method: saved ? "POST" : "DELETE",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as { ok: boolean; saved: boolean };
+}
+
+export async function createMusicPlaylist(
+  input: { wallet?: string; title: string; description?: string; is_public?: boolean }
+): Promise<MusicPlaylist> {
+  clearMusicLibraryCache();
+  const signed = await signWalletNonce({
+    wallet: input.wallet || WALLET,
+    amount: 1,
+    purpose: "playlist_create",
+    playlist_id: "new",
+  });
+  const res = await fetchWithTimeout(apiUrl("/music/playlists"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      ...input,
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return normalizeMusicPlaylist(await res.json());
+}
+
+export async function updateMusicPlaylist(
+  playlistId: string,
+  input: { wallet?: string; title?: string; description?: string; is_public?: boolean }
+): Promise<MusicPlaylist> {
+  clearMusicLibraryCache();
+  const signed = await signWalletNonce({
+    wallet: input.wallet || WALLET,
+    amount: 1,
+    purpose: "playlist_update",
+    playlist_id: playlistId,
+  });
+  const res = await fetchWithTimeout(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}`), {
+    method: "PATCH",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      ...input,
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return normalizeMusicPlaylist(await res.json());
+}
+
+export async function deleteMusicPlaylist(playlistId: string, wallet: string = WALLET): Promise<{ ok: boolean }> {
+  clearMusicLibraryCache();
+  const signed = await signWalletNonce({
+    wallet,
+    amount: 1,
+    purpose: "playlist_delete",
+    playlist_id: playlistId,
+  });
+  const res = await fetchWithTimeout(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}`), {
+    method: "DELETE",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as { ok: boolean };
+}
+
+export async function fetchMusicPlaylist(playlistId: string, wallet?: string | null): Promise<MusicPlaylist> {
+  const publicRes = await fetchMusicRead(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}`), {
+    headers: buildHeaders(false),
+  });
+  if (publicRes.ok) {
+    const publicPlaylist = normalizeMusicPlaylist(await publicRes.json());
+    if (!wallet || publicPlaylist.owner_wallet.toLowerCase() !== wallet.toLowerCase()) {
+      return publicPlaylist;
+    }
+    try {
+      const signed = await musicReadAccess(wallet);
+      const privateRes = await fetchMusicRead(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}/access`), {
+        method: "POST",
+        headers: buildHeaders(true),
+        body: JSON.stringify({
+          ...signed,
+        }),
+      });
+      if (privateRes.ok) return normalizeMusicPlaylist(await privateRes.json());
+    } catch {
+      return publicPlaylist;
+    }
+    return publicPlaylist;
+  }
+  if (wallet) {
+    const signed = await musicReadAccess(wallet);
+    const privateRes = await fetchMusicRead(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}/access`), {
+      method: "POST",
+      headers: buildHeaders(true),
+      body: JSON.stringify({
+        ...signed,
+      }),
+    });
+    if (privateRes.ok) return normalizeMusicPlaylist(await privateRes.json());
+    throw await parseErrorResponse(privateRes);
+  }
+  throw await parseErrorResponse(publicRes);
+}
+
+export async function addMusicPlaylistItem(
+  playlistId: string,
+  publicationId: string,
+  wallet: string = WALLET
+): Promise<MusicPlaylist> {
+  clearMusicLibraryCache();
+  const signed = await signWalletNonce({
+    wallet,
+    amount: 1,
+    purpose: "playlist_add",
+    playlist_id: playlistId,
+    publication_id: publicationId,
+  });
+  const res = await fetchWithTimeout(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}/items`), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+      publication_id: publicationId,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return normalizeMusicPlaylist(await res.json());
+}
+
+export async function removeMusicPlaylistItem(
+  playlistId: string,
+  publicationId: string,
+  wallet: string = WALLET
+): Promise<MusicPlaylist> {
+  clearMusicLibraryCache();
+  const signed = await signWalletNonce({
+    wallet,
+    amount: 1,
+    purpose: "playlist_remove",
+    playlist_id: playlistId,
+    publication_id: publicationId,
+  });
+  const res = await fetchWithTimeout(
+    apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}/items/${encodeURIComponent(publicationId)}`),
+    {
+      method: "DELETE",
+      headers: buildHeaders(true),
+      body: JSON.stringify({
+        wallet: signed.wallet,
+        nonce: signed.nonce,
+        signature: signed.signature,
+      }),
+    }
+  );
+  if (!res.ok) throw await parseErrorResponse(res);
+  return normalizeMusicPlaylist(await res.json());
+}
+
+export async function reorderMusicPlaylistItems(
+  playlistId: string,
+  publicationIds: string[],
+  wallet: string = WALLET
+): Promise<MusicPlaylist> {
+  clearMusicLibraryCache();
+  const signed = await signWalletNonce({
+    wallet,
+    amount: 1,
+    purpose: "playlist_reorder",
+    playlist_id: playlistId,
+  });
+  const res = await fetchWithTimeout(apiUrl(`/music/playlists/${encodeURIComponent(playlistId)}/reorder`), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+      publication_ids: publicationIds,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return normalizeMusicPlaylist(await res.json());
+}
+
+export async function fetchMusicCreator(wallet: string, opts: { sort?: string; viewerWallet?: string | null } = {}): Promise<MusicCreatorProfile> {
+  const params = new URLSearchParams();
+  if (opts.sort) params.set("sort", opts.sort);
+  let res: Response;
+  if (/^creator_[a-f0-9]{32}$/.test(wallet)) {
+    res = await fetchMusicRead(apiUrl(`/music/creators/${encodeURIComponent(wallet)}?${params}`), { headers: buildHeaders(false) });
+  } else if (opts.viewerWallet) {
+    const signed = await musicReadAccess(opts.viewerWallet);
+    res = await fetchMusicRead(apiUrl(`/music/creator/${encodeURIComponent(wallet)}`), {
+      method: "POST",
+      headers: buildHeaders(true),
+      body: JSON.stringify({
+        ...signed,
+        sort: opts.sort,
+      }),
+    });
+  } else {
+    const qs = params.toString();
+    res = await fetchMusicRead(apiUrl(`/music/creator/${encodeURIComponent(wallet)}${qs ? `?${qs}` : ""}`), {
+      headers: buildHeaders(false),
+    });
+  }
+  if (!res.ok) throw await parseErrorResponse(res);
+  const data = await res.json();
+  return {
+    wallet: String(data?.wallet || ""),
+    display_name: String(data?.display_name || ""),
+    track_count: Number(data?.track_count || 0),
+    play_count: Number(data?.play_count || 0),
+    like_count: Number(data?.like_count || 0),
+    publications: Array.isArray(data?.publications) ? data.publications.map(normalizeMusicPublication) : [],
+    playlists: Array.isArray(data?.playlists) ? data.playlists.map(normalizeMusicPlaylist) : [],
+    sort: String(data?.sort || opts.sort || "newest"),
+  };
+}
+
+export async function publishMusicJob(
+  input: { wallet?: string; job_id: string; title: string; style?: string; tags?: string[] },
+  options: { onProgress?: (step: MusicPublicationProgressStep) => void } = {}
+): Promise<MusicPublication> {
+  const signed = await signWalletNonce(
+    {
+      wallet: input.wallet || WALLET,
+      amount: 1,
+      purpose: "music_publish",
+      job_id: input.job_id,
+    },
+    (step) => options.onProgress?.(step)
+  );
+  options.onProgress?.("submitting_publication");
+  const res = await fetchWithTimeout(apiUrl("/music/publications"), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      ...input,
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return normalizeMusicPublication(await res.json());
+}
+
+export async function unpublishMusicPublication(
+  publicationId: string,
+  wallet: string = WALLET
+): Promise<{ ok: boolean }> {
+  const signed = await signWalletNonce({
+    wallet,
+    amount: 1,
+    purpose: "music_unpublish",
+    publication_id: publicationId,
+  });
+  const res = await fetchWithTimeout(apiUrl(`/music/publications/${encodeURIComponent(publicationId)}`), {
+    method: "DELETE",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as { ok: boolean };
+}
+
+export async function setMusicPublicationLike(
+  publicationId: string,
+  liked: boolean,
+  wallet: string = WALLET
+): Promise<{ ok: boolean; liked: boolean; like_count: number }> {
+  clearMusicLibraryCache();
+  const signed = await signWalletNonce({
+    wallet,
+    amount: 1,
+    purpose: "music_like",
+    publication_id: publicationId,
+  });
+  const res = await fetchWithTimeout(apiUrl(`/music/publications/${encodeURIComponent(publicationId)}/like`), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({
+      wallet: signed.wallet,
+      nonce: signed.nonce,
+      signature: signed.signature,
+      liked,
+    }),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as { ok: boolean; liked: boolean; like_count: number };
+}
+
+export async function recordMusicPublicationPlay(
+  publicationId: string,
+  input: { seconds_listened?: number; completed?: boolean; session_id?: string } = {}
+): Promise<{ ok: boolean; counted: boolean; play_count?: number; reason?: string }> {
+  const res = await fetchWithTimeout(apiUrl(`/music/publications/${encodeURIComponent(publicationId)}/play`), {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await parseErrorResponse(res);
+  return (await res.json()) as { ok: boolean; counted: boolean; play_count?: number; reason?: string };
+}
+
 export async function fetchMyGalleryListings(wallet: string = WALLET): Promise<GalleryListing[]> {
   const res = await fetchWithTimeout(
     apiUrl(`/gallery/my-listings?wallet=${encodeURIComponent(wallet)}&include_sold=true`),
@@ -2645,7 +3295,7 @@ export async function relistGalleryAsset(
 }
 
 export async function fetchMarketplace(
-  opts: { search?: string; category?: string; offset?: number; limit?: number } = {}
+  opts: { search?: string; category?: string; offset?: number; limit?: number; signal?: AbortSignal; accountCatalog?: boolean } = {}
 ): Promise<WorkflowListResponse> {
   const params = new URLSearchParams();
   if (opts.search) params.set("search", opts.search);
@@ -2653,16 +3303,21 @@ export async function fetchMarketplace(
   if (opts.offset) params.set("offset", String(opts.offset));
   if (opts.limit) params.set("limit", String(opts.limit));
   const qs = params.toString();
-  const res = await fetch(apiUrl(`/marketplace/browse${qs ? `?${qs}` : ""}`), {
+  const res = await fetchWithTimeout(apiUrl(`${opts.accountCatalog ? "/v2/workflows" : "/marketplace/browse"}${qs ? `?${qs}` : ""}`), {
     headers: buildHeaders(false),
+    signal: opts.signal,
   });
   if (!res.ok) throw await parseErrorResponse(res);
-  return (await res.json()) as WorkflowListResponse;
+  const result = (await res.json()) as WorkflowListResponse;
+  if (opts.accountCatalog) result.workflows = result.workflows.map(item => ({ ...item, id: `public:${item.id}` }));
+  return result;
 }
 
-export async function fetchWorkflow(id: string): Promise<Workflow> {
-  const res = await fetch(apiUrl(`/workflows/${encodeURIComponent(id)}`), {
+export async function fetchWorkflow(id: string, opts: { signal?: AbortSignal } = {}): Promise<Workflow> {
+  const path = id.startsWith("public:") ? `/v2/workflows/${encodeURIComponent(id.slice(7))}` : `/workflows/${encodeURIComponent(id)}`;
+  const res = await fetchWithTimeout(apiUrl(path), {
     headers: buildHeaders(false),
+    signal: opts.signal,
   });
   if (!res.ok) throw await parseErrorResponse(res);
   return (await res.json()) as Workflow;

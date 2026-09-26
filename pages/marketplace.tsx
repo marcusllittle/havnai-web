@@ -1,24 +1,24 @@
 import type { NextPage } from "next";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
-import { CinematicPageHero } from "../components/CinematicPageHero";
+import { useEffect, useRef, useState } from "react";
+import { ArrowUpRight, Images, Layers3, Plus } from "lucide-react";
+import { CollectionPreview } from "../components/CollectionPreview";
 import { SeoHead } from "../components/SeoHead";
 import { useWallet } from "../components/WalletProvider";
 import { SiteHeader } from "../components/SiteHeader";
-import { getApiBase } from "../lib/apiBase";
+import { useAccount } from "../components/AccountProvider";
+import { AccountMarketplace } from "../components/AccountMarketplace";
 import {
   createWorkflow,
   fetchCredits,
   fetchGalleryBrowse,
   fetchGalleryCollection,
-  fetchGalleryPurchases,
   fetchMarketplace,
   fetchMyGalleryListings,
   fetchOwnershipHistory,
   GalleryListing,
   GalleryOwnershipEvent,
-  GalleryPurchaseRecord,
   HavnaiApiError,
   delistGalleryListing,
   getGalleryDownloadUrl,
@@ -28,7 +28,7 @@ import {
 } from "../lib/havnai";
 import { downloadAsset } from "../lib/download";
 import { getConnectButtonLabel, isUsableWallet } from "../lib/wallet";
-import { getWalletIdentityLabel, getWalletSourceLabel, getWalletStatusCopy, PUBLIC_ALPHA_LABEL } from "../lib/publicAlpha";
+import { getWalletIdentityLabel, getWalletSourceLabel, getWalletStatusCopy } from "../lib/publicAlpha";
 
 type MarketplaceTab = "gallery" | "workflows";
 type GalleryView = "browse" | "my-listings" | "collection";
@@ -79,40 +79,9 @@ function formatListingModel(listing: Pick<GalleryListing, "model" | "model_tier"
   return `${model} · Tier ${tier}`;
 }
 
-function purchaseToListing(purchase: GalleryPurchaseRecord): GalleryListing {
-  return {
-    id: purchase.listing_id,
-    job_id: purchase.job_id,
-    seller_wallet: purchase.seller_wallet,
-    owner_wallet: purchase.buyer_wallet,
-    title: purchase.title,
-    description: "",
-    price_credits: purchase.price_paid,
-    category: undefined,
-    asset_type: purchase.asset_type,
-    model: purchase.model,
-    model_key: purchase.model_key,
-    model_tier: purchase.model_tier,
-    model_reward_weight: purchase.model_reward_weight,
-    model_credit_cost: purchase.model_credit_cost,
-    model_pipeline: purchase.model_pipeline,
-    model_task_type: purchase.model_task_type,
-    prompt: purchase.prompt,
-    listed: false,
-    sold: true,
-    status: "sold",
-    image_url: purchase.image_url,
-    video_url: purchase.video_url,
-    preview_url: purchase.preview_url,
-    created_at: purchase.created_at,
-    updated_at: purchase.created_at,
-  };
-}
-
 const MarketplacePage: NextPage = () => {
   const wallet = useWallet();
   const router = useRouter();
-  const apiBase = getApiBase();
 
   const [tab, setTab] = useState<MarketplaceTab>("gallery");
   const [galleryView, setGalleryView] = useState<GalleryView>("browse");
@@ -122,6 +91,7 @@ const MarketplacePage: NextPage = () => {
   const [creditLoading, setCreditLoading] = useState(false);
 
   const [gallerySearch, setGallerySearch] = useState("");
+  const [gallerySearchDraft, setGallerySearchDraft] = useState("");
   const [galleryAssetType, setGalleryAssetType] = useState<GalleryAssetFilter>("all");
   const [gallerySort, setGallerySort] = useState("newest");
   const [galleryPage, setGalleryPage] = useState(0);
@@ -154,6 +124,9 @@ const MarketplacePage: NextPage = () => {
   const [workflowTotal, setWorkflowTotal] = useState(0);
   const [workflowLoading, setWorkflowLoading] = useState(true);
   const [workflowSearch, setWorkflowSearch] = useState("");
+  const [workflowSearchDraft, setWorkflowSearchDraft] = useState("");
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
+  const [workflowRefreshKey, setWorkflowRefreshKey] = useState(0);
   const [workflowCategory, setWorkflowCategory] = useState("All");
   const [workflowPage, setWorkflowPage] = useState(0);
 
@@ -169,6 +142,7 @@ const MarketplacePage: NextPage = () => {
   const [workflowCreateError, setWorkflowCreateError] = useState("");
   const [workflowCreateSuccess, setWorkflowCreateSuccess] = useState("");
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
 
   const workflowLimit = 20;
   const galleryLimit = 24;
@@ -195,24 +169,11 @@ const MarketplacePage: NextPage = () => {
     }
   }, [router.isReady, router.query.tab, router.query.galleryView]);
 
-  useEffect(() => {
-    if (!router.isReady) return;
-    const currentTab = typeof router.query.tab === "string" ? router.query.tab : undefined;
-    const currentGalleryView =
-      typeof router.query.galleryView === "string" ? router.query.galleryView : undefined;
-    const nextQuery =
-      tab === "gallery"
-        ? { tab, galleryView }
-        : { tab };
-    const shouldReplace =
-      currentTab !== tab ||
-      (tab === "gallery" && currentGalleryView !== galleryView) ||
-      (tab === "workflows" && currentGalleryView != null);
-    if (!shouldReplace) return;
-    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, {
-      shallow: true,
-    });
-  }, [galleryView, router, tab]);
+  const changeMarketView = (nextTab: MarketplaceTab, nextView: GalleryView = galleryView) => {
+    setTab(nextTab);
+    setGalleryView(nextView);
+    router.replace({ pathname: router.pathname, query: nextTab === "gallery" ? { tab: nextTab, galleryView: nextView } : { tab: nextTab } }, undefined, { shallow: true });
+  };
 
   useEffect(() => {
     let active = true;
@@ -334,6 +295,7 @@ const MarketplacePage: NextPage = () => {
     let active = true;
     const loadWorkflows = async () => {
       setWorkflowLoading(true);
+      setWorkflowError(null);
       try {
         const category = workflowCategory === "All" ? undefined : workflowCategory;
         const res = await fetchMarketplace({
@@ -349,6 +311,7 @@ const MarketplacePage: NextPage = () => {
         if (active) {
           setWorkflows([]);
           setWorkflowTotal(0);
+          setWorkflowError("The workflow catalog is out of reach. Please try again.");
         }
       } finally {
         if (active) setWorkflowLoading(false);
@@ -358,9 +321,49 @@ const MarketplacePage: NextPage = () => {
     return () => {
       active = false;
     };
-  }, [workflowCategory, workflowPage, workflowSearch]);
+  }, [workflowCategory, workflowPage, workflowSearch, workflowRefreshKey]);
 
-  const galleryCards = useMemo(() => galleryListings, [galleryListings]);
+  useEffect(() => {
+    let active = true;
+    setOwnershipHistory([]);
+    if (selectedListing?.job_id) {
+      fetchOwnershipHistory(selectedListing.job_id)
+        .then(history => { if (active) setOwnershipHistory(history); })
+        .catch(() => { if (active) setOwnershipHistory([]); });
+    }
+    return () => { active = false; };
+  }, [selectedListing?.job_id]);
+
+  const galleryCards = galleryListings;
+
+  useEffect(() => {
+    if (!selectedListing && !selectedWorkflow) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const panel = drawerRef.current;
+    panel?.querySelector<HTMLButtonElement>(".job-drawer-close")?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedListing(null);
+        setSelectedWorkflow(null);
+        setRelistModalOpen(false);
+      }
+      if (event.key !== "Tab" || !panel) return;
+      const items = Array.from(panel.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), video[controls]'));
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (!first) { event.preventDefault(); panel.focus(); }
+      else if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKey);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [selectedListing?.id, selectedWorkflow?.id]);
 
   const handleConnectWallet = async () => {
     try {
@@ -422,11 +425,6 @@ const MarketplacePage: NextPage = () => {
     setGalleryActionSuccess(null);
     setOwnershipHistory([]);
     setRelistModalOpen(false);
-    if (listing.job_id) {
-      fetchOwnershipHistory(listing.job_id)
-        .then(setOwnershipHistory)
-        .catch(() => setOwnershipHistory([]));
-    }
   };
 
   const openCollectionListing = (listing: GalleryListing) => {
@@ -436,11 +434,6 @@ const MarketplacePage: NextPage = () => {
     setGalleryActionSuccess(null);
     setOwnershipHistory([]);
     setRelistModalOpen(false);
-    if (listing.job_id) {
-      fetchOwnershipHistory(listing.job_id)
-        .then(setOwnershipHistory)
-        .catch(() => setOwnershipHistory([]));
-    }
   };
 
   const closeListingDrawer = () => {
@@ -572,79 +565,34 @@ const MarketplacePage: NextPage = () => {
 
       <SiteHeader />
 
-      <main className="library-page jh-page-shell">
-        <CinematicPageHero
-          eyebrow="Marketplace"
-          title="Trade the outputs. Reuse the systems."
-          description={`The ${PUBLIC_ALPHA_LABEL.toLowerCase()} exchange layer for collectible media, exclusive ownership transfer, and reusable workflow setups that can route back into the generator.`}
-          mediaVariant="marketplace"
-          panelEyebrow="Exchange Floor"
-          panelTitle="Gallery ownership + workflow distribution"
-          panelDescription="Browse public listings without a wallet, then connect when you want to buy, list, or relist assets tied to your active identity."
-          stats={[
-            {
-              label: "Listings",
-              value: galleryTotal.toLocaleString(),
-              detail: "Visible in public browse",
-            },
-            {
-              label: "Workflows",
-              value: workflowTotal.toLocaleString(),
-              detail: "Reusable presets in catalog",
-            },
-            {
-              label: "Credits",
-              value: creditLoading ? "Loading..." : `${formatCredits(creditBalance)}`,
-              detail: activeWallet ? "Active wallet balance" : "Connect to transact",
-            },
-          ]}
-          actions={
-            <>
-              <Link href="/create" className="jh-btn jh-btn-primary">
-                Create to Sell
-              </Link>
-              <Link href="/astra" className="jh-btn jh-btn-secondary">
-                See Astra
-              </Link>
-            </>
-          }
-        />
-
-        <section className="page-container">
-          <div className="chart-section" style={{ marginBottom: "1.5rem" }}>
-            <div className="chart-header">
-              <h2 className="chart-title">Related paths</h2>
-            </div>
-            <p style={{ color: "var(--text-muted)", lineHeight: 1.7, marginBottom: "1rem" }}>
-              Marketplace works best as part of the full JoinHavn flow: generate, claim ownership, then buy, sell, or reuse assets.
-            </p>
-            <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap" }}>
-              <Link href="/ai-image-generator" className="jh-btn jh-btn-secondary">AI Image Generator</Link>
-              <Link href="/ownership" className="jh-btn jh-btn-secondary">Ownership</Link>
-              <Link href="/how-it-works" className="jh-btn jh-btn-tertiary">How It Works</Link>
-            </div>
-          </div>
-
+      <main className="market-page">
+        <header className="market-heading">
+          <div><span className="market-eyebrow">The HavnAI marketplace</span><h1>Find something worth keeping.</h1><p>Collect original creations. Discover the workflows behind the next idea.</p></div>
+          <Link href="/create" className="market-create"><Plus size={17} aria-hidden="true" /> Create something</Link>
+        </header>
+        <section className="market-content" aria-label="Marketplace">
           <div className="marketplace-tabs">
             <button
               type="button"
               className={`marketplace-tab ${tab === "gallery" ? "is-active" : ""}`}
-              onClick={() => setTab("gallery")}
+              aria-pressed={tab === "gallery"}
+              onClick={() => changeMarketView("gallery")}
             >
-              Gallery
+              <Images size={16} aria-hidden="true" /> Gallery
             </button>
             <button
               type="button"
               className={`marketplace-tab ${tab === "workflows" ? "is-active" : ""}`}
-              onClick={() => setTab("workflows")}
+              aria-pressed={tab === "workflows"}
+              onClick={() => changeMarketView("workflows")}
             >
-              Workflows
+              <Layers3 size={16} aria-hidden="true" /> Workflows
             </button>
           </div>
 
           {tab === "gallery" && (
             <>
-              <div className="marketplace-wallet-strip">
+              <details className="market-account"><summary>Wallet &amp; credits <span>{connectedWallet ? formatWallet(connectedWallet) : "Browse freely · connect to trade"}</span></summary><div className="marketplace-wallet-strip">
                 <div className="wallet-status-copy-block">
                   <div className="wallet-status-heading-row">
                     <span className={`wallet-status-pill wallet-source-${wallet.source}`}>{walletSourceLabel}</span>
@@ -684,20 +632,24 @@ const MarketplacePage: NextPage = () => {
                 </div>
               </div>
 
+              </details>
+
               {galleryActionSuccess && <p className="job-hint" style={{ color: "#8ff0b6" }}>{galleryActionSuccess}</p>}
 
               <div className="marketplace-subtabs">
                 <button
                   type="button"
                   className={`library-chip ${galleryView === "browse" ? "is-active" : ""}`}
-                  onClick={() => setGalleryView("browse")}
+                  aria-pressed={galleryView === "browse"}
+                  onClick={() => changeMarketView("gallery", "browse")}
                 >
                   Browse
                 </button>
                 <button
                   type="button"
                   className={`library-chip ${galleryView === "my-listings" ? "is-active" : ""}`}
-                  onClick={() => activeWallet && setGalleryView("my-listings")}
+                  aria-pressed={galleryView === "my-listings"}
+                  onClick={() => changeMarketView("gallery", "my-listings")}
                   disabled={!activeWallet}
                 >
                   My Listings
@@ -705,7 +657,8 @@ const MarketplacePage: NextPage = () => {
                 <button
                   type="button"
                   className={`library-chip ${galleryView === "collection" ? "is-active" : ""}`}
-                  onClick={() => activeWallet && setGalleryView("collection")}
+                  aria-pressed={galleryView === "collection"}
+                  onClick={() => changeMarketView("gallery", "collection")}
                   disabled={!activeWallet}
                 >
                   My Collection
@@ -719,19 +672,20 @@ const MarketplacePage: NextPage = () => {
 
               {galleryView === "browse" && (
                 <>
-                  <div className="library-toolbar-inner marketplace-toolbar">
+                  <form className="library-toolbar-inner marketplace-toolbar" onSubmit={(event) => { event.preventDefault(); setGallerySearch(gallerySearchDraft.trim()); setGalleryPage(0); }}>
                     <div className="library-search-wrapper">
                       <input
                         type="text"
                         className="library-search"
-                        placeholder="Search listings by title, prompt, or model..."
-                        value={gallerySearch}
+                        placeholder="Search the gallery"
+                        aria-label="Search gallery listings"
+                        value={gallerySearchDraft}
                         onChange={(event) => {
-                          setGallerySearch(event.target.value);
-                          setGalleryPage(0);
+                          setGallerySearchDraft(event.target.value);
                         }}
                       />
                     </div>
+                    <button type="submit" className="library-chip market-search-submit">Search</button>
                     <div className="library-filters">
                       <div className="library-filter-group">
                         <span className="library-filter-label">Asset type</span>
@@ -740,6 +694,7 @@ const MarketplacePage: NextPage = () => {
                             key={value}
                             type="button"
                             className={`library-chip ${galleryAssetType === value ? "is-active" : ""}`}
+                            aria-pressed={galleryAssetType === value}
                             onClick={() => {
                               setGalleryAssetType(value);
                               setGalleryPage(0);
@@ -753,6 +708,7 @@ const MarketplacePage: NextPage = () => {
                         <span className="library-filter-label">Sort</span>
                         <select
                           className="library-sort-select"
+                          aria-label="Sort gallery listings"
                           value={gallerySort}
                           onChange={(event) => {
                             setGallerySort(event.target.value);
@@ -767,39 +723,38 @@ const MarketplacePage: NextPage = () => {
                         </select>
                       </div>
                     </div>
-                  </div>
+                  </form>
 
                   {galleryLoading && <p className="library-loading">Loading gallery...</p>}
-                  {galleryError && <p className="job-hint error">{galleryError}</p>}
-                  {!galleryLoading && galleryCards.length === 0 && (
+                  {galleryError && <div className="market-notice" role="alert"><h2>The gallery is out of reach.</h2><p>We couldn’t load the listings. Your filters are saved.</p><button className="library-chip" onClick={() => setGalleryRefreshKey(value => value + 1)}>Try again</button></div>}
+                  {!galleryLoading && !galleryError && galleryCards.length === 0 && (
                     <div className="library-empty">
-                      <p>No gallery listings are live yet. Published Public Alpha creations will appear here as creators list work from Generator or My Library.</p>
+                      <Images size={32} strokeWidth={1.3} aria-hidden="true" />
+                      <h2>{gallerySearch || galleryAssetType !== "all" ? "Nothing matches just yet." : "A space for something original."}</h2>
+                      <p>{gallerySearch || galleryAssetType !== "all" ? "Try a different search or explore all media." : "When creators list their work, you’ll find it here. Make something of your own to get started."}</p>
+                      {gallerySearch || galleryAssetType !== "all" ? <button className="library-chip" onClick={() => { setGallerySearch(""); setGallerySearchDraft(""); setGalleryAssetType("all"); setGalleryPage(0); }}>Clear filters</button> : <Link className="market-create" href="/create">Start creating <ArrowUpRight size={16} aria-hidden="true" /></Link>}
                     </div>
                   )}
                   {!galleryLoading && galleryCards.length > 0 && (
                     <>
                       <div className="marketplace-gallery-grid">
                         {galleryCards.map((listing) => (
-                          <article
+                          <button
+                            type="button"
+                            aria-label={`View ${listing.title}, ${formatCredits(listing.price_credits)} credits`}
                             key={listing.id}
                             className="marketplace-gallery-card"
                             onClick={() => openBrowseListing(listing)}
                           >
                             <div className="marketplace-gallery-media">
-                              {listing.video_url ? (
-                                <video src={listing.video_url} muted playsInline preload="metadata" />
-                              ) : listing.image_url ? (
-                                <img src={listing.image_url} alt={listing.title} loading="lazy" />
-                              ) : (
-                                <div className="library-preview-empty">No preview</div>
-                              )}
+                              <CollectionPreview src={listing.video_url || listing.image_url || listing.preview_url} type={listing.video_url ? "video" : "image"} label={listing.title} />
                               <span className={`marketplace-status-badge status-${listing.status}`}>
                                 {listing.status}
                               </span>
                             </div>
                             <div className="marketplace-gallery-body">
                               <div className="marketplace-gallery-header">
-                                <h3>{listing.title}</h3>
+                                <h2>{listing.title}</h2>
                                 <span className="marketplace-gallery-price">
                                   {listing.price_credits.toFixed(1)} credits
                                 </span>
@@ -814,7 +769,7 @@ const MarketplacePage: NextPage = () => {
                                 <span>{formatTimestamp(listing.created_at)}</span>
                               </div>
                             </div>
-                          </article>
+                          </button>
                         ))}
                       </div>
 
@@ -847,16 +802,16 @@ const MarketplacePage: NextPage = () => {
               )}
 
               {galleryView === "my-listings" && (
-                <div className="chart-section marketplace-panel">
+                <div className="marketplace-panel">
                   <div className="chart-header">
-                    <h3 className="chart-title">My Listings</h3>
+                    <h2 className="chart-title">My Listings</h2>
                   </div>
                     {!activeWallet && (
                       <p className="job-hint">Connect your wallet to view wallet-linked listings. Guest sessions can browse the public gallery only.</p>
                     )}
                   {activeWallet && myListingsLoading && <p className="library-loading">Loading your listings...</p>}
                   {activeWallet && myListingsError && <p className="job-hint error">{myListingsError}</p>}
-                  {activeWallet && !myListingsLoading && myListings.length === 0 && (
+                  {activeWallet && !myListingsLoading && !myListingsError && myListings.length === 0 && (
                     <div className="library-empty">
                       <p>No active listings yet. Publish a finished result from Generator or My Library to start your storefront.</p>
                     </div>
@@ -895,16 +850,16 @@ const MarketplacePage: NextPage = () => {
               )}
 
               {galleryView === "collection" && (
-                <div className="chart-section marketplace-panel">
+                <div className="marketplace-panel">
                   <div className="chart-header">
-                    <h3 className="chart-title">My Collection</h3>
+                    <h2 className="chart-title">My Collection</h2>
                   </div>
                     {!activeWallet && (
                       <p className="job-hint">Connect your wallet to view your owned assets. Purchased items transfer exclusive ownership to you.</p>
                     )}
                   {activeWallet && collectionLoading && <p className="library-loading">Loading collection...</p>}
                   {activeWallet && collectionError && <p className="job-hint error">{collectionError}</p>}
-                  {activeWallet && !collectionLoading && collection.length === 0 && (
+                  {activeWallet && !collectionLoading && !collectionError && collection.length === 0 && (
                     <div className="library-empty">
                       <p>No assets owned yet. When you buy a gallery piece, exclusive ownership transfers to you and it appears here.</p>
                     </div>
@@ -956,6 +911,7 @@ const MarketplacePage: NextPage = () => {
                     <button
                       type="button"
                       className={`library-chip ${workflowView === "browse" ? "is-active" : ""}`}
+                      aria-pressed={workflowView === "browse"}
                       onClick={() => setWorkflowView("browse")}
                     >
                       Browse
@@ -963,6 +919,7 @@ const MarketplacePage: NextPage = () => {
                     <button
                       type="button"
                       className={`library-chip ${workflowView === "create" ? "is-active" : ""}`}
+                      aria-pressed={workflowView === "create"}
                       onClick={() => setWorkflowView("create")}
                     >
                       Create Workflow
@@ -973,55 +930,41 @@ const MarketplacePage: NextPage = () => {
 
               {workflowView === "browse" && (
                 <>
-                  <div className="library-toolbar-inner" style={{ marginBottom: "1.5rem" }}>
+                  <form className="library-toolbar-inner market-workflow-search" onSubmit={(event) => { event.preventDefault(); setWorkflowSearch(workflowSearchDraft.trim()); setWorkflowPage(0); }}>
                     <div className="library-search-wrapper">
                       <input
                         type="text"
                         className="library-search"
-                        placeholder="Search workflows..."
-                        value={workflowSearch}
+                        placeholder="Search workflows"
+                        aria-label="Search workflows"
+                        value={workflowSearchDraft}
                         onChange={(event) => {
-                          setWorkflowSearch(event.target.value);
-                          setWorkflowPage(0);
+                          setWorkflowSearchDraft(event.target.value);
                         }}
                       />
                     </div>
-                    <div className="library-filters">
-                      <div className="library-filter-group" style={{ flexWrap: "wrap" }}>
-                        <span className="library-filter-label">Category</span>
-                        {WORKFLOW_CATEGORIES.map((category) => (
-                          <button
-                            key={category}
-                            type="button"
-                            className={`library-chip ${workflowCategory === category ? "is-active" : ""}`}
-                            onClick={() => {
-                              setWorkflowCategory(category);
-                              setWorkflowPage(0);
-                            }}
-                          >
-                            {category}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                    <button type="submit" className="library-chip market-search-submit">Search</button>
+                    <label className="market-category"><span>Category</span><select className="library-sort-select" value={workflowCategory} onChange={(event) => { setWorkflowCategory(event.target.value); setWorkflowPage(0); }}>{WORKFLOW_CATEGORIES.map(category => <option key={category}>{category}</option>)}</select></label>
+                  </form>
 
                   {workflowLoading && <p className="library-loading">Loading workflows...</p>}
-                  {!workflowLoading && workflows.length === 0 && (
+                  {workflowError && <div className="market-notice" role="alert"><h2>The catalog is out of reach.</h2><p>{workflowError}</p><button className="library-chip" onClick={() => setWorkflowRefreshKey(value => value + 1)}>Try again</button></div>}
+                  {!workflowLoading && !workflowError && workflows.length === 0 && (
                     <div className="library-empty">
-                      <p>Shared workflows are still early in Public Alpha. Check back as the catalog grows, or save your own reusable workflow below.</p>
+                      <Layers3 size={32} strokeWidth={1.3} aria-hidden="true" /><h2>{workflowSearch || workflowCategory !== "All" ? "No matching workflows." : "Your next idea starts with a setup."}</h2><p>Try another search, or save a reusable workflow of your own.</p><button className="library-chip" onClick={() => setWorkflowView("create")}>Create a workflow</button>
                     </div>
                   )}
                   {!workflowLoading && workflows.length > 0 && (
                     <>
                       <div className="marketplace-grid">
                         {workflows.map((workflow) => (
-                          <div
+                          <button
+                            type="button"
                             key={workflow.id}
                             className="workflow-card"
                             onClick={() => setSelectedWorkflow(workflow)}
                           >
-                            <div className="workflow-name">{workflow.name}</div>
+                            <div className="workflow-name" role="heading" aria-level={2}>{workflow.name}</div>
                             <div className="workflow-desc">{workflow.description || "No description"}</div>
                             <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
                               {workflow.category && <span className="workflow-tag">{workflow.category}</span>}
@@ -1034,7 +977,7 @@ const MarketplacePage: NextPage = () => {
                                 {formatWallet(workflow.creator_wallet)}
                               </span>
                             </div>
-                          </div>
+                          </button>
                         ))}
                       </div>
                       {workflowTotalPages > 1 && (
@@ -1066,9 +1009,9 @@ const MarketplacePage: NextPage = () => {
               )}
 
               {workflowView === "create" && (
-                <div className="chart-section marketplace-panel">
+                <div className="marketplace-panel">
                   <div className="chart-header">
-                    <h3 className="chart-title">Create a Workflow</h3>
+                    <h2 className="chart-title">Create a Workflow</h2>
                   </div>
                   <p className="job-hint" style={{ marginTop: 0 }}>
                     Save a reusable setup for your own account now. Shared workflow publishing is still limited in the Public Alpha web UI.
@@ -1190,15 +1133,19 @@ const MarketplacePage: NextPage = () => {
           {selectedListing && (
             <div className="job-drawer" onClick={closeListingDrawer}>
               <div className="job-drawer-backdrop" />
-              <aside
+              <div
                 className="job-drawer-panel"
+                ref={drawerRef}
                 role="dialog"
+                aria-modal="true"
+                aria-labelledby="market-detail-title"
+                tabIndex={-1}
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="job-drawer-header">
                   <div>
                     <p className="job-drawer-kicker">Gallery Listing</p>
-                    <h3>{selectedListing.title}</h3>
+                    <h2 id="market-detail-title">{selectedListing.title}</h2>
                     <div className="job-meta-row">
                       <span className={`marketplace-status-badge status-${selectedListing.status}`}>
                         {selectedListing.status}
@@ -1212,7 +1159,7 @@ const MarketplacePage: NextPage = () => {
                 </div>
                 <div className="job-drawer-body">
                   <section className="job-section">
-                    <h4>Preview</h4>
+                    <h3>Preview</h3>
                     <div className="job-preview">
                       {selectedListing.video_url ? (
                         <video src={selectedListing.video_url} controls playsInline />
@@ -1224,63 +1171,10 @@ const MarketplacePage: NextPage = () => {
                     </div>
                   </section>
                   <section className="job-section">
-                    <h4>Description</h4>
-                    <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                      {selectedListing.description || "No description provided."}
-                    </p>
-                  </section>
-                  <section className="job-section">
-                    <h4>Details</h4>
-                    <div className="job-details-grid">
-                      <div><span className="job-label">Owner</span><span>{selectedListing.owner_wallet || selectedListing.seller_wallet}</span></div>
-                      <div><span className="job-label">Creator</span><span>{selectedListing.seller_wallet}</span></div>
-                      <div><span className="job-label">Asset type</span><span>{selectedListing.asset_type}</span></div>
-                      <div><span className="job-label">Created</span><span>{formatTimestamp(selectedListing.created_at)}</span></div>
-                      <div><span className="job-label">Model</span><span>{formatListingModel(selectedListing)}</span></div>
-                      <div><span className="job-label">Category</span><span>{selectedListing.category || "--"}</span></div>
-                    </div>
-                  </section>
-                  {selectedListing.prompt && userIsCurrentOwner && (
-                    <section className="job-section">
-                      <h4>Prompt</h4>
-                      <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
-                        {selectedListing.prompt}
-                      </p>
-                    </section>
-                  )}
-                  {!userIsCurrentOwner && (
-                    <section className="job-section">
-                      <p className="job-hint" style={{ margin: 0, fontStyle: "italic" }}>
-                        Prompt is only visible to the current owner.
-                      </p>
-                    </section>
-                  )}
-                  {ownershipHistory.length > 0 && (
-                    <section className="job-section">
-                      <h4>Provenance</h4>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                        {ownershipHistory.map((event, idx) => (
-                          <div key={event.id || idx} style={{ fontSize: "0.8rem", color: "var(--text-muted)", lineHeight: 1.4 }}>
-                            <span style={{ textTransform: "capitalize", fontWeight: 600, color: "var(--text-default)" }}>
-                              {event.event_type}
-                            </span>
-                            {event.event_type === "mint" && (
-                              <span> — Created by {formatWallet(event.to_wallet)}</span>
-                            )}
-                            {event.event_type === "sale" && (
-                              <span> — {formatWallet(event.from_wallet)} → {formatWallet(event.to_wallet)} for {event.price_credits.toFixed(1)} credits</span>
-                            )}
-                            {event.event_type === "relist" && (
-                              <span> — Re-listed by {formatWallet(event.to_wallet)} at {event.price_credits.toFixed(1)} credits</span>
-                            )}
-                            <span style={{ marginLeft: "0.5rem", opacity: 0.6 }}>{formatTimestamp(event.created_at)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  )}
-                  <section className="job-section">
                     <div className="job-actions">
+                      {!connectedWallet && (
+                        <button type="button" className="job-action-button" onClick={handleConnectWallet} disabled={wallet.connecting}>{connectLabel}</button>
+                      )}
                       {selectedListing.status === "active" && !userOwnsSelectedListing && (
                         <button
                           type="button"
@@ -1417,23 +1311,84 @@ const MarketplacePage: NextPage = () => {
                     )}
                     {galleryActionError && <p className="job-hint error">{galleryActionError}</p>}
                   </section>
+                  <section className="job-section">
+                    <h3>Description</h3>
+                    <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      {selectedListing.description || "No description provided."}
+                    </p>
+                  </section>
+                  <section className="job-section">
+                    <h3>Details</h3>
+                    <div className="job-details-grid">
+                      <div><span className="job-label">Owner</span><span>{selectedListing.owner_wallet || selectedListing.seller_wallet}</span></div>
+                      <div><span className="job-label">Creator</span><span>{selectedListing.seller_wallet}</span></div>
+                      <div><span className="job-label">Asset type</span><span>{selectedListing.asset_type}</span></div>
+                      <div><span className="job-label">Created</span><span>{formatTimestamp(selectedListing.created_at)}</span></div>
+                      <div><span className="job-label">Model</span><span>{formatListingModel(selectedListing)}</span></div>
+                      <div><span className="job-label">Category</span><span>{selectedListing.category || "--"}</span></div>
+                    </div>
+                  </section>
+                  {selectedListing.prompt && userIsCurrentOwner && (
+                    <section className="job-section">
+                      <h3>Prompt</h3>
+                      <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+                        {selectedListing.prompt}
+                      </p>
+                    </section>
+                  )}
+                  {!userIsCurrentOwner && (
+                    <section className="job-section">
+                      <p className="job-hint" style={{ margin: 0, fontStyle: "italic" }}>
+                        Prompt is only visible to the current owner.
+                      </p>
+                    </section>
+                  )}
+                  {ownershipHistory.length > 0 && (
+                    <section className="job-section">
+                      <h3>Provenance</h3>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                        {ownershipHistory.map((event, idx) => (
+                          <div key={event.id || idx} style={{ fontSize: "0.8rem", color: "var(--text-muted)", lineHeight: 1.4 }}>
+                            <span style={{ textTransform: "capitalize", fontWeight: 600, color: "var(--text-default)" }}>
+                              {event.event_type}
+                            </span>
+                            {event.event_type === "mint" && (
+                              <span> — Created by {formatWallet(event.to_wallet)}</span>
+                            )}
+                            {event.event_type === "sale" && (
+                              <span> — {formatWallet(event.from_wallet)} → {formatWallet(event.to_wallet)} for {event.price_credits.toFixed(1)} credits</span>
+                            )}
+                            {event.event_type === "relist" && (
+                              <span> — Re-listed by {formatWallet(event.to_wallet)} at {event.price_credits.toFixed(1)} credits</span>
+                            )}
+                            <span style={{ marginLeft: "0.5rem", opacity: 0.6 }}>{formatTimestamp(event.created_at)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
                 </div>
-              </aside>
+              </div>
             </div>
           )}
 
           {selectedWorkflow && (
             <div className="job-drawer" onClick={() => setSelectedWorkflow(null)}>
               <div className="job-drawer-backdrop" />
-              <aside
+              <div
                 className="job-drawer-panel"
+                ref={drawerRef}
                 role="dialog"
+                aria-modal="true"
+                aria-labelledby="market-detail-title"
+                tabIndex={-1}
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="job-drawer-header">
                   <div>
                     <p className="job-drawer-kicker">Workflow</p>
-                    <h3>{selectedWorkflow.name}</h3>
+                    <h2 id="market-detail-title">{selectedWorkflow.name}</h2>
                     <div className="job-meta-row">
                       {selectedWorkflow.category && <span className="workflow-tag">{selectedWorkflow.category}</span>}
                       <span>{selectedWorkflow.usage_count} uses</span>
@@ -1449,13 +1404,13 @@ const MarketplacePage: NextPage = () => {
                 </div>
                 <div className="job-drawer-body">
                   <section className="job-section">
-                    <h4>Description</h4>
+                    <h3>Description</h3>
                     <p style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
                       {selectedWorkflow.description || "No description provided."}
                     </p>
                   </section>
                   <section className="job-section">
-                    <h4>Configuration</h4>
+                    <h3>Configuration</h3>
                     <div className="job-details-grid">
                       {selectedWorkflow.config?.model && (
                         <div><span className="job-label">Model</span><span>{selectedWorkflow.config.model}</span></div>
@@ -1470,14 +1425,14 @@ const MarketplacePage: NextPage = () => {
                   </section>
                   {selectedWorkflow.config?.prompt_template && (
                     <section className="job-section">
-                      <h4>Prompt Template</h4>
+                      <h3>Prompt Template</h3>
                       <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", lineHeight: 1.5 }}>
                         {selectedWorkflow.config.prompt_template}
                       </p>
                     </section>
                   )}
                   <section className="job-section">
-                    <h4>Creator</h4>
+                    <h3>Creator</h3>
                     <p className="wallet-address">{selectedWorkflow.creator_wallet}</p>
                     <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginTop: "0.3rem" }}>
                       Created {new Date(selectedWorkflow.created_at).toLocaleDateString()}
@@ -1486,7 +1441,7 @@ const MarketplacePage: NextPage = () => {
                   <section className="job-section">
                     <div className="job-actions">
                       <a
-                        href={`/generator?workflow=${selectedWorkflow.id}`}
+                        href={`/create?workflow=${encodeURIComponent(selectedWorkflow.id)}`}
                         className="job-action-button"
                         style={{ textDecoration: "none", textAlign: "center" }}
                       >
@@ -1495,13 +1450,18 @@ const MarketplacePage: NextPage = () => {
                     </div>
                   </section>
                 </div>
-              </aside>
+              </div>
             </div>
           )}
         </section>
+        <footer className="market-footer"><Link href="/ownership">How ownership works <ArrowUpRight size={14} aria-hidden="true" /></Link><Link href="/library">Your creations</Link><Link href="/pricing">Credits &amp; pricing</Link></footer>
       </main>
     </>
   );
 };
 
-export default MarketplacePage;
+export default function Marketplace() {
+  const account = useAccount();
+  const router = useRouter();
+  return account.configured && router.query.tab !== "workflows" ? <AccountMarketplace listJob={typeof router.query.listJob === "string" ? router.query.listJob : undefined} /> : <MarketplacePage />;
+}

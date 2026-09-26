@@ -18,6 +18,17 @@ describe("libraryStore", () => {
     window.localStorage.clear();
   });
 
+  it("keeps account caches and removal preferences separate from legacy and other accounts", () => {
+    const item = entry("owned", "2026-01-01T00:00:00.000Z");
+    addToLibrary(item, "acct_alice");
+    addToLibrary({ ...item, job_id: "legacy" });
+    expect(loadLibrary("acct_bob")).toEqual([]);
+    removeFromLibrary("owned", "acct_alice");
+    expect(mergeServerJobs([item], "acct_alice")).toEqual([]);
+    expect(mergeServerJobs([item], "acct_bob")).toEqual([item]);
+    expect(loadLibrary().map(entry => entry.job_id)).toEqual(["legacy"]);
+  });
+
   describe("mergeServerJobs", () => {
     it("adds server jobs the browser has never seen", () => {
       // The whole point: a cleared browser or a second device starts empty

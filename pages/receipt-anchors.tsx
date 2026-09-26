@@ -1,6 +1,8 @@
 import type { NextPage } from "next";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FileCheck2 } from "lucide-react";
+import { NetworkNavigation } from "../components/NetworkNavigation";
 import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import {
@@ -46,20 +48,31 @@ const ReceiptAnchorsPage: NextPage = () => {
   const [copiedBatch, setCopiedBatch] = useState<number | null>(null);
   const [liveTransactions, setLiveTransactions] = useState<Record<number, string>>({});
 
+  const [loadError, setLoadError] = useState(false);
+  const [filter, setFilter] = useState("all");
+  const loadVersion = useRef(0);
+  const mounted = useRef(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const load = useCallback(async (quiet = false) => {
-    if (!quiet) setLoading(true);
+    if (!mounted.current) return;
+    const version = ++loadVersion.current;
+    if (!quiet) { setLoading(true); setNotice(null); }
     try {
-      setData(await fetchAstraReceiptBatches(100));
-      if (!quiet) setNotice(null);
-    } catch (error) {
-      setNotice({ tone: "error", text: errorMessage(error) });
+      const result = await fetchAstraReceiptBatches(100);
+      if (version !== loadVersion.current) return;
+      setData(result); setLoadError(false);
+    } catch {
+      if (version !== loadVersion.current) return;
+      setData(null); setLoadError(true);
     } finally {
-      if (!quiet) setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
     void load();
+    return () => { mounted.current = false; loadVersion.current += 1; if (copyTimer.current) clearTimeout(copyTimer.current); };
   }, [load]);
 
   const pendingBatches = useMemo(
@@ -69,10 +82,16 @@ const ReceiptAnchorsPage: NextPage = () => {
 
   useEffect(() => {
     if (pendingBatches.length === 0) return;
+    let active = true;
+    let checking = false;
     const timer = window.setInterval(() => {
-      void Promise.allSettled(pendingBatches.map(verifyPendingReceiptBatchAnchor)).then(() => load(true));
+      if (checking) return;
+      checking = true;
+      void Promise.allSettled(pendingBatches.map(verifyPendingReceiptBatchAnchor))
+        .then(() => { if (active) return load(true); })
+        .finally(() => { checking = false; });
     }, 15000);
-    return () => window.clearInterval(timer);
+    return () => { active = false; window.clearInterval(timer); };
   }, [load, pendingBatches]);
 
   const buildBatch = async () => {
@@ -151,10 +170,16 @@ const ReceiptAnchorsPage: NextPage = () => {
   };
 
   const copyRoot = async (batch: AstraReceiptBatch) => {
-    await navigator.clipboard.writeText(batch.merkle_root);
-    setCopiedBatch(batch.batch_id);
-    window.setTimeout(() => setCopiedBatch((current) => current === batch.batch_id ? null : current), 1500);
+    try {
+      await navigator.clipboard.writeText(batch.merkle_root);
+      setCopiedBatch(batch.batch_id);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopiedBatch(null), 1500);
+    } catch {
+      setNotice({ tone: "error", text: "Copy is unavailable in this browser. Expand the batch root to select it manually." });
+    }
   };
+  const visibleBatches = data?.batches.filter(batch => filter === "all" || batch.status === filter) ?? [];
 
   const anchoredCount = data?.batches.filter((batch) => batch.status === "anchored").length ?? 0;
 
@@ -167,38 +192,41 @@ const ReceiptAnchorsPage: NextPage = () => {
         noindex
       />
       <SiteHeader />
-      <main className="receipt-anchor-page">
+      <main className="network-page operator-ledger-page">
         <div className="receipt-anchor-shell">
-          <header className="receipt-anchor-titlebar">
+          <header className="network-heading">
             <div>
-              <span className="receipt-anchor-kicker">Network Operations</span>
-              <h1>Receipt Anchors</h1>
+              <span className="network-eyebrow"><FileCheck2 size={15} aria-hidden="true" /> Receipt anchors</span>
+              <h1>A record of what was created.</h1><p>Track artifact receipt batches and their confirmation on Sepolia.</p>
             </div>
             <div className="receipt-anchor-title-actions">
               <button type="button" className="receipt-anchor-button secondary" onClick={() => void load()} disabled={loading || Boolean(busy)}>
                 Refresh
               </button>
-              <button
+
+            </div>
+          </header>
+
+          <NetworkNavigation active="receipt-anchors" />
+          <section className="receipt-anchor-metrics" aria-label="Anchor summary">
+            <div><span>Network</span><strong>Sepolia</strong></div>
+            <div><span>Unbatched</span><strong>{data?.unbatched_receipt_count ?? "--"}</strong></div>
+            <div><span>Pending</span><strong>{data ? data.batches.filter(batch => batch.status === "pending").length : "--"}</strong></div>
+            <div><span>Anchored</span><strong>{data ? anchoredCount : "--"}</strong></div>
+            <div className="receipt-anchor-treasury"><span>Treasury</span><strong title={data?.treasury_wallet || undefined}>{shortHash(data?.treasury_wallet, 8, 6)}</strong></div>
+          </section>
+
+          {notice && <div className="receipt-anchor-notice" role={notice.tone === "error" ? "alert" : "status"} data-tone={notice.tone}>{notice.text}</div>}
+
+          {!loading && loadError && <div className="network-notice" role="alert"><p>The receipt ledger is unavailable. Try again to load batch history.</p><button className="network-secondary" onClick={() => void load()} disabled={Boolean(busy)}>Retry receipts</button></div>}
+          <details className="network-disclosure ledger-treasury"><summary>Treasury actions</summary><div className="ledger-treasury-actions"><p>Build a batch from unbatched receipts. This action requires authorization from the configured treasury wallet.</p>              <button
                 type="button"
                 className="receipt-anchor-button primary"
                 onClick={() => void buildBatch()}
                 disabled={loading || Boolean(busy) || !data?.unbatched_receipt_count}
               >
                 {busy === "build" ? "Authorizing..." : "Build Batch"}
-              </button>
-            </div>
-          </header>
-
-          <section className="receipt-anchor-metrics" aria-label="Anchor summary">
-            <div><span>Network</span><strong>Sepolia</strong></div>
-            <div><span>Unbatched</span><strong>{data?.unbatched_receipt_count ?? "--"}</strong></div>
-            <div><span>Pending</span><strong>{pendingBatches.length}</strong></div>
-            <div><span>Anchored</span><strong>{anchoredCount}</strong></div>
-            <div className="receipt-anchor-treasury"><span>Treasury</span><strong title={data?.treasury_wallet || undefined}>{shortHash(data?.treasury_wallet, 8, 6)}</strong></div>
-          </section>
-
-          {notice && <div className="receipt-anchor-notice" data-tone={notice.tone}>{notice.text}</div>}
-
+              </button></div></details>
           <section className="receipt-anchor-ledger" aria-label="Receipt anchor batches">
             <header>
               <div>
@@ -208,13 +236,18 @@ const ReceiptAnchorsPage: NextPage = () => {
               <Link href="/nodes">Back to Network</Link>
             </header>
 
+            <div className="network-tabs receipt-filters" aria-label="Filter receipt status">{["all", "ready", "pending", "anchored"].map(status => <button key={status} type="button" aria-pressed={filter === status} onClick={() => setFilter(status)}>{status === "all" ? "All batches" : status.charAt(0).toUpperCase() + status.slice(1)}</button>)}</div>
             {loading ? (
               <div className="receipt-anchor-empty">Loading receipt ledger...</div>
+            ) : loadError ? (
+              <div className="receipt-anchor-empty">Batch history could not be loaded.</div>
             ) : !data || data.batches.length === 0 ? (
               <div className="receipt-anchor-empty">No receipt batches found.</div>
+            ) : visibleBatches.length === 0 ? (
+              <div className="receipt-anchor-empty">No {filter} batches in this ledger.</div>
             ) : (
               <div className="receipt-anchor-list">
-                {data.batches.map((batch) => {
+                {visibleBatches.map((batch) => {
                   const transactionHash = batch.anchor_tx_hash || liveTransactions[batch.batch_id];
                   const transactionUrl = transactionHash
                     ? `https://sepolia.etherscan.io/tx/${transactionHash}`
@@ -228,7 +261,7 @@ const ReceiptAnchorsPage: NextPage = () => {
                       </div>
                       <div className="receipt-anchor-root">
                         <span>Merkle root</span>
-                        <code title={batch.merkle_root}>{shortHash(batch.merkle_root, 16, 12)}</code>
+                        <details className="receipt-full-root"><summary>{shortHash(batch.merkle_root, 16, 12)}</summary><code>{batch.merkle_root}</code></details>
                       </div>
                       <div className="receipt-anchor-meta">
                         <div><span>Receipts</span><strong>{batch.leaf_count}</strong></div>
@@ -264,6 +297,7 @@ const ReceiptAnchorsPage: NextPage = () => {
               </div>
             )}
           </section>
+          <p className="network-footnote">Ready batches are waiting to be submitted. Pending batches are awaiting confirmations. Anchored batches have a verified Sepolia transaction.</p>
         </div>
       </main>
     </>

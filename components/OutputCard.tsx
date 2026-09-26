@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { ArrowUpRight, Clapperboard, Download, Film, SlidersHorizontal } from "lucide-react";
 
 interface OutputCardProps {
   imageUrl?: string;
@@ -14,226 +15,205 @@ interface OutputCardProps {
   onRefineImage?: () => void;
 }
 
-/** Clean up model name for display */
 function friendlyModel(name?: string): string {
   if (!name) return "Auto";
-  return name
-    .replace(/_v\d+SD15/i, "")
-    .replace(/_v[xvi]+[a-z]*/i, "")
-    .replace(/_v\d+/i, "")
-    .replace(/By$/i, "")
-    .replace(/_beta$/i, "")
-    .replace(/_final$/i, "")
-    .replace(/Merge$/i, "")
-    .replace(/_/g, " ")
-    .trim() || name;
+  return name.replace(/_v\d+SD15/i, "").replace(/_v[xvi]+[a-z]*/i, "")
+    .replace(/_v\d+/i, "").replace(/By$/i, "").replace(/_beta$/i, "")
+    .replace(/_final$/i, "").replace(/Merge$/i, "").replace(/_/g, " ").trim() || name;
+}
+
+// A damaged or unsupported clip must not leave the capture button busy forever.
+function waitForVideo(video: HTMLVideoElement, event: string, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer);
+      video.removeEventListener(event, ready);
+      video.removeEventListener("error", fail);
+      signal.removeEventListener("abort", fail);
+    };
+    const ready = () => { cleanup(); resolve(); };
+    const fail = () => { cleanup(); reject(new Error("Video could not be read")); };
+    const timer = setTimeout(fail, 15000);
+    video.addEventListener(event, ready, { once: true });
+    video.addEventListener("error", fail, { once: true });
+    signal.addEventListener("abort", fail, { once: true });
+    if (signal.aborted) fail();
+  });
 }
 
 export const OutputCard: React.FC<OutputCardProps> = ({
-  imageUrl,
-  videoUrl,
-  model,
-  runtimeSeconds,
-  jobId,
-  pending = false,
-  statusMessage,
-  onRetry,
-  onUseLastFrame,
-  onAnimateImage,
-  onRefineImage,
+  imageUrl, videoUrl, model, runtimeSeconds, jobId, pending = false,
+  statusMessage, onRetry, onUseLastFrame, onAnimateImage, onRefineImage,
 }) => {
   const [frameBusy, setFrameBusy] = useState(false);
-  const [idCopied, setIdCopied] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [downloadFailed, setDownloadFailed] = useState(false);
   const [mediaFailed, setMediaFailed] = useState(false);
   const [mediaRevision, setMediaRevision] = useState(0);
+  const lifecycle = useRef<AbortController | null>(null);
+  const downloading = useRef(false);
+  const capturing = useRef(false);
 
   useEffect(() => {
+    const controller = new AbortController();
+    lifecycle.current = controller;
+    downloading.current = false;
+    capturing.current = false;
+    setFrameBusy(false);
+    setDownloadBusy(false);
+    setNotice("");
+    setDownloadFailed(false);
     setMediaFailed(false);
     setMediaRevision(0);
-  }, [imageUrl, videoUrl]);
+    return () => controller.abort();
+  }, [imageUrl, videoUrl, jobId]);
 
-  if (!imageUrl && !videoUrl) {
+  const mediaUrl = videoUrl || imageUrl;
+  const isCurrent = (controller: AbortController) =>
+    lifecycle.current === controller && !controller.signal.aborted;
+
+  const handleDownload = async () => {
+    const controller = lifecycle.current;
+    if (!mediaUrl || !controller || downloading.current) return;
+    downloading.current = true;
+    setDownloadBusy(true);
+    setNotice("");
+    setDownloadFailed(false);
+    try {
+      const response = await fetch(mediaUrl, { signal: controller.signal });
+      if (!response.ok) throw new Error("Download failed");
+      const blob = await response.blob();
+      if (!isCurrent(controller)) return;
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      // Preserve the actual asset type instead of renaming every image to PNG.
+      const extension = ({ "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/avif": "avif", "video/mp4": "mp4", "video/webm": "webm" } as Record<string, string>)[blob.type.split(";")[0]];
+      link.download = `havnai-${(jobId || "output").slice(0, 12)}${extension ? "." + extension : ""}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      setNotice("Download started.");
+    } catch {
+      if (isCurrent(controller)) {
+        setDownloadFailed(true);
+        setNotice("The download couldn't finish. Try again, or open the original to save it.");
+      }
+    } finally {
+      if (isCurrent(controller)) { downloading.current = false; setDownloadBusy(false); }
+    }
+  };
+
+  const handleCopyId = async () => {
+    const controller = lifecycle.current;
+    if (!jobId || !controller) return;
+    try {
+      await navigator.clipboard.writeText(jobId);
+      if (isCurrent(controller)) setNotice("Job ID copied.");
+    } catch {
+      if (isCurrent(controller)) setNotice("Couldn't copy the ID. Select the full ID in Result details to copy it manually.");
+    }
+  };
+
+  const handleUseLastFrame = async () => {
+    const controller = lifecycle.current;
+    if (!videoUrl || !onUseLastFrame || !controller || capturing.current) return;
+    capturing.current = true;
+    setFrameBusy(true);
+    setNotice("");
+    let objectUrl: string | undefined;
+    let video: HTMLVideoElement | undefined;
+    try {
+      const response = await fetch(videoUrl, { signal: controller.signal });
+      if (!response.ok) throw new Error("Video unavailable");
+      const blob = await response.blob();
+      if (!isCurrent(controller)) return;
+      objectUrl = URL.createObjectURL(blob);
+      video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = "auto";
+      const loaded = waitForVideo(video, "loadeddata", controller.signal);
+      video.src = objectUrl;
+      await loaded;
+      if (!Number.isFinite(video.duration) || !video.videoWidth || !video.videoHeight) throw new Error("Invalid video");
+      const targetTime = Math.max(0, video.duration - 0.1);
+      if (targetTime > 0) {
+        const seeked = waitForVideo(video, "seeked", controller.signal);
+        video.currentTime = targetTime;
+        await seeked;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas unavailable");
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      if (isCurrent(controller)) {
+        onUseLastFrame(canvas.toDataURL("image/png"));
+        setNotice("Last frame added as your next video's start frame.");
+      }
+    } catch {
+      if (isCurrent(controller)) setNotice("The last frame couldn't be captured. Try again, or upload a start image in Video.");
+    } finally {
+      if (video) { video.removeAttribute("src"); video.load(); }
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (isCurrent(controller)) { capturing.current = false; setFrameBusy(false); }
+    }
+  };
+
+  if (!mediaUrl) {
     return (
-      <div className="generator-output-card generator-output-placeholder" aria-live="polite">
+      <div className="generator-output-card generator-output-placeholder" aria-live="polite" aria-busy={pending}>
         <div className="generator-output-placeholder-body">
           {pending ? <span className="status-spinner" aria-hidden="true" /> : null}
-          <span>{statusMessage || (jobId ? "Output unavailable." : "No output yet.")}</span>
-          {jobId && !pending && onRetry ? (
-            <button type="button" className="generator-mini-button" onClick={onRetry}>
-              Check status
-            </button>
-          ) : null}
+          <strong>{pending ? "Bringing your idea to life" : jobId ? "Waiting for your result" : "Your canvas is ready"}</strong>
+          <span>{statusMessage || (jobId ? "Output unavailable." : "Your next creation will appear here.")}</span>
+          {jobId && !pending && onRetry ? <button type="button" className="generator-mini-button" onClick={onRetry}>Check status</button> : null}
         </div>
         {jobId ? <span className="generator-output-placeholder-id">#{jobId.slice(0, 12)}</span> : null}
       </div>
     );
   }
-  const runtimeDisplay =
-    typeof runtimeSeconds === "number"
-      ? runtimeSeconds.toFixed(1)
-      : undefined;
-  const label = videoUrl ? "Video" : "Image";
-  const downloadName = `havnai-${(jobId || "output").slice(0, 8)}.${videoUrl ? "mp4" : "png"}`;
-  const mediaUrl = videoUrl || imageUrl!;
-  const mediaSrc = mediaRevision
-    ? `${mediaUrl}${mediaUrl.includes("?") ? "&" : "?"}retry=${mediaRevision}`
-    : mediaUrl;
-
-  const handleDownload = async () => {
-    if (!videoUrl && !imageUrl) return;
-    const url = videoUrl || imageUrl!;
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`download failed: ${res.status}`);
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = downloadName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(objectUrl);
-    } catch {
-      window.open(url, "_blank", "noopener");
-    }
-  };
-
-  const handleCopyId = async () => {
-    if (!jobId) return;
-    try {
-      await navigator.clipboard.writeText(jobId);
-      setIdCopied(true);
-      setTimeout(() => setIdCopied(false), 2000);
-    } catch {
-      // Fallback: do nothing
-    }
-  };
-
-  const handleUseLastFrame = async () => {
-    if (!videoUrl || !onUseLastFrame || frameBusy) return;
-    setFrameBusy(true);
-    let objectUrl: string | null = null;
-    try {
-      const res = await fetch(videoUrl);
-      if (!res.ok) throw new Error(`download failed: ${res.status}`);
-      const blob = await res.blob();
-      objectUrl = URL.createObjectURL(blob);
-      const video = document.createElement("video");
-      video.src = objectUrl;
-      video.muted = true;
-      video.playsInline = true;
-      await new Promise<void>((resolve, reject) => {
-        video.onloadedmetadata = () => resolve();
-        video.onerror = () => reject(new Error("Failed to load video metadata"));
-      });
-      const targetTime = Math.max(0, (video.duration || 0) - 0.1);
-      video.currentTime = targetTime;
-      await new Promise<void>((resolve, reject) => {
-        const onSeeked = () => {
-          video.onseeked = null;
-          resolve();
-        };
-        video.onseeked = onSeeked;
-        video.onerror = () => reject(new Error("Failed to seek video"));
-      });
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth || 1;
-      canvas.height = video.videoHeight || 1;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas unavailable");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/png");
-      onUseLastFrame(dataUrl);
-    } catch (err) {
-      console.error("Failed to capture last frame", err);
-    } finally {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-      setFrameBusy(false);
-    }
-  };
-
-  const handleMediaRetry = () => {
-    setMediaFailed(false);
-    setMediaRevision((current) => current + 1);
-    onRetry?.();
-  };
 
   return (
     <div className="generator-output-card">
-      {mediaFailed ? (
-        <div className="generator-output-placeholder-body generator-output-media-error" role="alert">
-          <span>Output could not be loaded.</span>
-          <button type="button" className="generator-mini-button" onClick={handleMediaRetry}>
-            Retry
-          </button>
-        </div>
-      ) : videoUrl ? (
-        <video
-          className="generator-output-media"
-          src={mediaSrc}
-          controls
-          playsInline
-          onError={() => setMediaFailed(true)}
-        />
-      ) : (
-        <img src={mediaSrc} alt={jobId || "Generated image"} onError={() => setMediaFailed(true)} />
-      )}
-
-      <div className="generator-output-meta">
-        <span className="output-meta-badge">{label}</span>
-        <span className="output-meta-model">{friendlyModel(model)}</span>
-        {runtimeDisplay && <span className="output-meta-time">{runtimeDisplay}s</span>}
-        {jobId && (
-          <button
-            type="button"
-            className="output-meta-id"
-            onClick={handleCopyId}
-            title="Copy job ID"
-          >
-            {idCopied ? "Copied!" : `#${jobId.slice(0, 8)}`}
-          </button>
+      <div className="studio-output-canvas">
+        {mediaFailed ? (
+          <div className="generator-output-placeholder-body generator-output-media-error" role="alert">
+            <strong>The preview couldn't load</strong>
+            <span>Your result may still be available. Try loading it again.</span>
+            <button type="button" className="generator-mini-button" onClick={() => { setMediaFailed(false); setMediaRevision(value => value + 1); }}>Retry preview</button>
+          </div>
+        ) : videoUrl ? (
+          <video key={`${mediaUrl}-${mediaRevision}`} className="generator-output-media" src={mediaUrl} controls playsInline preload="metadata" onError={() => setMediaFailed(true)} />
+        ) : (
+          <img key={`${mediaUrl}-${mediaRevision}`} src={mediaUrl} alt="Generated image" onError={() => setMediaFailed(true)} />
         )}
       </div>
-      {(videoUrl || imageUrl) && (
-        <div className="generator-output-actions">
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="generator-download"
-          >
-            {videoUrl ? "\u2913 Download" : "\u2913 Download"}
-          </button>
-          {videoUrl && onUseLastFrame ? (
-            <button
-              type="button"
-              onClick={handleUseLastFrame}
-              className="generator-download"
-              disabled={frameBusy}
-            >
-              {frameBusy ? "Capturing\u2026" : "\u21BB Use last frame"}
-            </button>
-          ) : null}
-          {imageUrl && onAnimateImage ? (
-            <button
-              type="button"
-              onClick={onAnimateImage}
-              className="generator-download"
-            >
-              Animate image
-            </button>
-          ) : null}
-          {imageUrl && onRefineImage ? (
-            <button
-              type="button"
-              onClick={onRefineImage}
-              className="generator-download"
-            >
-              Refine image
-            </button>
-          ) : null}
-        </div>
-      )}
+      <div className="generator-output-meta">
+        <span className="output-meta-badge">{videoUrl ? "Video" : "Image"}</span>
+        <span className="output-meta-model">{friendlyModel(model)}</span>
+        {typeof runtimeSeconds === "number" && Number.isFinite(runtimeSeconds) && runtimeSeconds >= 0 ? <span className="output-meta-time">{runtimeSeconds.toFixed(1)}s</span> : null}
+      </div>
+      <div className="generator-output-actions" aria-label="Result actions">
+        <button type="button" onClick={handleDownload} className="generator-download studio-output-download" disabled={downloadBusy}>
+          <Download size={16} aria-hidden="true" />{downloadBusy ? "Downloading..." : videoUrl ? "Download video" : "Download image"}
+        </button>
+        {imageUrl && !videoUrl && onRefineImage ? <button type="button" onClick={onRefineImage} className="generator-download"><SlidersHorizontal size={16} aria-hidden="true" />Refine image</button> : null}
+        {imageUrl && !videoUrl && onAnimateImage ? <button type="button" onClick={onAnimateImage} className="generator-download"><Clapperboard size={16} aria-hidden="true" />Animate image</button> : null}
+        {videoUrl && onUseLastFrame ? <button type="button" onClick={handleUseLastFrame} className="generator-download" disabled={frameBusy}><Film size={16} aria-hidden="true" />{frameBusy ? "Capturing..." : "Use last frame"}</button> : null}
+      </div>
+      {notice ? <p className="studio-output-notice" role="status">{notice}</p> : null}
+      {downloadFailed ? <a className="studio-output-original" href={mediaUrl} target="_blank" rel="noopener noreferrer" aria-label="Open original in a new tab">Open original <ArrowUpRight size={14} aria-hidden="true" /></a> : null}
+      {jobId ? (
+        <details className="studio-output-details">
+          <summary>Result details</summary>
+          <div><span>Job ID</span><code>{jobId}</code><button type="button" onClick={handleCopyId}>Copy ID</button></div>
+        </details>
+      ) : null}
     </div>
   );
 };

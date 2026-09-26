@@ -13,6 +13,7 @@ const REMOVED_KEY = "havnai.library.removed.v1";
 // a cache that also carries preview hints for jobs whose results have not
 // been fetched yet. The cap only bounds localStorage quota.
 const MAX_ENTRIES = 500;
+const scopedKey = (key: string, account?: string) => account ? `${key}:${account}` : key;
 
 function safeParse(raw: string | null): LibraryEntry[] {
   if (!raw) return [];
@@ -35,24 +36,24 @@ function safeParse(raw: string | null): LibraryEntry[] {
   }
 }
 
-export function loadLibrary(): LibraryEntry[] {
+export function loadLibrary(account?: string): LibraryEntry[] {
   if (typeof window === "undefined") return [];
-  return safeParse(window.localStorage.getItem(STORAGE_KEY));
+  return safeParse(window.localStorage.getItem(scopedKey(STORAGE_KEY, account)));
 }
 
-export function saveLibrary(entries: LibraryEntry[]): void {
+export function saveLibrary(entries: LibraryEntry[], account?: string): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  window.localStorage.setItem(scopedKey(STORAGE_KEY, account), JSON.stringify(entries));
 }
 
 export function prune(entries: LibraryEntry[]): LibraryEntry[] {
   return entries.slice(0, MAX_ENTRIES);
 }
 
-export function addToLibrary(entry: LibraryEntry): LibraryEntry[] {
-  const existing = loadLibrary().filter((item) => item.job_id !== entry.job_id);
+export function addToLibrary(entry: LibraryEntry, account?: string): LibraryEntry[] {
+  const existing = loadLibrary(account).filter((item) => item.job_id !== entry.job_id);
   const next = prune([entry, ...existing]);
-  saveLibrary(next);
+  saveLibrary(next, account);
   return next;
 }
 
@@ -63,36 +64,36 @@ export function addToLibrary(entry: LibraryEntry): LibraryEntry[] {
  * now re-seeded from the server on every visit, so a plain filter would put
  * deleted items straight back on the next page load.
  */
-function loadRemoved(): Set<string> {
+function loadRemoved(account?: string): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(REMOVED_KEY) || "[]");
+    const parsed = JSON.parse(window.localStorage.getItem(scopedKey(REMOVED_KEY, account)) || "[]");
     return Array.isArray(parsed) ? new Set(parsed.filter((id) => typeof id === "string")) : new Set();
   } catch {
     return new Set();
   }
 }
 
-function saveRemoved(ids: Set<string>): void {
+function saveRemoved(ids: Set<string>, account?: string): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(REMOVED_KEY, JSON.stringify([...ids].slice(-MAX_ENTRIES)));
+  window.localStorage.setItem(scopedKey(REMOVED_KEY, account), JSON.stringify([...ids].slice(-MAX_ENTRIES)));
 }
 
-export function removeFromLibrary(jobId: string): LibraryEntry[] {
-  const removed = loadRemoved();
+export function removeFromLibrary(jobId: string, account?: string): LibraryEntry[] {
+  const removed = loadRemoved(account);
   removed.add(jobId);
-  saveRemoved(removed);
-  const next = loadLibrary().filter((entry) => entry.job_id !== jobId);
-  saveLibrary(next);
+  saveRemoved(removed, account);
+  const next = loadLibrary(account).filter((entry) => entry.job_id !== jobId);
+  saveLibrary(next, account);
   return next;
 }
 
-export function bulkRemoveFromLibrary(jobIds: Set<string>): LibraryEntry[] {
-  const removed = loadRemoved();
+export function bulkRemoveFromLibrary(jobIds: Set<string>, account?: string): LibraryEntry[] {
+  const removed = loadRemoved(account);
   jobIds.forEach((id) => removed.add(id));
-  saveRemoved(removed);
-  const next = loadLibrary().filter((entry) => !jobIds.has(entry.job_id));
-  saveLibrary(next);
+  saveRemoved(removed, account);
+  const next = loadLibrary(account).filter((entry) => !jobIds.has(entry.job_id));
+  saveLibrary(next, account);
   return next;
 }
 
@@ -102,10 +103,10 @@ export function bulkRemoveFromLibrary(jobIds: Set<string>): LibraryEntry[] {
  * Server entries win on existence, local entries win on `preview_hint`
  * (the server does not store one). Anything the user deleted stays gone.
  */
-export function mergeServerJobs(serverEntries: LibraryEntry[]): LibraryEntry[] {
-  const removed = loadRemoved();
+export function mergeServerJobs(serverEntries: LibraryEntry[], account?: string): LibraryEntry[] {
+  const removed = loadRemoved(account);
   const byId = new Map<string, LibraryEntry>();
-  for (const entry of loadLibrary()) {
+  for (const entry of loadLibrary(account)) {
     if (!removed.has(entry.job_id)) byId.set(entry.job_id, entry);
   }
   for (const entry of serverEntries) {
@@ -120,10 +121,10 @@ export function mergeServerJobs(serverEntries: LibraryEntry[]): LibraryEntry[] {
   const next = prune(
     [...byId.values()].sort((a, b) => b.created_at.localeCompare(a.created_at))
   );
-  saveLibrary(next);
+  saveLibrary(next, account);
   return next;
 }
 
-export function isInLibrary(jobId: string): boolean {
-  return loadLibrary().some((entry) => entry.job_id === jobId);
+export function isInLibrary(jobId: string, account?: string): boolean {
+  return loadLibrary(account).some((entry) => entry.job_id === jobId);
 }

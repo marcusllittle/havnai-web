@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { NextPage } from "next";
 import Link from "next/link";
+import Image from "next/image";
+import { ArrowRight, ArrowUpRight, Gamepad2 } from "lucide-react";
 import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../lib/WalletContext";
@@ -112,138 +114,97 @@ const AstraPage: NextPage = () => {
 
       <SiteHeader />
 
-      <main className="jh-page-shell">
-        {/* ── Hero ── */}
-        <section className="jh-hero">
-          <div className="jh-hero-bg" aria-hidden="true">
-            <img src="/astra/scenes/shmup_combat.png" alt="" className="jh-hero-bg-img" />
-            <div className="jh-hero-bg-overlay" />
-          </div>
-          <div className="jh-hero-inner">
-            <span className="jh-eyebrow">Astra Valkyries</span>
-            <h1 className="jh-hero-title">Win the run. The network paints it.</h1>
-            <p className="jh-hero-subtitle">
-              Arcade space combat wired into a real economy. Victories earn shared HavnAI
-              credits — and the GPU grid renders your pilot, your outfit, your zone, your grade.
-            </p>
-            <div className="jh-hero-actions">
-              <a href={playUrl} className="jh-btn jh-btn-primary" target="_blank" rel="noreferrer">
-                {wallet.shortAddress ? `Play as ${wallet.shortAddress}` : "Play Astra"}
+      <main className="astra-page">
+        <section className="astra-hero" aria-labelledby="astra-title">
+          <div className="astra-hero-copy">
+            <span className="astra-eyebrow"><Gamepad2 size={15} aria-hidden="true" /> Astra Valkyries</span>
+            <h1 id="astra-title">Make every<br />run <em>your own.</em></h1>
+            <p>Fly the mission. Earn the credits. Let the GPU network turn your pilot’s victories into art.</p>
+            <div className="astra-actions">
+              <a href={playUrl} className="astra-button astra-button-primary" target="_blank" rel="noreferrer">
+                {wallet.shortAddress ? `Play as ${wallet.shortAddress}` : "Play Astra"} <ArrowUpRight size={17} aria-hidden="true" />
               </a>
-              <Link href="/create" className="jh-btn jh-btn-secondary">
-                Open Generator
-              </Link>
-              <Link href="/marketplace" className="jh-btn jh-btn-tertiary">
-                Marketplace
-              </Link>
+              <a href="#astra-zones" className="astra-button astra-button-secondary">Explore the universe</a>
             </div>
+            <span className="astra-launch-note">Opens the Astra game in a new tab</span>
           </div>
+          <figure className="astra-hero-art">
+            <Image src="/astra/scenes/shmup_combat.png" alt="A fighter weaving through glowing fire in a space battle" fill priority sizes="(max-width: 760px) calc(100vw - 32px), (max-width: 1280px) 53vw, 660px" />
+            <figcaption><span>Arcade combat · Astra universe artwork</span><strong>Your next run starts here.</strong></figcaption>
+          </figure>
         </section>
-
-        {/* ── The loop ── */}
-        <section className="jh-pipeline">
-          <div className="jh-pipeline-header">
-            <span className="jh-eyebrow">One wallet, one economy</span>
-            <h2>Play. Earn. Collect. Create.</h2>
-            <p>
-              Astra is not a promo page for the platform — it is the platform, playable.
-              The credits you win are the credits that generate.
-            </p>
+        <section className="astra-loop" aria-labelledby="astra-loop-title">
+          <div className="astra-section-heading">
+            <div><span className="astra-eyebrow">Beyond the high score</span><h2 id="astra-loop-title">One run. More possibilities.</h2></div>
+            <p>Shared HavnAI credits connect<br /> what you play with what you create.</p>
           </div>
-          <div className="jh-pipeline-flow">
-            {loopSteps.map((step, i) => (
-              <div key={step.title} style={{ display: "contents" }}>
-                <div className="jh-pipeline-step">
-                  <span className="jh-pipeline-icon">{i + 1}</span>
-                  <strong>{step.title}</strong>
-                  <span>{step.text}</span>
+          <ol className="astra-loop-grid">
+            {loopSteps.map((step, index) => (
+              <li key={step.title}><span className="astra-step-number">0{index + 1}</span><div><h3>{step.title}</h3><p>{step.text}</p></div></li>
+            ))}
+          </ol>
+          <Link href="/create" className="astra-text-link">Explore the generator <ArrowRight size={16} aria-hidden="true" /></Link>
+        </section>
+        <section id="astra-zones" className="astra-section" aria-labelledby="astra-zones-title">
+          <div className="astra-section-heading">
+            <div><span className="astra-eyebrow">Choose your horizon</span><h2 id="astra-zones-title">Three zones. One way forward.</h2></div>
+            <p>Eighteen waves. Three bosses.<br /> Grade B or better unlocks the next zone.</p>
+          </div>
+          <div className="astra-zone-grid">
+            {zones.map((zone, index) => (
+              <article key={zone.name} className="astra-zone-card">
+                <div className="astra-zone-art">
+                  <Image src={zone.image} alt={`Cockpit view of ${zone.name}`} fill sizes="(max-width: 600px) calc(100vw - 32px), (max-width: 760px) 42vw, (max-width: 1280px) 31vw, 410px" />
+                  <span>Zone 0{index + 1}</span>
                 </div>
-                {i < loopSteps.length - 1 && <span className="jh-pipeline-connector" aria-hidden="true" />}
-              </div>
+                <div className="astra-zone-copy"><h3>{zone.name}</h3><p>{zone.description}</p></div>
+              </article>
+            ))}
+          </div>
+          <p className="astra-art-note">Explore the world through Astra universe artwork.</p>
+        </section>
+        <section className="astra-section" aria-labelledby="astra-pilots-title">
+          <div className="astra-section-heading">
+            <div><span className="astra-eyebrow">Meet the Valkyries</span><h2 id="astra-pilots-title">Find your kind of fearless.</h2></div>
+            <p>Three pilots. Distinct voices.<br /> Each with a story to fly.</p>
+          </div>
+          <div className="astra-pilot-grid">
+            {pilots.map((pilot) => (
+              <article key={pilot.name} className="astra-pilot-card">
+                <div className="astra-pilot-art"><Image src={pilot.image} alt={pilot.name} fill sizes="(max-width: 760px) 110px, (max-width: 1280px) 31vw, 410px" /></div>
+                <div className="astra-pilot-copy"><h3>{pilot.name}</h3><p>{pilot.role}</p></div>
+              </article>
             ))}
           </div>
         </section>
-
-        {/* ── Fresh from the grid ── */}
         {creations.length > 0 && (
-          <section className="jh-showcase">
-            <div className="jh-showcase-header">
-              <span className="jh-eyebrow">Fresh from the grid</span>
-              <h2>Player victories, painted by the network.</h2>
-              <p>
-                Every one of these was generated for a real run — pilot, outfit, zone,
-                and grade straight from the mission that earned it.
-              </p>
+          <section className="astra-section" aria-labelledby="astra-creations-title">
+            <div className="astra-section-heading">
+              <div><span className="astra-eyebrow">Fresh from the grid</span><h2 id="astra-creations-title">A victory worth keeping.</h2></div>
+              <p>Player renders generated from<br /> the missions that earned them.</p>
             </div>
-            <div className="jh-showcase-grid">
+            <div className="astra-creation-grid">
               {creations.map((creation) => (
-                <article key={creation.job_id} className="jh-showcase-card">
-                  <div className="jh-showcase-img-wrap">
-                    <img
-                      src={resolveAssetUrl(creation.image_url ?? creation.preview_url)}
-                      alt={`Grade ${creation.grade} victory render on ${creation.map_id.replace(/-/g, " ")}`}
-                      className="jh-showcase-img"
-                      loading="lazy"
-                    />
+                <article key={creation.job_id} className="astra-creation-card">
+                  <div className="astra-creation-art">
+                    <img src={resolveAssetUrl(creation.image_url || creation.preview_url)} alt={`Grade ${creation.grade} victory render on ${creation.map_id.replace(/-/g, " ")}`} loading="lazy"
+                      onError={(event) => { event.currentTarget.hidden = true; }} />
+                    <span>Preview unavailable</span>
                   </div>
-                  <div className="jh-showcase-card-body">
-                    <strong>Grade {creation.grade} — {creation.map_id.replace(/-/g, " ")}</strong>
-                    <span>flown by {creation.pilot_short}</span>
-                  </div>
+                  <div><h3>Grade {creation.grade} · {creation.map_id.replace(/-/g, " ")}</h3><p>Flown by {creation.pilot_short}</p></div>
                 </article>
               ))}
             </div>
           </section>
         )}
-
-        {/* ── Zones ── */}
-        <section className="jh-showcase">
-          <div className="jh-showcase-header">
-            <span className="jh-eyebrow">Three zones</span>
-            <h2>Eighteen waves. Three bosses. One route at a time.</h2>
-            <p>Clear a zone at grade B or better to unlock the next.</p>
-          </div>
-          <div className="jh-showcase-grid">
-            {zones.map((zone) => (
-              <article key={zone.name} className="jh-showcase-card">
-                <div className="jh-showcase-img-wrap">
-                  <img src={zone.image} alt={zone.name} className="jh-showcase-img" loading="lazy" />
-                </div>
-                <div className="jh-showcase-card-body">
-                  <strong>{zone.name}</strong>
-                  <span>{zone.description}</span>
-                </div>
-              </article>
-            ))}
+        <section className="astra-endcap" aria-labelledby="astra-endcap-title">
+          <div><span className="astra-eyebrow">The universe is waiting</span><h2 id="astra-endcap-title">Take it for a run.</h2><p>Your pilot. Your next victory. Your collection.</p></div>
+          <div className="astra-endcap-actions">
+            <a href={playUrl} className="astra-button astra-button-primary" target="_blank" rel="noreferrer">Launch Astra Valkyries <ArrowUpRight size={17} aria-hidden="true" /></a>
+            <span className="astra-launch-note">Opens the game in a new tab</span>
           </div>
         </section>
-
-        {/* ── Pilots ── */}
-        <section className="jh-characters">
-          <div className="jh-showcase-header">
-            <span className="jh-eyebrow">The Valkyries</span>
-            <h2>Three pilots. Distinct voices. Real dialogue.</h2>
-          </div>
-          <div className="jh-hero-pilots">
-            {pilots.map((pilot) => (
-              <article key={pilot.name} className="jh-pilot-card">
-                <img src={pilot.image} alt={pilot.name} className="jh-pilot-img" loading="lazy" />
-                <div className="jh-pilot-info">
-                  <strong>{pilot.name}</strong>
-                  <span>{pilot.role}</span>
-                </div>
-              </article>
-            ))}
-          </div>
-          <div className="jh-hero-actions" style={{ justifyContent: "center", marginTop: "2rem" }}>
-            <a href={playUrl} className="jh-btn jh-btn-primary" target="_blank" rel="noreferrer">
-              Launch Astra Valkyries
-            </a>
-            <Link href="/pricing" className="jh-btn jh-btn-tertiary">
-              Credits &amp; Pricing
-            </Link>
-          </div>
-        </section>
+        <footer className="astra-footer"><Link href="/create">Create with HavnAI <ArrowRight size={15} aria-hidden="true" /></Link><Link href="/marketplace">Marketplace</Link><Link href="/pricing">Credits &amp; pricing</Link></footer>
       </main>
     </>
   );

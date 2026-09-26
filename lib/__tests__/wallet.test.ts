@@ -26,6 +26,7 @@ import {
   getInjectedProvider,
   detectProviderConflict,
   getAllProviders,
+  formatWalletShort,
   WalletError,
 } from "../wallet";
 
@@ -222,5 +223,12 @@ describe("wallet provider selection", () => {
       const providers = getAllProviders();
       expect(providers).toHaveLength(1);
     });
+  });
+});
+
+describe("formatWalletShort", () => {
+  it("uses a shortened wallet identity for display surfaces", () => {
+    expect(formatWalletShort("0x1111111111111111111111111111111111111111")).toBe("0x1111...1111");
+    expect(formatWalletShort(null)).toBe("No wallet");
   });
 });

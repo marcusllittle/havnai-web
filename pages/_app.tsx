@@ -1,8 +1,29 @@
 import type { AppProps } from "next/app";
+import Head from "next/head";
 import React from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { WalletProvider } from "../components/WalletProvider";
+import { AccountProvider } from "../components/AccountProvider";
+import { MusicPlayerProvider } from "../components/MusicPlayer";
 import "../style.css";
+import "../styles/music.css";
+import "../styles/create.css";
+import "../styles/collection.css";
+import "../styles/discover.css";
+import "../styles/navigation.css";
+import "../styles/studios.css";
+import "../styles/home.css";
+import "../styles/astra.css";
+import "../styles/marketplace.css";
+import "../styles/music-shelf.css";
+import "../styles/account.css";
+import "../styles/network.css";
+import "../styles/operators.css";
+import "../styles/product.css";
+import "../styles/guides.css";
+import "../styles/templates.css";
+import "../styles/results.css";
+import "../styles/policies.css";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -75,10 +96,15 @@ class ErrorBoundary extends React.Component<
 export default function HavnAIApp({ Component, pageProps }: AppProps) {
   return (
     <ErrorBoundary>
-      <WalletProvider>
-        <Component {...pageProps} />
-        <Analytics />
-      </WalletProvider>
+      <Head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
+      <AccountProvider><WalletProvider>
+        <MusicPlayerProvider>
+          <Component {...pageProps} />
+          <Analytics />
+        </MusicPlayerProvider>
+      </WalletProvider></AccountProvider>
     </ErrorBoundary>
   );
 }
