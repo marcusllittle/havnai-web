@@ -19,10 +19,11 @@ purchase/job references and redacted diagnostics rather than secrets.
 
 The proposed business wording is manual, individual review of refund requests,
 considering payment, usage, issue and consumer rights. It does not promise a fixed
-refund window, response deadline or approval of every request. **Owner approval
-of this wording and confirmation that the mailbox is monitored remain open.**
-The copy is reviewable on localhost; its presence in the branch is not policy
-approval or production deployment.
+refund window, response deadline or approval of every request. The owner reviewed
+the pages in this thread and approved the wording,
+then confirmed `team@joinhavn.io` is the correct contact. The copy is approved for
+the release; its presence in the branch is not production deployment. Actual
+support-message delivery and response handling have not been tested here.
 
 ## Preserved payment boundaries
 
@@ -91,7 +92,7 @@ pricing's agreement links, and verify a newly completed purchase's stored receip
 URLs. Keep production checkout disabled until its wider HAVN-11 payment/auth/live
 acceptance gates are met. Never rewrite old receipts to the new URLs.
 
-Owner approval, public deployment, running staging/production configuration,
+Public deployment, running staging/production configuration,
 live receipt evidence under this revision, and attaching/linking the evidence in
 HAVN-21/HAVN-23/HAVN-25 remain open. No Jira status or comment was changed.
 

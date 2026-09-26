@@ -6,6 +6,7 @@ import { SiteHeader } from "../../components/SiteHeader";
 import { SeoHead } from "../../components/SeoHead";
 
 type Deleted = { job_id: string; deleted_at: number; recover_until: number; purged_at: number | null };
+type DeletedPage = { generations: Deleted[]; next_cursor?: string | null };
 
 export default function DeletedCreationsPage() {
   const account = useAccount();
@@ -50,17 +51,23 @@ function DeletedCreations() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [revision, setRevision] = useState(0);
+  const [before, setBefore] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const pending = useRef(false);
   const lifetime = useRef<AbortController | null>(null);
   useEffect(() => {
     const controller = new AbortController(); lifetime.current = controller;
-    setLoading(true); setError("");
-    void account.request<{ generations: Deleted[] }>("/v2/account/deleted-generations", { signal: controller.signal, cache: "no-store" })
-      .then(result => { if (!controller.signal.aborted) setItems(result.generations); })
+    pending.current = true; setLoading(true); setBusy(""); setError(""); setNextCursor(null);
+    void account.request<DeletedPage>(`/v2/account/deleted-generations${before ? `?before=${encodeURIComponent(before)}` : ""}`, { signal: controller.signal, cache: "no-store" })
+      .then(result => { if (!controller.signal.aborted) { setItems(result.generations); setNextCursor(result.next_cursor || null); } })
       .catch(() => { if (!controller.signal.aborted) setError("Could not load deleted creations. Please try again."); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+      .finally(() => { if (!controller.signal.aborted) { pending.current = false; setLoading(false); } });
     return () => controller.abort();
-  }, [account.request, revision]);
+  }, [account.request, revision, before]);
+  function changePage(cursor: string | null) {
+    if (pending.current) return;
+    pending.current = true; setLoading(true); setItems([]); setNotice(""); setBefore(cursor);
+  }
   async function restore(item: Deleted) {
     if (pending.current || !lifetime.current) return;
     pending.current = true; setBusy(item.job_id); setError(""); setNotice("");
@@ -71,7 +78,7 @@ function DeletedCreations() {
       setItems(current => current.filter(row => row.job_id !== item.job_id));
       setNotice("Restored privately. Republish or add it to playlists separately.");
     } catch { if (!signal.aborted) setError("Could not restore this creation. Its recovery window may have expired. Please refresh and try again."); }
-    finally { pending.current = false; if (!signal.aborted) setBusy(""); }
+    finally { if (!signal.aborted) { pending.current = false; setBusy(""); } }
   }
   return <>
     {error && <div className="recovery-feedback recovery-feedback-error" role="alert"><p>{error}</p><button className="recovery-button recovery-button-secondary" type="button" disabled={Boolean(busy)} onClick={() => setRevision(value => value + 1)}><RotateCcw size={16} aria-hidden="true" />Try again</button></div>}
@@ -79,7 +86,7 @@ function DeletedCreations() {
     {loading ? <div className="recovery-state" role="status"><LoaderCircle size={26} className="recovery-spinner" aria-hidden="true" /><p>Loading deleted creations…</p></div>
       : !error && !items.length ? <div className="recovery-state">
         <span className="recovery-state-icon"><History size={30} aria-hidden="true" /></span>
-        <h2>Nothing to restore.</h2><p>No deleted creations. If you delete something, you'll find it here during its recovery window.</p>
+        <h2>{before || nextCursor ? "Nothing left on this page." : "Nothing to restore."}</h2><p>{before || nextCursor ? "These creations have been restored. You can return to your latest deletions or browse an older page." : "No deleted creations. If you delete something, you'll find it here during its recovery window."}</p>
         <Link href="/library" className="recovery-button recovery-button-primary">Open Collection<ArrowUpRight size={17} aria-hidden="true" /></Link>
       </div> : items.length > 0 && <section className="recovery-list-panel" aria-label="Deleted creations">
         <div className="recovery-list-heading"><h2>Recently deleted<span>{items.length}</span></h2><span><Clock3 size={15} aria-hidden="true" />30-day recovery</span></div>
@@ -101,5 +108,10 @@ function DeletedCreations() {
           </li>;
         })}</ul>
       </section>}
+    {(before || nextCursor) && <nav className="recovery-pagination" aria-label="Deleted creation pages">
+      <span>{loading ? "Loading page…" : `${items.length} ${items.length === 1 ? "creation" : "creations"} on this page`}</span>
+      <div>{before && <button className="recovery-button recovery-button-secondary" type="button" disabled={loading || Boolean(busy)} onClick={() => changePage(null)}>Latest deletions</button>}
+        {nextCursor && <button className="recovery-button recovery-button-secondary" type="button" disabled={loading || Boolean(busy)} onClick={() => changePage(nextCursor)}>Older deletions<ArrowUpRight size={16} aria-hidden="true" /></button>}</div>
+    </nav>}
   </>;
 }
