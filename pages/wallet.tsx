@@ -1,4 +1,6 @@
 import type { NextPage } from "next";
+import Link from "next/link";
+import { ArrowUpRight, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
@@ -18,13 +20,16 @@ import {
 } from "../lib/havnai";
 import { ensureInjectedProvider, getConnectButtonLabel } from "../lib/wallet";
 import { isHaiFundingConfigured, readHaiBalance, getBrowserProvider } from "../lib/hai-token";
-import { getWalletIdentityLabel, getWalletSourceLabel, getWalletStatusCopy, PUBLIC_ALPHA_LABEL } from "../lib/publicAlpha";
+import { getWalletIdentityLabel, getWalletSourceLabel, getWalletStatusCopy } from "../lib/publicAlpha";
 
 const WalletPage: NextPage = () => {
   const wallet = useWallet();
   const [credits, setCredits] = useState<CreditBalance | null>(null);
   const [rewards, setRewards] = useState<WalletRewards | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [balanceError, setBalanceError] = useState("");
+  const [connectionError, setConnectionError] = useState("");
   const [claiming, setClaiming] = useState(false);
   const [claimResult, setClaimResult] = useState<string | null>(null);
   const [onChainHai, setOnChainHai] = useState<string | null>(null);
@@ -48,6 +53,7 @@ const WalletPage: NextPage = () => {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setCredits(null); setRewards(null); setBalanceError("");
     if (!wallet.activeWallet) {
       setCredits(null);
       setRewards(null);
@@ -63,6 +69,7 @@ const WalletPage: NextPage = () => {
       if (!active) return;
       setCredits(cr);
       setRewards(rw);
+      if (!cr || !rw) setBalanceError("Some balances are unavailable. Try refreshing your wallet data.");
       setLoading(false);
     });
     // Load on-chain HAI balance
@@ -86,7 +93,7 @@ const WalletPage: NextPage = () => {
       setOnChainHai(null);
     }
     return () => { active = false; };
-  }, [wallet.activeWallet]);
+  }, [wallet.activeWallet, wallet.connectedWallet, haiFundingConfigured, refreshKey]);
 
   useEffect(() => {
     let active = true;
@@ -141,7 +148,7 @@ const WalletPage: NextPage = () => {
     return () => {
       active = false;
     };
-  }, [wallet.activeWallet, claimResult]);
+  }, [wallet.activeWallet, claimResult, refreshKey]);
 
   useEffect(() => {
     if (!testerConfig?.default_request_hai) return;
@@ -211,16 +218,12 @@ const WalletPage: NextPage = () => {
       />
       <SiteHeader />
 
-      <main className="library-page">
-        <section className="page-hero">
-          <div className="page-hero-inner">
-            <p className="hero-kicker">Wallet</p>
-            <h1 className="hero-title">Your Wallet</h1>
-            <p className="hero-subtitle">Credits, tracked HAI, Sepolia balance, and funding history in one place.</p>
-          </div>
-        </section>
-
-        <section className="page-container">
+      <main className="account-page wallet-page">
+        <header className="account-heading">
+          <div><span className="account-eyebrow"><Wallet size={15} aria-hidden="true" /> Your account</span><h1>Room for your next idea.</h1><p>Your credits, rewards, and funding history in one place.</p></div>
+          <Link href="/pricing" className="account-primary">Explore credits <ArrowUpRight size={16} aria-hidden="true" /></Link>
+        </header>
+        <section className="account-content" aria-label="Wallet account">
           <div className="wallet-status-card">
             <div className="wallet-status-copy-block">
               <div className="wallet-status-heading-row">
@@ -239,7 +242,7 @@ const WalletPage: NextPage = () => {
               <button
                 type="button"
                 className="job-action-button secondary"
-                onClick={() => void wallet.connect()}
+                onClick={() => { setConnectionError(""); void wallet.connect().catch(reason => setConnectionError(reason instanceof Error ? reason.message : "Wallet connection failed.")); }}
                 disabled={wallet.connecting}
               >
                 {connectLabel}
@@ -247,26 +250,10 @@ const WalletPage: NextPage = () => {
             </div>
           </div>
 
-          <div className="chart-section">
-            <div className="chart-header">
-              <h3 className="chart-title">Public Alpha Wallet Guide</h3>
-            </div>
-            <ol style={{ color: "var(--text-muted)", lineHeight: 1.6, paddingLeft: "1.2rem", margin: 0 }}>
-              <li>Connect your wallet and confirm the active network is Sepolia.</li>
-              <li>
-                Get SepoliaETH for gas from faucets such as{" "}
-                <a href="https://www.alchemy.com/faucets/ethereum-sepolia" target="_blank" rel="noreferrer">
-                  Alchemy
-                </a>{" "}
-                or{" "}
-                <a href="https://faucets.chain.link/sepolia" target="_blank" rel="noreferrer">
-                  Chainlink
-                </a>.
-              </li>
-              <li>Use Buy Credits to fund credits with HAI at the current Public Alpha rate.</li>
-              <li>This page shows credits, on-chain HAI, tracked rewards, and Sepolia funding/request history for the active identity above.</li>
-            </ol>
-          </div>
+          {connectionError && <p className="account-notice" role="alert">{connectionError}</p>}
+          {balanceError && <div className="account-notice" role="alert"><p>{balanceError}</p><button className="account-secondary" onClick={() => setRefreshKey(value => value + 1)}>Refresh balances</button></div>}
+          <h2 className="account-section-title">Your balances</h2>
+
 
           {loading && <p className="library-loading">Loading wallet data...</p>}
 
@@ -277,7 +264,7 @@ const WalletPage: NextPage = () => {
                 <div className="stat-label">Credit Balance</div>
                 <div className="stat-value">{credits?.balance?.toFixed(1) ?? "--"}</div>
                 <div className="stat-sub">
-                  {credits ? `${credits.total_deposited.toFixed(1)} deposited / ${credits.total_spent.toFixed(1)} spent` : "Credits not enabled"}
+                  {credits ? `${credits.total_deposited.toFixed(1)} deposited / ${credits.total_spent.toFixed(1)} spent` : wallet.activeWallet ? "Balance unavailable" : "Connect to view your balance"}
                 </div>
               </div>
 
@@ -308,11 +295,30 @@ const WalletPage: NextPage = () => {
             </div>
           )}
 
+          <details className="account-disclosure wallet-guide"><summary>Getting started with your wallet</summary><div className="account-guide-copy">
+
+            <ol style={{ color: "var(--text-muted)", lineHeight: 1.6, paddingLeft: "1.2rem", margin: 0 }}>
+              <li>Connect your wallet and confirm the active network is Sepolia.</li>
+              <li>
+                Get SepoliaETH for gas from faucets such as{" "}
+                <a href="https://www.alchemy.com/faucets/ethereum-sepolia" target="_blank" rel="noreferrer">
+                  Alchemy
+                </a>{" "}
+                or{" "}
+                <a href="https://faucets.chain.link/sepolia" target="_blank" rel="noreferrer">
+                  Chainlink
+                </a>.
+              </li>
+              <li>Use Buy Credits to fund credits with HAI at the current Public Alpha rate.</li>
+              <li>This page shows credits, on-chain HAI, tracked rewards, and Sepolia funding/request history for the active identity above.</li>
+            </ol>
+          </div></details>
+
           {/* Claim section */}
           {!loading && rewards && rewards.claimable > 0 && (
-            <div className="chart-section">
+            <div className="account-panel">
               <div className="chart-header">
-                <h3 className="chart-title">Claim Rewards</h3>
+                <h2 className="chart-title">Claim Rewards</h2>
               </div>
               <p style={{ color: "var(--text-muted)", marginBottom: "1rem", fontSize: "0.85rem" }}>
                 You have <strong style={{ color: "#8ff0b6" }}>{rewards.claimable.toFixed(4)} HAI</strong> available to claim.
@@ -330,17 +336,9 @@ const WalletPage: NextPage = () => {
             </div>
           )}
 
-          {/* Buy credits CTA */}
-          <div className="chart-section" style={{ textAlign: "center" }}>
-            <h3 className="chart-title" style={{ marginBottom: "0.75rem" }}>Need more credits?</h3>
-            <a href="/pricing" className="job-action-button" style={{ textDecoration: "none", display: "inline-block" }}>
-              Buy Credits
-            </a>
-          </div>
-
-          <div className="chart-section">
+          <div className="account-panel">
             <div className="chart-header">
-              <h3 className="chart-title">HAI Funding History</h3>
+              <h2 className="chart-title">HAI funding history</h2>
             </div>
             {fundingLoading ? (
               <p className="library-loading">Loading funding history...</p>
@@ -349,7 +347,7 @@ const WalletPage: NextPage = () => {
             ) : fundings.length === 0 ? (
               <p className="job-hint">No HAI-to-credit funding has been recorded for this identity yet.</p>
             ) : (
-              <div className="table-wrapper">
+              <div className="table-wrapper" tabIndex={0} role="region" aria-label="HAI funding history table">
                 <table className="rewards-table">
                   <thead>
                     <tr>
@@ -391,9 +389,9 @@ const WalletPage: NextPage = () => {
             </p>
           </div>
 
-          <div className="chart-section">
+          <div className="account-panel">
             <div className="chart-header">
-              <h3 className="chart-title">Request Test HAI</h3>
+              <h2 className="chart-title">Request Test HAI</h2>
             </div>
             <p className="job-hint" style={{ marginBottom: "0.8rem" }}>
               Test HAI requests are reviewed manually by the HavnAI team. Availability may be limited
@@ -413,6 +411,7 @@ const WalletPage: NextPage = () => {
                   type="number"
                   min="1"
                   step="1"
+                  aria-label="Test HAI request amount"
                   value={testerAmount}
                   onChange={(event) => setTesterAmount(event.target.value)}
                   disabled={!wallet.activeWallet || testerSubmitting || !testerDistributionEnabled}
@@ -430,6 +429,7 @@ const WalletPage: NextPage = () => {
             <textarea
               className="library-search"
               style={{ marginTop: "0.6rem", minHeight: "80px", resize: "vertical" }}
+              aria-label="Optional note for test HAI reviewers"
               value={testerNote}
               onChange={(event) => setTesterNote(event.target.value)}
               placeholder="Optional note for reviewers (team, test scenario, urgency)"
@@ -439,10 +439,10 @@ const WalletPage: NextPage = () => {
             {testerError && <p className="convert-error">{testerError}</p>}
             {testerLoading ? (
               <p className="library-loading">Loading tester requests...</p>
-            ) : testerRequests.length === 0 ? (
+            ) : testerError ? null : testerRequests.length === 0 ? (
               <p className="job-hint">No test HAI requests have been submitted for this identity yet.</p>
             ) : (
-              <div className="table-wrapper" style={{ marginTop: "0.8rem" }}>
+              <div className="table-wrapper" tabIndex={0} role="region" aria-label="Test HAI requests table" style={{ marginTop: "0.8rem" }}>
                 <table className="rewards-table">
                   <thead>
                     <tr>

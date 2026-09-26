@@ -1,0 +1,486 @@
+import Head from "next/head";
+import Image from "next/image";
+import Link from "next/link";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Download,
+  ArrowUpRight,
+  LogOut,
+  MoreHorizontal,
+  Music2,
+  Pause,
+  Play,
+  SlidersHorizontal,
+  Sparkles,
+  WifiOff,
+  X,
+} from "lucide-react";
+import { SiteHeader } from "../components/SiteHeader";
+import { StudioAccessGate } from "../components/StudioAccessGate";
+import { useMusicPlayer } from "../components/MusicPlayer";
+import { useWallet } from "../components/WalletProvider";
+import {
+  fetchMusicDiscover,
+  publishMusicJob,
+  unpublishMusicPublication,
+  type MusicPublication,
+} from "../lib/havnai";
+import {
+  cancelMusicJob,
+  createMusicJob,
+  fetchMusicCapabilities,
+  fetchMusicJob,
+  fetchMusicJobs,
+  musicMediaUrl,
+  type MusicCapabilities,
+  type MusicJob,
+} from "../lib/musicStudioApi";
+import {
+  FINAL_MUSIC_STATES,
+  formatMusicDuration,
+  musicJobError,
+  musicJobTitle,
+  musicStageLabel,
+} from "../lib/musicJobPresentation";
+import { DEFAULT_MUSIC_FORM, restoreMusicForm, type MusicFormState } from "../lib/musicStudioState";
+
+const FORM_STORAGE_KEY = "havnai_music_studio_form_v1";
+const ACTIVE_STORAGE_KEY = "havnai_music_studio_active_job";
+const STUDIO_KEY = "havnai_studio_key";
+
+function mergeJobs(current: MusicJob[], incoming: MusicJob[]): MusicJob[] {
+  const jobs = new Map(current.map((job) => [job.id, job]));
+  incoming.forEach((job) => jobs.set(job.id, job));
+  return [...jobs.values()]
+    .sort((left, right) => Number(right.updated_at || right.created_at || 0) - Number(left.updated_at || left.created_at || 0))
+    .slice(0, 20);
+}
+
+function friendlyError(reason: unknown): string {
+  const message = reason instanceof Error ? reason.message : String(reason || "");
+  if (message.includes("studio_access_denied")) return "That studio access key was not accepted.";
+  if (message.includes("owner_api_not_configured")) return "Music Studio is not configured on this deployment.";
+  if (message.includes("owner_api_unavailable")) return "Music Studio cannot reach HavnAI right now.";
+  if (message.includes("invalid_duration")) return "Choose a song length between 10 seconds and 10 minutes.";
+  if (message.includes("invalid_bpm")) return "BPM must be between 30 and 300.";
+  if (message.includes("invalid_seed")) return "Seed must be a whole number from 0 to 2,147,483,647.";
+  if (message.includes("unknown_model")) return "The selected music model is no longer available.";
+  return message || "Something interrupted the request. Please try again.";
+}
+
+function jobDuration(job: MusicJob): number {
+  const artifact = job.artifacts.find((item) => item.kind === "audio");
+  return Number(artifact?.metadata?.duration || job.resolved_spec?.parameters?.duration || 0);
+}
+
+function jobStyle(job: MusicJob): string {
+  return String(job.resolved_spec?.parameters?.style || "HavnAI original");
+}
+
+export default function MusicStudioPage() {
+  const [accessKey, setAccessKey] = useState("");
+  const [unlocked, setUnlocked] = useState(false);
+  const [checkingAccess, setCheckingAccess] = useState(false);
+  const [capabilities, setCapabilities] = useState<MusicCapabilities | null>(null);
+  const [form, setForm] = useState<MusicFormState>(DEFAULT_MUSIC_FORM);
+  const [jobs, setJobs] = useState<MusicJob[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [publications, setPublications] = useState<MusicPublication[]>([]);
+  const [publishJob, setPublishJob] = useState<MusicJob | null>(null);
+  const [publishTitle, setPublishTitle] = useState("");
+  const [publishTags, setPublishTags] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [publishProgress, setPublishProgress] = useState("");
+  const mountedRef = useRef(false);
+  const { currentTrack, isPlaying, playTrack, toggle } = useMusicPlayer();
+  const wallet = useWallet();
+  const activeWallet = wallet.activeWallet;
+  const connectedWallet = wallet.connectedWallet;
+  const [loadingPublications, setLoadingPublications] = useState(false);
+  const publicationReadInFlight = useRef(false);
+  const publicationWallet = useRef(connectedWallet);
+  publicationWallet.current = connectedWallet;
+
+  useEffect(() => {
+    setForm(restoreMusicForm(window.localStorage.getItem(FORM_STORAGE_KEY)));
+    const savedKey = window.sessionStorage.getItem(STUDIO_KEY) || "";
+    if (savedKey) {
+      setAccessKey(savedKey);
+      void connect(savedKey);
+    }
+    mountedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!mountedRef.current) return;
+    try { window.localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(form)); } catch { /* ignore */ }
+  }, [form]);
+
+  const activeIds = jobs.filter((job) => !job.id.startsWith("pending-") && !FINAL_MUSIC_STATES.has(job.status)).map((job) => job.id).join(",");
+  useEffect(() => {
+    if (!unlocked || !activeIds) return;
+    const timer = window.setTimeout(() => {
+      void Promise.all(activeIds.split(",").map((id) => fetchMusicJob(id, accessKey)))
+        .then((updates) => {
+          setJobs((current) => mergeJobs(current, updates));
+          const remaining = updates.find((job) => !FINAL_MUSIC_STATES.has(job.status));
+          if (remaining) window.localStorage.setItem(ACTIVE_STORAGE_KEY, remaining.id);
+          else window.localStorage.removeItem(ACTIVE_STORAGE_KEY);
+        })
+        .catch((reason) => setError(friendlyError(reason)));
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [accessKey, activeIds, unlocked]);
+
+  useEffect(() => {
+    if (!unlocked) return;
+    const timer = window.setInterval(() => {
+      void Promise.all([
+        fetchMusicJobs(accessKey),
+        fetchMusicCapabilities(accessKey),
+      ])
+        .then(([recent, nextCapabilities]) => {
+          setJobs((current) => mergeJobs(current, recent));
+          setCapabilities(nextCapabilities);
+        })
+        .catch(() => undefined);
+    }, 6000);
+    return () => window.clearInterval(timer);
+  }, [accessKey, unlocked]);
+
+  useEffect(() => { setPublications([]); }, [activeWallet]);
+
+  async function loadPublishingStatus() {
+    if (!connectedWallet || publicationReadInFlight.current) return;
+    publicationReadInFlight.current = true;
+    setLoadingPublications(true);
+    try {
+      const response = await fetchMusicDiscover({ creator_wallet: connectedWallet, wallet: connectedWallet, limit: 100 });
+      if (publicationWallet.current === connectedWallet) setPublications(response.publications);
+    } catch (reason) { setError(friendlyError(reason)); }
+    finally { publicationReadInFlight.current = false; setLoadingPublications(false); }
+  }
+
+  const musicModels = capabilities?.models.filter((model) =>
+    model.available && model.capabilities?.includes("text_to_music")
+  ) || [];
+  const selectedModel = musicModels[0]?.id || "";
+  const musicAvailable = musicModels.length > 0;
+  const publicationByJobId = useMemo(() => {
+    return new Map(
+      publications
+        .filter((publication) => publication.job_id)
+        .map((publication) => [publication.job_id!, publication])
+    );
+  }, [publications]);
+
+  async function connect(key: string) {
+    const normalized = key.trim();
+    if (!normalized) return;
+    setCheckingAccess(true);
+    setError("");
+    try {
+      const [nextCapabilities, recent] = await Promise.all([
+        fetchMusicCapabilities(normalized),
+        fetchMusicJobs(normalized),
+      ]);
+      setCapabilities(nextCapabilities);
+      setJobs(recent);
+      setAccessKey(normalized);
+      setUnlocked(true);
+      window.sessionStorage.setItem(STUDIO_KEY, normalized);
+      const activeId = window.localStorage.getItem(ACTIVE_STORAGE_KEY);
+      if (activeId && !recent.some((job) => job.id === activeId)) {
+        const active = await fetchMusicJob(activeId, normalized).catch(() => null);
+        if (active) setJobs((current) => mergeJobs(current, [active]));
+      }
+    } catch (reason) {
+      window.sessionStorage.removeItem(STUDIO_KEY);
+      setUnlocked(false);
+      setError(friendlyError(reason));
+    } finally {
+      setCheckingAccess(false);
+    }
+  }
+
+  function update<K extends keyof MusicFormState>(key: K, value: MusicFormState[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedModel || !form.prompt.trim()) return;
+    setError("");
+    setSubmitting(true);
+    const optimisticId = `pending-${Date.now()}`;
+    const optimistic: MusicJob = {
+      id: optimisticId,
+      type: "text_to_music",
+      status: "queued",
+      stage: "queued",
+      progress: 0,
+      model: selectedModel,
+      wallet: activeWallet || undefined,
+      created_at: Date.now() / 1000,
+      resolved_spec: { parameters: { ...form, bpm: form.bpm ? Number(form.bpm) : null, seed: form.seed ? Number(form.seed) : null } },
+      artifacts: [],
+    };
+    setJobs((current) => mergeJobs(current, [optimistic]));
+    try {
+      const created = await createMusicJob({
+        model: selectedModel,
+        prompt: form.prompt.trim(),
+        style: form.style.trim(),
+        lyrics: form.instrumental ? "" : form.lyrics,
+        instrumental: form.instrumental,
+        duration: form.duration,
+        bpm: form.bpm ? Number(form.bpm) : undefined,
+        key: form.key.trim() || undefined,
+        seed: form.seed ? Number(form.seed) : undefined,
+        wallet: activeWallet || undefined,
+      }, accessKey);
+      setJobs((current) => mergeJobs(current.filter((job) => job.id !== optimisticId), [created]));
+      window.localStorage.setItem(ACTIVE_STORAGE_KEY, created.id);
+    } catch (reason) {
+      setJobs((current) => current.filter((job) => job.id !== optimisticId));
+      setError(friendlyError(reason));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function cancel(job: MusicJob) {
+    try {
+      await cancelMusicJob(job.id, accessKey);
+      const updated = await fetchMusicJob(job.id, accessKey);
+      setJobs((current) => mergeJobs(current, [updated]));
+    } catch (reason) {
+      setError(friendlyError(reason));
+    }
+  }
+
+  function beginPublish(job: MusicJob) {
+    setPublishJob(job);
+    setPublishTitle(musicJobTitle(job));
+    setPublishTags(jobStyle(job));
+    setPublishProgress("");
+    setError("");
+  }
+
+  async function submitPublish(event: React.FormEvent) {
+    event.preventDefault();
+    if (!publishJob) return;
+    let signerWallet = activeWallet;
+    if (!signerWallet) {
+      signerWallet = await wallet.connect().catch((reason) => {
+        setError(friendlyError(reason));
+        return null;
+      });
+    }
+    if (!signerWallet) return;
+    setPublishing(true);
+    setPublishProgress("Preparing signature...");
+    try {
+      const publication = await publishMusicJob(
+        {
+          wallet: signerWallet,
+          job_id: publishJob.id,
+          title: publishTitle,
+          style: publishTags,
+          tags: publishTags.split(",").map((tag) => tag.trim()).filter(Boolean),
+        },
+        {
+          onProgress: (step) => {
+            if (step === "requesting_nonce") setPublishProgress("Preparing signature...");
+            else if (step === "awaiting_signature") setPublishProgress("Confirm in wallet...");
+            else if (step === "submitting_publication") setPublishProgress("Publishing...");
+          },
+        }
+      );
+      setPublications((current) => [
+        publication,
+        ...current.filter((item) => item.id !== publication.id && item.job_id !== publication.job_id),
+      ]);
+      setPublishJob(null);
+    } catch (reason) {
+      setError(friendlyError(reason));
+    } finally {
+      setPublishing(false);
+      setPublishProgress("");
+    }
+  }
+
+  async function unpublish(publication: MusicPublication) {
+    if (!activeWallet) return;
+    setError("");
+    try {
+      await unpublishMusicPublication(publication.id, activeWallet);
+      setPublications((current) => current.filter((item) => item.id !== publication.id));
+    } catch (reason) {
+      setError(friendlyError(reason));
+    }
+  }
+
+  if (!unlocked) {
+    return (
+      <>
+        <Head><title>Music Studio | HavnAI</title></Head>
+        <SiteHeader />
+        <StudioAccessGate kind="music" accessKey={accessKey} onChange={setAccessKey} onSubmit={event => { event.preventDefault(); void connect(accessKey); }} checking={checkingAccess} error={error} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Head><title>Music Studio | HavnAI</title><meta name="description" content="Create original music on the HavnAI network." /></Head>
+      <SiteHeader />
+      <main className="music-studio-page studio-workspace-music">
+        <header className="music-studio-heading">
+          <div><span><Music2 size={14} aria-hidden="true" /> Music Studio</span><h1>Make a little noise.</h1><p>A feeling, a scene, a sound. Start with what moves you.</p></div>
+          <div className="music-runtime-row">
+            <span className={musicAvailable ? "is-online" : ""}>{musicAvailable ? "Music ready" : "Music unavailable"}</span>
+            <button type="button" title="Leave studio" aria-label="Leave studio" onClick={() => { window.sessionStorage.removeItem(STUDIO_KEY); setAccessKey(""); setUnlocked(false); setCapabilities(null); setError(""); }}><LogOut size={18} /></button>
+          </div>
+        </header>
+
+        {!musicAvailable && (
+          <div className="music-offline" role="status"><WifiOff size={20} /><div><strong>Music creation is offline</strong><span>Your settings are saved. Try again when music creation is back online.</span></div></div>
+        )}
+        {error && <div className="music-alert" role="alert"><span>{error}</span><button type="button" onClick={() => setError("")} aria-label="Dismiss error"><X size={17} /></button></div>}
+
+        <div className="studio-music-layout">
+        <form className="music-composer" onSubmit={submit}>
+          <label className="music-prompt-field">
+            <span>Song description</span>
+            <textarea value={form.prompt} onChange={(event) => update("prompt", event.target.value)} maxLength={4000} required placeholder="A hazy late-night R&B track with brushed drums, warm bass, and a hopeful chorus..." />
+          </label>
+          <div className="studio-music-starters" role="group" aria-label="Song ideas">
+            <span>Try a direction</span>
+            {[
+              { title: "Midnight R&B", style: "R&B, soulful, late night", prompt: "A warm late-night R&B track with brushed drums, deep bass, intimate vocals, and a hopeful chorus." },
+              { title: "Indie lift", style: "Indie pop, bright, uplifting", prompt: "An uplifting indie pop song with jangly guitars, a driving beat, and a chorus that feels like the first day of summer." },
+              { title: "Ambient focus", style: "Ambient, minimal, atmospheric", prompt: "A gentle instrumental soundscape with soft piano, slow evolving synths, and plenty of space to think." },
+            ].map(idea => <button type="button" key={idea.title} onClick={() => setForm(current => ({ ...current, prompt: idea.prompt, style: idea.style }))}>{idea.title}</button>)}
+          </div>
+          <div className="music-composer-grid">
+            <label><span>Style</span><input value={form.style} maxLength={500} onChange={(event) => update("style", event.target.value)} placeholder="Dream pop, soulful, cinematic" /></label>
+            <label><span>Length</span><select value={form.duration} onChange={(event) => update("duration", Number(event.target.value))}><option value={30}>0:30</option><option value={60}>1:00</option><option value={90}>1:30</option><option value={120}>2:00</option><option value={180}>3:00</option></select></label>
+            <label className="music-switch"><span><strong>Instrumental</strong><small>Create without vocals</small></span><input type="checkbox" checked={form.instrumental} onChange={(event) => update("instrumental", event.target.checked)} /></label>
+          </div>
+          {!form.instrumental && (
+            <details className="music-lyrics" open={Boolean(form.lyrics)}>
+              <summary>Lyrics <span>Optional</span></summary>
+              <label><span>Lyrics</span><textarea value={form.lyrics} maxLength={12000} onChange={(event) => update("lyrics", event.target.value)} placeholder="[Verse]\nWrite your lyrics here..." /></label>
+            </details>
+          )}
+          <details className="music-advanced">
+            <summary><SlidersHorizontal size={17} /> Advanced settings</summary>
+            <div>
+              <label><span>BPM</span><input type="number" min={30} max={300} value={form.bpm} onChange={(event) => update("bpm", event.target.value)} placeholder="Auto" /></label>
+              <label><span>Key</span><input value={form.key} maxLength={64} onChange={(event) => update("key", event.target.value)} placeholder="Auto" /></label>
+              <label><span>Seed</span><input type="number" min={0} max={2147483647} value={form.seed} onChange={(event) => update("seed", event.target.value)} placeholder="Random" /></label>
+            </div>
+          </details>
+          <button className="music-generate" type="submit" disabled={submitting || !musicAvailable || !form.prompt.trim()}><Sparkles size={19} />{submitting ? "Adding to studio..." : "Create song"}</button>
+        </form>
+
+        <section className="music-results" aria-live="polite">
+          <div className="music-results-heading"><div><span>Your studio</span><h2>Recent songs <span className="studio-song-count">{jobs.length}</span></h2></div><Link href="/music/library">Music library <ArrowUpRight size={14} aria-hidden="true" /></Link></div>
+          {connectedWallet && jobs.length > 0 && <button type="button" className="studio-publishing-status" disabled={loadingPublications} onClick={() => void loadPublishingStatus()}>{loadingPublications ? "Checking publishing status..." : "Check publishing status (wallet signature)"}</button>}
+          {jobs.length === 0 ? (
+            <div className="music-empty studio-music-empty"><div className="studio-record" aria-hidden="true"><Image src="/music-default-cover.png" alt="" fill sizes="200px" /></div><strong>There’s a song in that idea.</strong><span>Your creations will appear here, ready to play, download, or publish.</span><Link href="/discover">Find inspiration in Discover <ArrowUpRight size={14} aria-hidden="true" /></Link></div>
+          ) : (
+            <div className="music-song-list">
+              {jobs.map((job) => {
+                const audio = musicMediaUrl(job.artifacts.find((artifact) => artifact.kind === "audio")?.url);
+                const title = musicJobTitle(job);
+                const style = jobStyle(job);
+                const duration = jobDuration(job);
+                const playing = currentTrack?.id === job.id && isPlaying;
+                const active = !FINAL_MUSIC_STATES.has(job.status);
+                const jobError = musicJobError(job);
+                const publication = publicationByJobId.get(job.id);
+                const canPublish = Boolean(audio && !active && activeWallet && job.wallet?.toLowerCase() === activeWallet.toLowerCase());
+                return (
+                  <article className={`music-song ${active ? "is-generating" : ""}`} key={job.id}>
+                    <div className="music-cover">
+                      <Image src="/music-default-cover.png" alt="" fill sizes="(max-width: 640px) 88px, 112px" />
+                      {audio ? (
+                        <button type="button" aria-label={playing ? `Pause ${title}` : `Play ${title}`} onClick={() => playing ? toggle() : playTrack({ id: job.id, title, style, audioUrl: audio, artworkUrl: "/music-default-cover.png", duration })}>
+                          {playing ? <Pause size={23} fill="currentColor" /> : <Play size={23} fill="currentColor" />}
+                        </button>
+                      ) : active ? <span className="music-cover-pulse" /> : null}
+                    </div>
+                    <div className="music-song-body">
+                      <div className="music-song-title"><div><strong>{title}</strong><span>{style}</span></div><span className={`music-song-state state-${job.status}`}>{publication ? "Published" : musicStageLabel(job)}</span></div>
+                      {active && <div className="music-job-progress"><span style={{ width: `${Math.max(8, Math.min(99, job.progress || 8))}%` }} /></div>}
+                      {jobError && <p className="music-song-error">{jobError}</p>}
+                      <div className="music-song-meta"><span>{formatMusicDuration(duration)}</span>{job.resolved_spec?.parameters?.bpm && <span>{job.resolved_spec.parameters.bpm} BPM</span>}{job.resolved_spec?.parameters?.key && <span>{job.resolved_spec.parameters.key}</span>}{job.resolved_spec?.parameters?.instrumental && <span>Instrumental</span>}</div>
+                    </div>
+                    <div className="music-song-actions">
+                      {active && !job.id.startsWith("pending-") && <button type="button" onClick={() => void cancel(job)} aria-label={`Cancel ${title}`} title="Cancel"><X size={18} /></button>}
+                      {audio && <a href={audio} download aria-label={`Download ${title}`} title="Download"><Download size={18} /></a>}
+                      <details>
+                        <summary aria-label={`More actions for ${title}`} title="More actions"><MoreHorizontal size={19} /></summary>
+                        <div>
+                          {audio ? <a href={audio} target="_blank" rel="noreferrer">Open audio</a> : <span>{musicStageLabel(job)}</span>}
+                          {publication ? (
+                            <>
+                              <Link href={`/discover?track=${encodeURIComponent(publication.id)}`}>View in Discover</Link>
+                              <button type="button" onClick={() => void unpublish(publication)}>Unpublish</button>
+                            </>
+                          ) : canPublish ? (
+                            <button type="button" onClick={() => beginPublish(job)}>Publish</button>
+                          ) : audio && !active ? (
+                            <span>{activeWallet ? "Connect the creator wallet to publish" : "Connect wallet to publish"}</span>
+                          ) : null}
+                        </div>
+                      </details>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+        </div>
+        {publishJob && (
+          <div className="music-publish-backdrop" role="presentation" onMouseDown={() => !publishing && setPublishJob(null)}>
+            <form className="music-publish-modal" onSubmit={submitPublish} onMouseDown={(event) => event.stopPropagation()}>
+              <div className="music-publish-cover">
+                <Image src="/music-default-cover.png" alt="" fill sizes="180px" />
+              </div>
+              <div className="music-publish-fields">
+                <div className="music-publish-heading">
+                  <span>Publish to Discover</span>
+                  <button type="button" aria-label="Close publish dialog" title="Close" onClick={() => setPublishJob(null)} disabled={publishing}><X size={18} /></button>
+                </div>
+                <label>
+                  <span>Title</span>
+                  <input value={publishTitle} maxLength={120} onChange={(event) => setPublishTitle(event.target.value)} required />
+                </label>
+                <label>
+                  <span>Style and tags</span>
+                  <input value={publishTags} maxLength={160} onChange={(event) => setPublishTags(event.target.value)} placeholder="Dream pop, cinematic, late night" />
+                </label>
+                <div className="music-publish-summary">
+                  <span>{formatMusicDuration(jobDuration(publishJob))}</span>
+                  {publishJob.resolved_spec?.parameters?.bpm && <span>{publishJob.resolved_spec.parameters.bpm} BPM</span>}
+                  {publishJob.resolved_spec?.parameters?.key && <span>{publishJob.resolved_spec.parameters.key}</span>}
+                  {publishJob.resolved_spec?.parameters?.instrumental && <span>Instrumental</span>}
+                </div>
+                {publishProgress && <p className="music-publish-progress">{publishProgress}</p>}
+                <button className="music-generate" type="submit" disabled={publishing || !publishTitle.trim()}>
+                  <Sparkles size={18} />{publishing ? "Publishing..." : activeWallet ? "Publish" : "Connect and publish"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </main>
+    </>
+  );
+}
+

@@ -1,7 +1,7 @@
 import type { NextPage } from "next";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { CinematicPageHero } from "../components/CinematicPageHero";
+import { useEffect, useState } from "react";
+import { ArrowUpRight, Coins } from "lucide-react";
 import { SeoHead } from "../components/SeoHead";
 import { SiteHeader } from "../components/SiteHeader";
 import { useWallet } from "../components/WalletProvider";
@@ -32,7 +32,6 @@ import {
   getWalletIdentityLabel,
   getWalletSourceLabel,
   getWalletStatusCopy,
-  PUBLIC_ALPHA_LABEL,
 } from "../lib/publicAlpha";
 
 const FALLBACK_PACKAGES: CreditPackage[] = [
@@ -52,6 +51,7 @@ function formatPerCredit(pkg: CreditPackage): string {
 }
 
 function formatOutputCount(referenceId: string, credits: number, cost: number): string {
+  if (!Number.isFinite(cost) || cost <= 0) return "--";
   const count = Math.floor(credits / cost);
   const withGrouping = count.toLocaleString();
   switch (referenceId) {
@@ -71,6 +71,7 @@ const PricingPage: NextPage = () => {
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const [packagesLoading, setPackagesLoading] = useState(true);
   const [packagesError, setPackagesError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const [creditReference, setCreditReference] = useState<CreditReferenceRow[]>([]);
   const [creditReferenceLoading, setCreditReferenceLoading] = useState(true);
@@ -182,7 +183,7 @@ const PricingPage: NextPage = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => {
     let active = true;
@@ -479,16 +480,7 @@ const PricingPage: NextPage = () => {
 
   const packageDestination = walletIdentityLabel;
 
-  const referenceRows = useMemo(() => {
-    if (creditReference.length > 0) return creditReference;
-    return [
-      { id: "sdxl_image", label: "SDXL Image", credits_per_job: 1.0 },
-      { id: "sd15_image", label: "SD1.5 Image", credits_per_job: 0.5 },
-      { id: "face_swap", label: "Face Swap", credits_per_job: 1.5 },
-      { id: "animatediff_video", label: "AnimateDiff Video", credits_per_job: 2.0 },
-      { id: "ltx2_video", label: "LTX2 Video", credits_per_job: 3.0 },
-    ];
-  }, [creditReference]);
+  const referenceRows = creditReference;
 
   return (
     <>
@@ -501,66 +493,11 @@ const PricingPage: NextPage = () => {
 
       <SiteHeader />
 
-      <main className="jh-page-shell">
-        <CinematicPageHero
-          eyebrow="Credits"
-          title="Fund creation on the grid."
-          description="Credits are the usage rail behind image, face swap, and video generation across JoinHavn. This page tracks live funding routes, package availability, and the current cost profile for outputs."
-          mediaVariant="credits"
-          panelEyebrow="Funding Rails"
-          panelTitle={haiFundingConfigured ? "Sepolia HAI is live now" : "Wallet-linked credit funding"}
-          panelDescription="Card checkout appears only on deployments where it has been enabled, while wallet flows stay tied to the identity shown below."
-          stats={[
-            {
-              label: "Packages",
-              value: referencePackages.length.toLocaleString(),
-              detail: stripeEnabled ? "Card checkout catalog" : "Fallback pricing shown",
-            },
-            {
-              label: "Balance",
-              value: balance ? `${balance.balance.toFixed(1)} cr` : activeWallet ? "Syncing..." : "Guest",
-              detail: activeWallet ? "Wallet-linked credits" : "Connect to fund",
-            },
-            {
-              label: "Rate Table",
-              value: referenceRows.length.toLocaleString(),
-              detail: "Current workload cost references",
-            },
-          ]}
-          actions={
-            <>
-              <Link href="/create" className="jh-btn jh-btn-primary">
-                Start Creating
-              </Link>
-              <Link href="/marketplace" className="jh-btn jh-btn-secondary">
-                Visit Marketplace
-              </Link>
-            </>
-          }
-        />
-
-        <section className="section pricing-section">
-          <div className="section-header">
-            <h2>Buy Credits</h2>
-            <p>
-              Credits are the main usage currency across JoinHavn {PUBLIC_ALPHA_LABEL}. Sepolia HAI
-              funding is the primary live path today, while card checkout appears only on
-              deployments where it has been enabled.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", marginTop: "1rem" }}>
-            <Link href="/ai-image-generator" className="jh-btn jh-btn-secondary">
-              AI Image Generator
-            </Link>
-            <Link href="/how-it-works" className="jh-btn jh-btn-secondary">
-              How It Works
-            </Link>
-            <Link href="/ownership" className="jh-btn jh-btn-tertiary">
-              Ownership Flow
-            </Link>
-          </div>
-        </section>
-
+      <main className="account-page credits-page">
+        <header className="account-heading">
+          <div><span className="account-eyebrow"><Coins size={15} aria-hidden="true" /> Credits &amp; pricing</span><h1>A little credit. A lot to create.</h1><p>Explore generation costs and the funding options available in Public Alpha.</p></div>
+          <Link href="/create" className="account-primary">Start creating <ArrowUpRight size={16} aria-hidden="true" /></Link>
+        </header>
         <section className="pricing-section">
 
           {balance && (
@@ -615,10 +552,11 @@ const PricingPage: NextPage = () => {
             </p>
           </div>
 
+          <div className="account-section-heading"><h2>Credit packages</h2><span>Card checkout availability depends on this deployment.</span></div>
           {packagesLoading ? (
             <div className="pricing-loading">Loading packages...</div>
           ) : packagesError ? (
-            <div className="pricing-alert pricing-alert-error">{packagesError}</div>
+            <div className="pricing-alert pricing-alert-error" role="alert"><p>Credit packages could not be loaded.</p><button className="account-secondary" onClick={() => setRefreshKey(value => value + 1)}>Try again</button></div>
           ) : packages.length === 0 ? (
             <div className="pricing-alert pricing-alert-info">Card checkout packages are not available on this deployment yet.</div>
           ) : (
@@ -632,7 +570,7 @@ const PricingPage: NextPage = () => {
                     key={pkg.id}
                     className={`pricing-card${pkg.id === "creator" ? " pricing-card-featured" : ""}`}
                   >
-                    {pkg.id === "creator" && <div className="pricing-card-badge">Best Value</div>}
+
                     <h3 className="pricing-card-name">{pkg.name}</h3>
                     <div className="pricing-card-price">{formatPrice(pkg.price_cents)}</div>
                     <div className="pricing-card-credits">{pkg.credits} credits</div>
@@ -660,7 +598,7 @@ const PricingPage: NextPage = () => {
 
           {haiFundingConfigured && (
             <div className="pricing-convert">
-              <h3>Fund Credits with testnet HAI</h3>
+              <h2>Fund credits with testnet HAI</h2>
               <p className="pricing-convert-desc">
                 Sepolia HAI funding is the primary live credit path in Public Alpha. Transfers are
                 credited at the current 1 HAI = 1 credit alpha rate.
@@ -677,6 +615,7 @@ const PricingPage: NextPage = () => {
                     type="number"
                     min="1"
                     step="1"
+                    aria-label="HAI amount to fund credits"
                     value={haiAmount}
                     onChange={(e) => setHaiAmount(e.target.value)}
                     disabled={!connectedWallet || haiFunding}
@@ -700,6 +639,7 @@ const PricingPage: NextPage = () => {
                     className="convert-input"
                     type="text"
                     placeholder="Confirmed tx hash"
+                    aria-label="Confirmed funding transaction hash"
                     value={haiFundingTxHash}
                     onChange={(e) => setHaiFundingTxHash(e.target.value.trim())}
                     disabled={!connectedWallet || haiFunding}
@@ -723,7 +663,7 @@ const PricingPage: NextPage = () => {
           )}
 
           <div className="pricing-costs">
-            <h3>What Credits Get You</h3>
+            <h2>What can you create?</h2>
             <p className="pricing-wallet-note" style={{ marginBottom: "0.9rem" }}>
               Estimated output counts from the coordinator&apos;s current default credit costs. Rates
               may change during Public Alpha.
@@ -731,9 +671,13 @@ const PricingPage: NextPage = () => {
             {creditReferenceLoading ? (
               <div className="pricing-loading">Loading credit cost reference...</div>
             ) : creditReferenceError ? (
-              <div className="pricing-alert pricing-alert-error">{creditReferenceError}</div>
-            ) : (
-              <div className="table-wrapper">
+              <div className="pricing-alert pricing-alert-error" role="alert"><p>Generation costs could not be loaded.</p><button className="account-secondary" onClick={() => setRefreshKey(value => value + 1)}>Retry costs</button></div>
+            ) : referenceRows.length === 0 ? <p className="pricing-wallet-note">Generation costs have not been published on this deployment.</p> : (
+              <>
+              <div className="credit-rate-grid">{referenceRows.map(row => <article key={row.id}><h3>{row.label}</h3><strong>{row.credits_per_job.toFixed(1)} <span>credits / job</span></strong></article>)}</div>
+              <details className="account-disclosure"><summary>Compare estimated output counts</summary>
+              {packages.length === 0 && <p className="pricing-wallet-note">These example credit balances are for comparison, not available checkout packages.</p>}
+              <div className="table-wrapper" tabIndex={0} role="region" aria-label="Output count comparison">
                 <table className="rewards-table">
                   <thead>
                     <tr>
@@ -741,7 +685,7 @@ const PricingPage: NextPage = () => {
                       <th>Credits per Job</th>
                       {referencePackages.map((pkg) => (
                         <th key={`pkg-col-${pkg.id}`}>
-                          {pkg.name.replace(" Pack", "")} ({pkg.credits})
+                          {packages.length > 0 ? pkg.name.replace(" Pack", "") : "Example"} ({pkg.credits})
                         </th>
                       ))}
                     </tr>
@@ -760,13 +704,14 @@ const PricingPage: NextPage = () => {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </div></details>
+              </>
             )}
           </div>
 
           {payments.length > 0 && (
             <div className="pricing-history">
-              <h3>Checkout History</h3>
+              <h2>Checkout history</h2>
               <div className="table-wrapper">
                 <table className="rewards-table">
                   <thead>
@@ -796,8 +741,7 @@ const PricingPage: NextPage = () => {
             </div>
           )}
 
-          <div className="pricing-convert">
-            <h3>Convert credits back to testnet HAI</h3>
+          <details className="account-disclosure account-convert"><summary>Convert credits back to testnet HAI</summary><div className="pricing-convert">
             <p className="pricing-convert-desc">Connected wallets can convert unused Public Alpha credits back into testnet HAI.</p>
             <div className="convert-row">
               <button
@@ -816,6 +760,7 @@ const PricingPage: NextPage = () => {
                   type="number"
                   min="0"
                   step="0.1"
+                  aria-label="Credits to convert to HAI"
                   value={convertAmount}
                   onChange={(event) => setConvertAmount(event.target.value)}
                   disabled={!connectedWallet || converting}
@@ -837,16 +782,12 @@ const PricingPage: NextPage = () => {
               </p>
             )}
             {convertMessage && <p className="convert-message">{convertMessage}</p>}
-            {convertError && <p className="convert-error">{convertError}</p>}
-          </div>
+            {convertError && <p className="convert-error" role="alert">{convertError}</p>}
+          </div></details>
         </section>
       </main>
 
-      <footer className="site-footer">
-        <div className="footer-inner">
-          <p className="footer-copy">&copy; 2025 JoinHavn</p>
-        </div>
-      </footer>
+      <footer className="account-footer"><Link href="/wallet">Your wallet</Link><Link href="/ownership">Ownership</Link><Link href="/how-it-works">How HavnAI works</Link></footer>
     </>
   );
 };

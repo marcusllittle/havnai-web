@@ -4,14 +4,14 @@ import React, { useEffect, useMemo, useState } from "react";
  * Download panel for the HavnAI Node desktop app.
  *
  * Installers are published as GitHub release assets on the public havnai-core
- * repo, so this reads the latest release directly and offers the file matching
- * the visitor's system. Everything degrades: if no release exists yet, or the
+ * repo, so this reads the newest desktop release directly and offers the file
+ * matching the visitor's system. Everything degrades: if no release exists yet, or the
  * API is unreachable, the panel says so and points at the terminal installer
  * rather than showing a dead button.
  */
 
 const RELEASES_API =
-  "https://api.github.com/repos/marcusllittle/havnai-core/releases/latest";
+  "https://api.github.com/repos/marcusllittle/havnai-core/releases?per_page=30";
 const RELEASES_PAGE = "https://github.com/marcusllittle/havnai-core/releases";
 
 export type Platform = "windows" | "macos-arm" | "macos-intel" | "linux-deb" | "linux-appimage";
@@ -20,6 +20,13 @@ type ReleaseAsset = {
   name: string;
   browser_download_url: string;
   size: number;
+};
+
+export type Release = {
+  tag_name?: string;
+  draft?: boolean;
+  prerelease?: boolean;
+  assets?: ReleaseAsset[];
 };
 
 export type DownloadOption = {
@@ -69,9 +76,26 @@ export function toDownloadOptions(assets: ReleaseAsset[]): DownloadOption[] {
   return options.sort((a, b) => order.indexOf(a.platform) - order.indexOf(b.platform));
 }
 
+/**
+ * The newest published desktop release that actually carries installers.
+ *
+ * havnai-core publishes other releases too, and GitHub's "latest" is whichever
+ * came last - so reading it showed an unrelated release with no files and told
+ * visitors there were no desktop installers. GitHub lists newest first.
+ */
+export function pickDesktopRelease(releases: Release[]): Release | null {
+  return releases.find(release =>
+    !release.draft
+    && !release.prerelease
+    && String(release.tag_name ?? "").startsWith("desktop-v")
+    && toDownloadOptions(release.assets ?? []).length > 0,
+  ) ?? null;
+}
+
 /** Best guess at the visitor's system, used only to pick the primary button. */
 export function detectPlatform(userAgent: string): Platform | null {
   const ua = userAgent.toLowerCase();
+  if (/iphone|ipad|ipod|android/.test(ua)) return null;
   if (ua.includes("windows")) return "windows";
   if (ua.includes("mac os") || ua.includes("macintosh")) {
     // Browsers still report Intel on Apple Silicon, so this is a coin flip we
@@ -88,117 +112,50 @@ function humanSize(bytes: number): string {
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`;
 }
 
-type LoadState = "loading" | "ready" | "unavailable";
+type LoadState = "loading" | "ready" | "empty" | "unavailable";
 
 export const NodeAppDownload: React.FC = () => {
   const [state, setState] = useState<LoadState>("loading");
   const [options, setOptions] = useState<DownloadOption[]>([]);
-  const [version, setVersion] = useState<string>("");
-
+  const [version, setVersion] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
   useEffect(() => {
     let cancelled = false;
-
-    fetch(RELEASES_API, { headers: { Accept: "application/vnd.github+json" } })
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 12000);
+    setState("loading");
+    fetch(RELEASES_API, { signal: controller.signal, headers: { Accept: "application/vnd.github+json" } })
+      .then(async response => {
+        if (response.status === 404) return [];
+        if (!response.ok) throw new Error("Release lookup failed");
         return response.json();
-      })
-      .then((release) => {
+      }).then(releases => {
         if (cancelled) return;
+        const release = pickDesktopRelease(Array.isArray(releases) ? releases : []);
         const parsed = toDownloadOptions(release?.assets ?? []);
-        if (!parsed.length) {
-          setState("unavailable");
-          return;
-        }
         setOptions(parsed);
-        setVersion(String(release?.tag_name ?? "").replace(/^desktop-/, ""));
-        setState("ready");
-      })
-      .catch(() => {
-        if (!cancelled) setState("unavailable");
-      });
+        setVersion(String(release?.tag_name ?? "").replace(/^desktop-v?/, ""));
+        setState(parsed.length ? "ready" : "empty");
+      }).catch(() => { if (!cancelled) setState("unavailable"); })
+      .finally(() => window.clearTimeout(timer));
+    return () => { cancelled = true; window.clearTimeout(timer); controller.abort(); };
+  }, [refreshKey]);
+  const detected = useMemo(() => typeof navigator === "undefined" ? null : detectPlatform(navigator.userAgent), []);
+  const sortedOptions = useMemo(() => [...options].sort((a, b) => Number(b.platform === detected) - Number(a.platform === detected)), [options, detected]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const detected = useMemo(
-    () => (typeof navigator === "undefined" ? null : detectPlatform(navigator.userAgent)),
-    []
-  );
-
-  const primary = useMemo(
-    () => options.find((option) => option.platform === detected) ?? options[0] ?? null,
-    [options, detected]
-  );
-  const others = useMemo(
-    () => options.filter((option) => option.platform !== primary?.platform),
-    [options, primary]
-  );
-
-  return (
-    <div className="chart-section" id="download-app">
-      <div className="chart-header">
-        <h2 className="chart-title">Download the node app</h2>
-      </div>
-      <p style={{ color: "var(--text-muted)", marginBottom: "1.25rem", lineHeight: 1.7 }}>
-        The simplest way to run a node. Open the app, paste your wallet address, and click
-        Install — it sets up everything, downloads the models, and tells you when your machine
-        is ready to serve jobs. No terminal required.
-      </p>
-
-      {state === "loading" && (
-        <p style={{ color: "var(--text-muted)" }}>Checking for the latest version…</p>
-      )}
-
-      {state === "unavailable" && (
-        <div style={{ color: "var(--text-muted)", lineHeight: 1.7 }}>
-          <p style={{ marginBottom: "0.75rem" }}>
-            No desktop build has been published yet. You can still set up a node with the
-            one-line installer below, which does exactly the same thing.
-          </p>
-          <a href={RELEASES_PAGE} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
-            Check the releases page →
-          </a>
-        </div>
-      )}
-
-      {state === "ready" && primary && (
-        <>
-          <a
-            className="jh-btn jh-btn-primary"
-            href={primary.url}
-            style={{ display: "inline-block", marginBottom: "0.85rem" }}
-          >
-            Download for {primary.label}
-            {primary.size ? ` (${humanSize(primary.size)})` : ""}
-          </a>
-
-          {others.length > 0 && (
-            <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", lineHeight: 1.9 }}>
-              Other systems:{" "}
-              {others.map((option, index) => (
-                <span key={option.platform}>
-                  {index > 0 ? " · " : ""}
-                  <a href={option.url} style={{ color: "var(--accent)" }}>
-                    {option.label}
-                  </a>
-                </span>
-              ))}
-            </div>
-          )}
-
-          <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginTop: "1rem", lineHeight: 1.6 }}>
-            {version ? `Version ${version}. ` : ""}
-            These builds are not yet signed, so your system will warn you the first time you open
-            the app. On macOS, right-click it and choose <strong>Open</strong>. On Windows, click{" "}
-            <strong>More info</strong> then <strong>Run anyway</strong>.
-          </p>
-        </>
-      )}
-    </div>
-  );
+  return <section className="network-panel node-download-panel" id="download-app" aria-labelledby="download-title">
+    <span className="network-eyebrow">Desktop setup</span><h2 id="download-title">Your node, in one app.</h2>
+    <p>Set up your wallet, download models, and check what your machine can serve from one control panel.</p>
+    {state === "loading" && <p role="status" className="network-empty">Checking desktop releases...</p>}
+    {state === "unavailable" && <div className="network-notice" role="alert"><p>Desktop downloads could not be loaded. Try again or check the releases page.</p><button className="network-secondary" onClick={() => setRefreshKey(value => value + 1)}>Retry downloads</button></div>}
+    {state === "empty" && <p className="network-empty">No desktop installers have been published yet. You can use the terminal installer.</p>}
+    {state === "ready" && <>
+      <div className="setup-downloads">{sortedOptions.map(option => <a key={option.platform} className={option.platform === detected ? "is-recommended" : undefined} href={option.url}><span>Download for {option.label}</span><small>{humanSize(option.size)}{option.platform === detected ? " / Your system" : ""}</small></a>)}</div>
+      {version && <p className="network-caption">Version {version}</p>}
+      <details className="network-disclosure"><summary>Opening the desktop app</summary><p>These builds are not yet signed. On macOS, right-click the app and choose Open. On Windows, choose More info, then Run anyway, if you trust the downloaded release.</p></details>
+    </>}
+    <p className="network-caption">Windows operators: the app installs the node natively. Install Python 3.12 from python.org first, with Add python.exe to PATH checked.</p>
+    <a className="setup-release-link" href={RELEASES_PAGE} target="_blank" rel="noreferrer">View releases on GitHub</a>
+  </section>;
 };
-
 export default NodeAppDownload;

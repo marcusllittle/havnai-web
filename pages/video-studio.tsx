@@ -1,6 +1,10 @@
 import Head from "next/head";
+import Image from "next/image";
+import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowUpRight, Film, ImagePlus, SlidersHorizontal } from "lucide-react";
 import { SiteHeader } from "../components/SiteHeader";
+import { StudioAccessGate } from "../components/StudioAccessGate";
 import {
   cancelV1Job,
   createVideoJob,
@@ -233,26 +237,7 @@ export default function VideoStudioPage() {
       <>
         <Head><title>Video Studio | HavnAI</title></Head>
         <SiteHeader />
-        <main className="video-studio">
-          <form className="video-studio-lock" onSubmit={unlockStudio}>
-            <h1>Video Studio</h1>
-            <p>Enter the access key for this studio deployment.</p>
-            <label>
-              Studio access key
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={studioKey}
-                onChange={(event) => setStudioKey(event.target.value)}
-                autoFocus
-              />
-            </label>
-            {error && <p className="video-error" role="alert">{error}</p>}
-            <button type="submit" disabled={checkingAccess || !studioKey.trim()}>
-              {checkingAccess ? "Checking..." : "Open studio"}
-            </button>
-          </form>
-        </main>
+        <StudioAccessGate kind="video" accessKey={studioKey} onChange={setStudioKey} onSubmit={unlockStudio} checking={checkingAccess} error={error} />
       </>
     );
   }
@@ -261,21 +246,22 @@ export default function VideoStudioPage() {
     <>
       <Head><title>Video Studio | HavnAI</title></Head>
       <SiteHeader />
-      <main className="video-studio">
+      <main className="video-studio studio-workspace-video">
         <header className="video-studio-heading">
           <div>
-            <p className="video-studio-kicker">Owner Studio</p>
-            <h1>Video Studio</h1>
+            <p className="video-studio-kicker"><Film size={14} aria-hidden="true" /> Video Studio</p>
+            <h1>Make your image move.</h1>
+            <p className="studio-video-intro">Start with a frame. Tell us what happens next.</p>
           </div>
           <div className="video-studio-status">
             <span className={`video-runtime ${capabilities?.video_v2_available ? "is-online" : ""}`}>
               {capabilities === null
                 ? "Checking runtime"
                 : capabilities.video_v2_available
-                  ? "Video v2 online"
+                  ? "Video ready"
                   : capabilities.video_v2_enabled
                     ? "No video node available"
-                    : "Video v2 offline"}
+                    : "Video unavailable"}
             </span>
             <button className="video-studio-lock-button" type="button" onClick={lockStudio}>
               Lock studio
@@ -286,49 +272,57 @@ export default function VideoStudioPage() {
         <div className="video-studio-layout">
           <form className="video-controls" onSubmit={submit}>
             <section className="video-control-section">
-              <h2>Source</h2>
+              <h2>Your starting frame</h2>
               <div className="source-row">
                 <label className="source-drop">
-                  {sourcePreview ? <img src={sourcePreview} alt="Selected source" /> : <span>Choose image</span>}
-                  <input type="file" accept="image/*" onChange={(event) => setSource(event.target.files?.[0] || null)} />
+                  {sourcePreview ? <img src={sourcePreview} alt="Selected source" /> : <span><ImagePlus size={23} aria-hidden="true" />Choose image</span>}
+                  <input type="file" accept="image/*" aria-label="Choose starting image" onChange={(event) => setSource(event.target.files?.[0] || null)} />
                 </label>
                 <div className="source-fields">
-                  <label>HavnAI result URL<input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="/api/static/outputs/..." /></label>
-                  <label>Optional audio<input type="file" accept="audio/*" onChange={(event) => setAudio(event.target.files?.[0] || null)} /></label>
+                  <label>Or use a HavnAI image URL<input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="Paste an image result URL" /></label>
+                  <Link href="/create">Create a starting image <ArrowUpRight size={13} aria-hidden="true" /></Link>
                 </div>
               </div>
             </section>
 
             <section className="video-control-section">
-              <label>Motion prompt<textarea required value={prompt} onChange={(event) => setPrompt(event.target.value)} /></label>
-              <label>Model<select required value={model} onChange={(event) => setModel(event.target.value)}>{videoModels.map((item) => <option key={item.id} value={item.id}>{item.id} {item.model_version || item.version ? `(${item.model_version || item.version})` : ""}</option>)}</select></label>
+              <label>What happens next?<textarea required value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="The camera drifts forward as the light shifts and the leaves move gently in the breeze…" /></label>
             </section>
 
             <section className="video-control-section video-option-grid">
-              <fieldset><legend>Preset</legend><div className="video-segments"><button type="button" className={preset === "fast_upscaled" ? "active" : ""} onClick={() => setPreset("fast_upscaled")}>Fast Upscaled</button><button type="button" className={preset === "native_quality" ? "active" : ""} onClick={() => setPreset("native_quality")}>Native Quality</button></div></fieldset>
-              <fieldset><legend>Aspect</legend><div className="video-segments"><button type="button" className={aspect === "9:16" ? "active" : ""} onClick={() => setAspect("9:16")}>9:16</button><button type="button" className={aspect === "16:9" ? "active" : ""} onClick={() => setAspect("16:9")}>16:9</button></div></fieldset>
+              <fieldset><legend>Frame</legend><div className="video-segments"><button type="button" aria-pressed={aspect === "9:16"} className={aspect === "9:16" ? "active" : ""} onClick={() => setAspect("9:16")}>9:16</button><button type="button" aria-pressed={aspect === "16:9"} className={aspect === "16:9" ? "active" : ""} onClick={() => setAspect("16:9")}>16:9</button></div></fieldset>
               <label>Duration<select value={duration} onChange={(event) => setDuration(Number(event.target.value) as VideoDuration)}><option value={3}>3 seconds</option><option value={5}>5 seconds</option><option value={8}>8 seconds</option></select></label>
-              <label>Seed<input type="number" min={0} value={seed} onChange={(event) => setSeed(event.target.value)} placeholder="Random" /></label>
-              <label className="motion-control">Source preservation <output>{motion.toFixed(2)}</output><input type="range" min={0.1} max={1} step={0.05} value={motion} onChange={(event) => setMotion(Number(event.target.value))} /></label>
             </section>
+            <details className="studio-video-advanced">
+              <summary><SlidersHorizontal size={16} aria-hidden="true" /> Model, audio & advanced settings</summary>
+              <div className="video-control-section video-option-grid">
+              <label>Model<select required value={model} onChange={(event) => setModel(event.target.value)}>{videoModels.map((item) => <option key={item.id} value={item.id}>{item.id} {item.model_version || item.version ? `(${item.model_version || item.version})` : ""}</option>)}</select></label>
+              <label>Optional audio<input type="file" accept="audio/*" onChange={(event) => setAudio(event.target.files?.[0] || null)} /></label>
+              <fieldset className="studio-video-preset"><legend>Quality preset</legend><div className="video-segments"><button type="button" aria-pressed={preset === "fast_upscaled"} className={preset === "fast_upscaled" ? "active" : ""} onClick={() => setPreset("fast_upscaled")}>Fast Upscaled</button><button type="button" aria-pressed={preset === "native_quality"} className={preset === "native_quality" ? "active" : ""} onClick={() => setPreset("native_quality")}>Native Quality</button></div></fieldset>
+              <label>Seed<input type="number" min={0} value={seed} onChange={(event) => setSeed(event.target.value)} placeholder="Random" /></label>
+              <label className="motion-control" htmlFor="video-source-preservation">Source preservation <output>{motion.toFixed(2)}</output><input id="video-source-preservation" type="range" min={0.1} max={1} step={0.05} value={motion} onChange={(event) => setMotion(Number(event.target.value))} /></label>
+              </div>
+            </details>
 
             {error && <p className="video-error" role="alert">{error}</p>}
             <div className="video-actions">
-              <button className="video-submit" type="submit" disabled={busy || !model || !capabilities?.video_v2_available}>{busy ? "Submitting..." : "Generate clip"}</button>
+              <button className="video-submit" type="submit" disabled={busy || !model || !capabilities?.video_v2_available || !prompt.trim() || (!source && !sourceUrl.trim())}>{busy ? "Submitting..." : "Generate clip"}</button>
               {job && !finalStates.has(job.status) && <button className="video-cancel" type="button" onClick={cancel} disabled={busy} aria-label="Cancel active job">Cancel</button>}
             </div>
           </form>
 
           <section className="video-output" aria-live="polite">
-            <div className={`video-frame aspect-${frameAspect.replace(":", "-")}`}>
+            {!job && !sourcePreview ? <div className="studio-video-inspiration"><div><Image src="/create/coastal-light.webp" alt="Sunlit Mediterranean coast" fill sizes="(max-width: 760px) 100vw, 700px" /><span>AI-made inspiration · still image</span></div><h2>Every scene starts somewhere.</h2><p>Choose your starting frame and describe the motion. Your clip will appear here.</p></div> : <div className={`video-frame aspect-${frameAspect.replace(":", "-")}`}>
               {output ? <video src={output} controls playsInline /> : sourcePreview ? <img src={sourcePreview} alt="Video source" /> : <div className="video-empty">No active render</div>}
-            </div>
+            </div>}
+            {job && <>
             <div className="video-progress-header">
-              <div><strong>{job ? normalizedStage : "Ready"}</strong>{job && <code>{job.id}</code>}</div>
+              <div><strong>{finalStates.has(job.status) ? job.status === "succeeded" ? "Your clip is ready" : job.status : normalizedStage}</strong></div>
               <span>{Math.round(job?.progress || 0)}%</span>
             </div>
             <div className="video-progress"><span style={{ width: `${job?.progress || 0}%` }} /></div>
             <ol className="video-phases">{phases.map((phase, index) => <li key={phase} className={index <= stageIndex && job ? "active" : ""}>{phase}</li>)}</ol>
+            </>}
             <section className="video-job-history" aria-label="Recent renders">
               <div className="video-job-history-heading"><h2>Recent renders</h2><span>{recentJobs.length}</span></div>
               {recentJobs.length ? (

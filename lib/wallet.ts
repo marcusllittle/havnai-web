@@ -37,6 +37,21 @@ const METAMASK_DAPP_URL = String(
 let metaMaskSdkInstance: MetaMaskSDKType | null = null;
 let metaMaskSdkProvider: InjectedProvider | null = null;
 let metaMaskSdkInitPromise: Promise<InjectedProvider | null> | null = null;
+const announcedProviders = new Map<string, { provider: InjectedProvider; rdns: string; name: string }>();
+let discoveryWindow: Window | null = null;
+
+function discoverWallets(): void {
+  if (typeof window === "undefined") return;
+  if (discoveryWindow !== window) {
+    discoveryWindow = window;
+    window.addEventListener("eip6963:announceProvider", ((event: CustomEvent) => {
+      const detail = event.detail;
+      if (typeof detail?.info?.uuid !== "string" || !isProviderUsable(detail?.provider)) return;
+      announcedProviders.set(detail.info.uuid, { provider: detail.provider, rdns: detail.info.rdns, name: detail.info.name });
+    }) as EventListener);
+  }
+  window.dispatchEvent(new Event("eip6963:requestProvider"));
+}
 
 export type WalletSource = "connected" | "env" | "none";
 export type WalletStatus =
@@ -347,6 +362,13 @@ export function detectProviderConflict(): {
 }
 
 export function getInjectedProvider(): InjectedProviderSelection {
+  discoverWallets();
+  const announced = Array.from(announcedProviders.values());
+  const metaMask = announced.find(entry => entry.rdns === "io.metamask" || entry.rdns === "io.metamask.flask");
+  if (metaMask) return {
+    provider: metaMask.provider, providerName: "MetaMask", hasProvider: true,
+    hasConflict: announced.length > 1, error: null,
+  };
   const ethereum = getWindowEthereum();
   if (!ethereum) {
     if (isProviderUsable(metaMaskSdkProvider)) {
@@ -419,11 +441,21 @@ export function getInjectedProvider(): InjectedProviderSelection {
   };
 }
 
-export async function ensureInjectedProvider(): Promise<InjectedProviderSelection> {
+let activeWalletProvider: InjectedProvider | null = null;
+
+export function setActiveWalletProvider(provider: InjectedProvider | null): void {
+  activeWalletProvider = provider;
+}
+
+export async function ensureInjectedProvider(options: { allowSdk?: boolean } = {}): Promise<InjectedProviderSelection> {
+  if (activeWalletProvider) {
+    return { provider: activeWalletProvider, providerName: activeWalletProvider.isMetaMask ? "MetaMask" : "Browser wallet", hasProvider: true, hasConflict: false, error: null };
+  }
   const current = getInjectedProvider();
   if (current.provider) {
     return current;
   }
+  if (options.allowSdk === false) return current;
 
   const sdkProvider = await initMetaMaskSdkProvider();
   if (isProviderUsable(sdkProvider)) {
@@ -486,16 +518,26 @@ export async function readConnectedAccounts(provider?: InjectedProvider | null):
   return normalizeAccounts(accounts);
 }
 
+const accountRequests = new WeakMap<InjectedProvider, Promise<string[]>>();
+
 export async function requestAccounts(provider?: InjectedProvider | null): Promise<string[]> {
   const injected = await requireProvider(provider);
-  const accounts = await injected.request({ method: "eth_requestAccounts" });
-  return normalizeAccounts(accounts);
+  const pending = accountRequests.get(injected);
+  if (pending) return pending;
+  const request = Promise.resolve().then(() => injected.request({ method: "eth_requestAccounts" }))
+    .then(normalizeAccounts).finally(() => accountRequests.delete(injected));
+  accountRequests.set(injected, request);
+  return request;
 }
 
 export async function readChainInfo(provider?: InjectedProvider | null): Promise<ChainInfo> {
   const injected = await requireProvider(provider);
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const rawChainId = await injected.request({ method: "eth_chainId" });
+    const rawChainId = await Promise.race([
+      injected.request({ method: "eth_chainId" }),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Chain lookup timed out")), 5000); }),
+    ]);
     const chainId = normalizeChainId(rawChainId);
     return {
       chainId,
@@ -508,6 +550,8 @@ export async function readChainInfo(provider?: InjectedProvider | null): Promise
       chainName: undefined,
       chainAllowed: true,
     };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
