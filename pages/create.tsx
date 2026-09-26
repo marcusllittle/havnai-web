@@ -31,7 +31,6 @@ import {
   fetchJob,
   fetchResult,
   fetchJobWithResult,
-  fetchQuota,
   fetchCredits,
   extractVideoLastFrame,
   stitchVideos,
@@ -40,7 +39,6 @@ import {
   ResultResponse,
   FaceSwapRequest,
   SubmitJobOptions,
-  QuotaStatus,
   CreditBalance,
   VideoJobRequest,
   resolveAssetUrl,
@@ -52,7 +50,6 @@ import {
   type VideoWorkflow,
 } from "../lib/videoWorkflows";
 import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
-import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 import { getJobSSE, normalizeLifecycleStatus, SSEEvent } from "../lib/sse";
 import { getApiBase } from "../lib/apiBase";
 import { getConnectButtonLabel } from "../lib/wallet";
@@ -463,13 +460,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
   const [drawerSummary, setDrawerSummary] = useState<JobSummary | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerError, setDrawerError] = useState<string | undefined>();
-  const [inviteCode, setInviteCodeState] = useState("");
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [savedInviteCode, setSavedInviteCode] = useState<string | undefined>();
-  const [quota, setQuota] = useState<QuotaStatus | null>(null);
-  const [quotaError, setQuotaError] = useState<string | undefined>();
   const [credits, setCredits] = useState<CreditBalance | null>(null);
-  const inviteSaved = Boolean(savedInviteCode);
   const connectLabel = getConnectButtonLabel(wallet);
   const walletSourceLabel = getWalletSourceLabel(wallet.source);
   const walletIdentityLabel = getWalletIdentityLabel(wallet);
@@ -495,14 +486,6 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
       }
     } catch {
       // ignore
-    }
-  }, []);
-
-  useEffect(() => {
-    const storedInvite = getInviteCode();
-    if (storedInvite) {
-      setInviteCodeState(storedInvite);
-      setSavedInviteCode(storedInvite);
     }
   }, []);
 
@@ -920,36 +903,6 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     faceSwapPrefillKeyRef.current = prefillKey;
   }, [mode, faceswapModel, selectedFaceSwapModelMeta]);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (accountAuth || !savedInviteCode) {
-      setQuota(null);
-      setQuotaError(undefined);
-      return () => {
-        cancelled = true;
-      };
-    }
-    fetchQuota()
-      .then((data) => {
-        if (!cancelled) {
-          setQuota(data);
-          setQuotaError(undefined);
-        }
-      })
-      .catch((err: any) => {
-        if (cancelled) return;
-        const message =
-          err instanceof HavnaiApiError
-            ? err.message
-            : err?.message || "Failed to load access limits.";
-        setQuota(null);
-        setQuotaError(message);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [savedInviteCode]);
-
   // Fetch credit balance on mount and after each job completes
   useEffect(() => {
     let cancelled = false;
@@ -1365,25 +1318,6 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     }
   };
 
-  const handleInviteSave = () => {
-    const trimmed = inviteCode.trim();
-    if (!trimmed) {
-      handleInviteClear();
-      return;
-    }
-    setInviteCode(trimmed);
-    setSavedInviteCode(trimmed);
-    setInviteOpen(false);
-  };
-
-  const handleInviteClear = () => {
-    clearInviteCode();
-    setSavedInviteCode(undefined);
-    setInviteCodeState("");
-    setQuota(null);
-    setQuotaError(undefined);
-  };
-
   const handleBaseImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1603,13 +1537,12 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
           setStatusMessage(`Not enough credits for this request. Need ${cost}, available ${bal}.`);
         } else if (code === "invite_required") {
           setStatusMessage("This coordinator is still running legacy access-code gating. Try again after the launch configuration is refreshed.");
-          setInviteOpen(true);
         } else if (code === "rate_limited") {
           const resetLabel = formatResetAt(err?.data?.reset_at);
           setStatusMessage(
             resetLabel
-              ? `This access code has reached its current limit. Resets at ${resetLabel}.`
-              : "This access code has reached its current limit. Please try again later."
+              ? `This coordinator has reached its current request limit. Resets at ${resetLabel}.`
+              : "This coordinator has reached its current request limit. Please try again later."
           );
         } else if (code === "no_capacity") {
           const message =
@@ -2909,63 +2842,12 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                     onResume={id => void handleResumeSequence(id)} onStop={id => void handleStopSequence(id)} />}
                   <p><Link href="/video-studio">Open account Video Studio</Link></p>
                 </section> : <details className="studio-account">
-                  <summary><Wallet size={15} aria-hidden="true" /><span>Account & credits</span><span className="studio-account-balance">{credits?.credits_enabled ? credits.balance.toFixed(1) + " cr" : inviteSaved ? "Legacy code saved" : "Account"}</span><ChevronDown size={15} aria-hidden="true" /></summary>
+                  <summary><Wallet size={15} aria-hidden="true" /><span>Account & credits</span><span className="studio-account-balance">{credits?.credits_enabled ? credits.balance.toFixed(1) + " cr" : "Account"}</span><ChevronDown size={15} aria-hidden="true" /></summary>
                   <div className="studio-account-content">
                 <div className="invite-panel">
-                  <div className={`invite-badge${inviteSaved ? " is-ok" : " is-missing"}`}>
-                    {inviteSaved ? "Legacy access code saved" : "No access code needed"}
+                  <div className="invite-badge is-ok">
+                    No access code needed
                   </div>
-                  {quota && (
-                    <div className="quota-bars">
-                      <div className="quota-bar-group">
-                        <span className="quota-bar-label">Daily jobs</span>
-                        <div className="quota-bar-track">
-                          <div
-                            className={`quota-bar-fill ${
-                              quota.max_daily > 0 && quota.used_today / quota.max_daily > 0.85
-                                ? "is-high"
-                                : ""
-                            }`}
-                            style={{
-                              width: quota.max_daily > 0
-                                ? `${Math.min((quota.used_today / quota.max_daily) * 100, 100)}%`
-                                : "0%",
-                            }}
-                          />
-                        </div>
-                        <span className="quota-bar-value">
-                          {quota.max_daily > 0
-                            ? `${quota.used_today}/${quota.max_daily}`
-                            : `${quota.used_today}`}
-                        </span>
-                      </div>
-                      <div className="quota-bar-group">
-                        <span className="quota-bar-label">Concurrent jobs</span>
-                        <div className="quota-bar-track">
-                          <div
-                            className={`quota-bar-fill ${
-                              quota.max_concurrent > 0 && quota.used_concurrent / quota.max_concurrent > 0.85
-                                ? "is-high"
-                                : ""
-                            }`}
-                            style={{
-                              width: quota.max_concurrent > 0
-                                ? `${Math.min((quota.used_concurrent / quota.max_concurrent) * 100, 100)}%`
-                                : "0%",
-                            }}
-                          />
-                        </div>
-                        <span className="quota-bar-value">
-                          {quota.max_concurrent > 0
-                            ? `${quota.used_concurrent}/${quota.max_concurrent}`
-                            : `${quota.used_concurrent}`}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  {!quota && quotaError && (
-                    <div className="invite-quota invite-error">{quotaError}</div>
-                  )}
                   {credits && credits.credits_enabled && (
                     <div className="invite-quota">
                       Credits: {credits.balance.toFixed(1)}
@@ -2988,49 +2870,10 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                       {connectLabel}
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    className="invite-toggle"
-                    onClick={() => setInviteOpen((prev) => !prev)}
-                  >
-                    {inviteSaved ? "Edit legacy code" : "Add legacy code"}
-                  </button>
                   <p className="generator-help" style={{ marginTop: "0.75rem" }}>
-                    Public launch access uses your account and credits. This field only supports older alpha codes while legacy coordinators are being retired.
+                    Public launch access uses your account and credits.
                   </p>
                 </div>
-                {inviteOpen && (
-                  <div className="invite-form">
-                    <label className="generator-label" htmlFor="invite-code">
-                      Legacy alpha access code
-                    </label>
-                    <input
-                      id="invite-code"
-                      type="text"
-                      className="generator-input"
-                      placeholder="Optional legacy code"
-                      value={inviteCode}
-                      onChange={(e) => setInviteCodeState(e.target.value)}
-                    />
-                    <div className="invite-actions">
-                      <button
-                        type="button"
-                        className="generator-mini-button"
-                        onClick={handleInviteSave}
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        className="generator-mini-button"
-                        onClick={handleInviteClear}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                    <p className="generator-help">Only stored in this browser.</p>
-                  </div>
-                )}
 
                     <Link href="/pricing" className="studio-library-link">Manage credits <ArrowUpRight size={14} aria-hidden="true" /></Link>
                   </div>

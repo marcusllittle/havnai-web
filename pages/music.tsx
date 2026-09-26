@@ -77,7 +77,7 @@ function mergeJobs(current: MusicJob[], incoming: MusicJob[]): MusicJob[] {
 
 function friendlyError(reason: unknown): string {
   const message = reason instanceof Error ? reason.message : String(reason || "");
-  if (message.includes("studio_access_denied")) return "That studio access key was not accepted.";
+  if (message.includes("studio_access_denied")) return "Studio access was not accepted on this deployment.";
   if (message.includes("owner_api_not_configured")) return "Music Studio is not configured on this deployment.";
   if (message.includes("owner_api_unavailable")) return "Music Studio cannot reach HavnAI right now.";
   if (message.includes("invalid_duration")) return "Choose a song length between 10 seconds and 10 minutes.";
@@ -503,7 +503,7 @@ function MusicStudioWorkspace({ accountAuth }: { accountAuth?: { id: string; req
         <SiteHeader />
         {accountAuth ? <main className="account-page"><h1>Your music studio</h1><p role={error ? "alert" : "status"}>{error || "Opening your songs…"}</p>
           {error && <button onClick={() => window.location.reload()}>Try again</button>}</main> :
-          <StudioAccessGate kind="music" accessKey={accessKey} onChange={setAccessKey} onSubmit={event => { event.preventDefault(); void connect(accessKey); }} checking={checkingAccess} error={error} />}
+          <StudioAccessGate kind="music" error={error} />}
       </>
     );
   }

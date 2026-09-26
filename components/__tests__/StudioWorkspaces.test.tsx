@@ -43,23 +43,20 @@ describe("Studio workspaces", () => {
     expect(container.querySelector<HTMLInputElement>('.music-advanced input[placeholder="Random"]')!.value).toBe("24");
     expect(button("Create song").disabled).toBe(false);
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Leave studio"]')!.click());
-    expect(container.querySelector<HTMLInputElement>("#studio-access-key")!.value).toBe("");
+    expect(container.textContent).toContain("No invite code or operator key is needed");
+    expect(container.querySelector<HTMLInputElement>("#studio-access-key")).toBeNull();
     expect(sessionStorage.getItem("havnai_studio_key")).toBeNull();
     expect(JSON.parse(localStorage.getItem("havnai_music_studio_form_v1")!).lyrics).toBe("My chorus");
   });
 
-  it("shows rejected studio access and keeps the key editable for retry", async () => {
+  it("presents signed-out studios as account access instead of key-gated access", async () => {
     sessionStorage.clear();
-    vi.mocked(fetchMusicCapabilities).mockRejectedValueOnce(new Error("studio_access_denied"));
     await act(async () => root.render(<MusicStudioPage />));
-    expect(document.activeElement).not.toBe(container.querySelector("input"));
-    await act(async () => change("#studio-access-key", "bad-key"));
-    await act(async () => button("Open Music Studio").click());
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain("not accepted");
-    expect(sessionStorage.getItem("havnai_studio_key")).toBeNull();
-    await act(async () => change("#studio-access-key", "retry-key"));
-    await act(async () => button("Open Music Studio").click());
-    expect(container.querySelector(".music-composer")).not.toBeNull();
+    expect(container.textContent).toContain("No invite code or operator key is needed");
+    expect(container.textContent).not.toContain("Studio access key");
+    expect(container.textContent).not.toContain("requires an access key");
+    expect(container.querySelector<HTMLInputElement>("#studio-access-key")).toBeNull();
+    expect(container.querySelector<HTMLAnchorElement>('a[href="/sign-in"]')?.textContent).toContain("Sign in");
   });
 
   it("requires video essentials and retains advanced settings in the submitted clip", async () => {
