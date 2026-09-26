@@ -30,9 +30,9 @@ describe("Site navigation", () => {
     const links = Array.from(container.querySelectorAll("nav a"));
     expect(links.map(link => link.textContent)).toEqual([
       "Image", "Video", "Music", "Discover", "Astra", "Marketplace", "Network overview",
-      "Run a Node", "How it works", "Library", "Collection", "Wallet", "Credits",
+      "Run a Node", "How it works", "Library", "Collection", "Deleted creations", "Wallet", "Credits",
     ]);
-    expect(new Set(links.map(link => link.getAttribute("href"))).size).toBe(13);
+    expect(new Set(links.map(link => link.getAttribute("href"))).size).toBe(14);
     expect(container.querySelector("nav button")).toBeNull();
     expect(container.querySelector('a[href="/templates"]')).toBeNull();
     expect(container.querySelectorAll("button")).toHaveLength(1);

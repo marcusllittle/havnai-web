@@ -551,7 +551,7 @@ const LibraryPage: React.FC<{ accountAuth?: CollectionAccount }> = ({ accountAut
           </div>
         </header>
         <div className="collection-context">
-          {deleteNotice && <p role="status">{deleteNotice}</p>}
+          {deleteNotice && <p role="status">{deleteNotice} <Link href="/account/deleted">Restore deleted creations</Link></p>}
           {accountAuth && <Link href="/account/deleted">Deleted creations</Link>}
           {accountAuth ? <Link href="/account">Your account</Link> : <details className="collection-account">
             <summary><Wallet size={14} aria-hidden="true" />{walletSourceLabel}<ChevronDown size={14} aria-hidden="true" /></summary>

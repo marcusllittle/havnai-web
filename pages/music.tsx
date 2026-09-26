@@ -513,7 +513,7 @@ function MusicStudioWorkspace({ accountAuth }: { accountAuth?: { id: string; req
       <Head><title>Music Studio | HavnAI</title><meta name="description" content="Create original music on the HavnAI network." /></Head>
       <SiteHeader />
       <main className="music-studio-page studio-workspace-music">
-        {deleteNotice && <p role="status">{deleteNotice}</p>}
+        {deleteNotice && <p role="status">{deleteNotice} <Link href="/account/deleted">Restore deleted creations</Link></p>}
         {accountAuth && <Link href="/account/deleted">Deleted creations</Link>}
         <header className="music-studio-heading">
           <div><span><Music2 size={14} aria-hidden="true" /> Music Studio</span><h1>Make a little noise.</h1><p>A feeling, a scene, a sound. Start with what moves you.</p></div>

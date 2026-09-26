@@ -48,6 +48,11 @@ export default function AccountPage() {
             <Link href="/pricing">Get credits</Link>
           </section>
           <AccountPurchases key={account.id} />
+          <section className="account-summary-card" aria-label="Your creations">
+            <h2>Your creations</h2>
+            <p><Link href="/library">Open Collection</Link> · <Link href="/music">Open Music Studio</Link></p>
+            <p><Link href="/account/deleted">Restore deleted creations</Link> within 30 days. Restored work stays private.</p>
+          </section>
           <AccountWallets key={account.id} />
           <AccountImportReceipts key={account.id} />
           <SignOutButton redirectUrl="/"><button type="button">Sign out</button></SignOutButton>
