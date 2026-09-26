@@ -146,7 +146,7 @@
       <section class="section">
         <div class="section-header">
           <h2>Recent Jobs Feed</h2>
-          <p>Last few jobs processed on the grid, including reward and preview.</p>
+          <p>Last few jobs processed on the grid, with public previews withheld until review.</p>
         </div>
         <div class="table-wrapper">
           <table class="jobs-table">
@@ -156,7 +156,7 @@
                 <th>Model</th>
                 <th>Reward</th>
                 <th>Status</th>
-                <th>Preview</th>
+                <th>Output</th>
                 <th>Completed</th>
               </tr>
             </thead>
@@ -219,13 +219,13 @@
             <div class="status-timeline" id="drawerTimeline"></div>
           </section>
           <section class="job-section">
-            <h4>Preview</h4>
+            <h4>Output Review</h4>
             <div class="job-preview" id="drawerPreview"></div>
           </section>
           <section class="job-section">
             <h4>Actions</h4>
             <div class="job-actions">
-              <button type="button" class="job-action-button" id="drawerDownload">Download output</button>
+              <button type="button" class="job-action-button" id="drawerDownload">Download unavailable</button>
               <button type="button" class="job-action-button secondary" id="drawerCopyDebug">
                 Copy debug info
               </button>
@@ -281,7 +281,7 @@
     <script>
       (function () {
         const API_BASE = window.NEXT_PUBLIC_API_BASE_URL || "/api";
-        const ROOT_BASE = API_BASE.replace(/\\/api$/, "") || "";
+        const ROOT_BASE = API_BASE.replace(/\/api$/, "") || "";
 
         // Shared nav behavior
         const navToggle = document.getElementById("navToggle");
@@ -582,7 +582,9 @@
         async function openJobDrawer(summary) {
           if (!summary || !summary.job_id) return;
           drawerState.jobId = summary.job_id;
+          drawerState.downloadUrl = "";
           drawerHint.textContent = "Loading job details...";
+          drawerDownload.disabled = true;
           setDrawerOpen(true);
 
           const normalized = normalizeStatus(summary.status);
@@ -593,12 +595,8 @@
             ? "Created " + formatIso(summary.submitted_at)
             : "";
 
-          const previewUrl = resolveAssetUrl(summary.video_url || summary.image_url);
-          drawerPreview.innerHTML = previewUrl
-            ? summary.video_url
-              ? `<video src="${previewUrl}" controls playsinline></video>`
-              : `<img src="${previewUrl}" alt="${summary.job_id} preview" />`
-            : `<div class="job-preview-empty">Preview not available</div>`;
+          drawerPreview.innerHTML =
+            '<div class="job-preview-empty">Public preview withheld pending curation.</div>';
 
           try {
             const jobRes = await fetch(`${API_BASE}/jobs/${encodeURIComponent(summary.job_id)}`);
@@ -660,7 +658,8 @@
 
             const outputImage = resolveAssetUrl(result?.image_url || summary.image_url);
             const outputVideo = resolveAssetUrl(result?.video_url || summary.video_url);
-            drawerState.downloadUrl = outputVideo || outputImage || "";
+            drawerState.downloadUrl = "";
+            drawerDownload.disabled = true;
 
             const debugPayload = {
               job_id: summary.job_id,
@@ -753,9 +752,7 @@
                 : "—";
               const imageUrl = job.image_url || job.preview_url || "";
               const videoUrl = job.video_url || "";
-              const preview = imageUrl
-                ? `<div class="jobs-preview-tile"><img src="${imageUrl}" alt="${id} preview" loading="lazy" /></div>`
-                : `<div class="jobs-preview-tile">No preview</div>`;
+              const preview = `<div class="jobs-preview-tile jobs-preview-withheld">Withheld</div>`;
 
               return `
                 <tr class="jobs-row-clickable" data-job-id="${id}" data-job-model="${model}" data-job-status="${status}" data-job-task="${job.task_type || ""}" data-job-submitted="${job.submitted_at || ""}" data-job-completed="${job.completed_at || ""}" data-job-image="${imageUrl}" data-job-video="${videoUrl}">
