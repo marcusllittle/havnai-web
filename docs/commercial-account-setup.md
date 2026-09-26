@@ -97,3 +97,29 @@ the approved wording, exact required coordinator policy URLs, and the outstandin
 deployment/configuration gates. Local sandbox purchases keep their
 original development-policy URLs. Public footer links do not enable checkout or
 replace the policy revision quoted by the coordinator.
+
+## Production setup checkpoint
+
+Vercel CLI authentication succeeded. Listing production environment variable
+names confirmed that `CLERK_SECRET_KEY` and
+`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` are not yet configured there. No values were
+copied from local development into production.
+
+The existing Clerk application `havnai` has only a development instance. The
+Clerk CLI was linked to that application and production creation was attempted
+for `joinhavn.io`. Clerk rejected creation with: "Your subscription plan doesn't
+cover all the features enabled in your development instance." A subsequent
+read-only deploy status confirmed `not_started` and no production instance ID.
+No subscription upgrade or feature removal was performed.
+
+The configuration check found MFA disabled, multi-session disabled, a seven-day
+maximum session lifetime, and Clerk branding enabled. Google's email-subaddress
+blocking is enabled, but Clerk's published pricing lists that capability as
+included. The CLI error does not identify an offending feature; do not infer
+one or weaken authentication to work around this message. The dashboard's
+detailed production/plan message is needed to resolve the mismatch.
+
+After resolving that provider rejection, production still needs its domain/DNS,
+Google OAuth credentials, production-only keys, matching coordinator issuer and
+origins, audience claim, lifecycle webhook, and live acceptance checks. Vercel
+authentication alone does not complete those requirements.
