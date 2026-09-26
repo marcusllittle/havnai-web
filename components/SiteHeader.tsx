@@ -4,15 +4,16 @@ import { useRouter } from "next/router";
 import { ChevronDown } from "lucide-react";
 import { WalletButton } from "./WalletButton";
 import { useAccount } from "./AccountProvider";
+import { AccountSessionButton } from "./AccountSessionButton";
 
 const GROUPS = {
   Create: [{ href: "/create", label: "Image" }, { href: "/video-studio", label: "Video" }, { href: "/music", label: "Music" }],
   Network: [{ href: "/nodes", label: "Network overview" }, { href: "/run-a-node", label: "Run a Node" }, { href: "/how-it-works", label: "How it works" }],
-  "Your Havn": [{ href: "/music/library", label: "Library" }, { href: "/library", label: "Collection" }, { href: "/account/deleted", label: "Deleted creations" }, { href: "/wallet", label: "Wallet" }, { href: "/pricing", label: "Credits" }],
+  "Your Havn": [{ href: "/account", label: "Your account" }, { href: "/music/library", label: "Library" }, { href: "/library", label: "Collection" }, { href: "/account/deleted", label: "Deleted creations" }, { href: "/wallet", label: "Wallet" }, { href: "/pricing", label: "Credits" }],
 };
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/music") return pathname === "/music";
+  if (href === "/music" || href === "/account") return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -64,7 +65,7 @@ export function SiteHeader() {
           {group("Your Havn")}
         </nav>
         <div className="nav-wallet">{account.configured
-          ? <Link className="account-nav-link" href={account.signedIn ? "/account" : "/sign-in"}>{account.signedIn ? "Your account" : "Sign in"}</Link>
+          ? <AccountSessionButton />
           : <WalletButton />}</div>
       </div>
     </header>

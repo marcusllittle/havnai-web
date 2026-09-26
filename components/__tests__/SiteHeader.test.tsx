@@ -30,16 +30,16 @@ describe("Site navigation", () => {
     const links = Array.from(container.querySelectorAll("nav a"));
     expect(links.map(link => link.textContent)).toEqual([
       "Image", "Video", "Music", "Discover", "Astra", "Marketplace", "Network overview",
-      "Run a Node", "How it works", "Library", "Collection", "Deleted creations", "Wallet", "Credits",
+      "Run a Node", "How it works", "Your account", "Library", "Collection", "Deleted creations", "Wallet", "Credits",
     ]);
-    expect(new Set(links.map(link => link.getAttribute("href"))).size).toBe(14);
+    expect(new Set(links.map(link => link.getAttribute("href"))).size).toBe(15);
     expect(container.querySelector("nav button")).toBeNull();
     expect(container.querySelector('a[href="/templates"]')).toBeNull();
     expect(container.querySelectorAll("button")).toHaveLength(1);
     expect(Array.from(container.querySelectorAll("summary")).map(item => item.textContent)).toEqual(["Create", "Network", "Your Havn"]);
     expect(links.map(link => link.getAttribute("href"))).toEqual([
       "/create", "/video-studio", "/music", "/discover", "/astra", "/marketplace", "/nodes",
-      "/run-a-node", "/how-it-works", "/music/library", "/library", "/wallet", "/pricing",
+      "/run-a-node", "/how-it-works", "/account", "/music/library", "/library", "/account/deleted", "/wallet", "/pricing",
     ]);
   });
 
@@ -49,6 +49,14 @@ describe("Site navigation", () => {
     act(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(group.open).toBe(false);
     expect(document.activeElement).toBe(group.querySelector("summary"));
+  });
+
+  it("identifies recovery without also marking the account overview active", () => {
+    route.pathname = "/account/deleted";
+    act(() => root.render(<SiteHeader />));
+    expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+    expect(container.querySelector('[aria-current="page"]')?.textContent).toBe("Deleted creations");
+    route.pathname = "/music/library";
   });
 
   it("closes navigation on outside interaction and route changes", () => {

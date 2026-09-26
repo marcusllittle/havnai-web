@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
-import { SignOutButton } from "@clerk/nextjs";
 import { SiteHeader } from "../components/SiteHeader";
 import { useAccount } from "../components/AccountProvider";
 import { AccountPurchases } from "../components/AccountPurchases";
@@ -36,7 +35,7 @@ export default function AccountPage() {
       <p>Your creations and credits stay with your account. A wallet is optional.</p>
       {!configured ? <p role="status">Accounts are not available yet. Please try again later.</p>
         : loading ? <p role="status">Loading your account…</p>
-        : !signedIn ? <div className="account-actions"><Link className="btn" href="/sign-in">Sign in</Link><Link href="/sign-up">Create account</Link></div>
+        : !signedIn ? <div className="account-actions"><Link className="account-primary" href="/sign-in">Sign in</Link><Link className="account-secondary" href="/sign-up">Create account</Link></div>
         : error ? <div role="alert"><p>{error}</p><button onClick={() => void refresh().catch(() => undefined)}>Try again</button></div>
         : account && <>
           <section className="account-summary-card" aria-label="Your credits">
@@ -55,7 +54,6 @@ export default function AccountPage() {
           </section>
           <AccountWallets key={account.id} />
           <AccountImportReceipts key={account.id} />
-          <SignOutButton redirectUrl="/"><button type="button">Sign out</button></SignOutButton>
         </>}
     </main></>;
 }
