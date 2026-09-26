@@ -49,6 +49,19 @@ it("coalesces a purchase and explicitly retries the same lost response", async (
   expect(button("Retry purchase for 1.25 credits")).toBeUndefined();
 });
 
+it("clears insufficient-credit purchases and sends the buyer to pricing", async () => {
+  const error = Object.assign(new Error("Not enough credits for this purchase. Add credits and try again."), { code: "insufficient_credits" });
+  auth.request.mockRejectedValueOnce(error);
+  await render();
+  await act(async () => host.querySelector<HTMLButtonElement>(".marketplace-gallery-card")!.click());
+  await act(async () => button("Buy for 1.25 credits").click());
+  expect(auth.request).toHaveBeenCalledTimes(1);
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("Not enough credits");
+  expect(host.querySelector<HTMLAnchorElement>('a[href="/pricing"]')?.textContent).toBe("Get credits");
+  expect(button("Retry purchase for 1.25 credits")).toBeUndefined();
+  expect(sessionStorage.getItem("havnai.account-marketplace-request.v1:alice")).toBeNull();
+});
+
 it("never automatically submits a saved purchase or carries it to another account", async () => {
   sessionStorage.setItem("havnai.account-marketplace-request.v1:alice", JSON.stringify({ kind: "purchase", key: "persisted-purchase-key", listingId: 4, units: 1250 }));
   await render();
