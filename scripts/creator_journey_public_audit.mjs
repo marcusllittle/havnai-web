@@ -22,7 +22,7 @@ const checks = [
   {
     path: "/",
     mustContain: ["Create", "Music Studio", "Astra"],
-    mustNotContain: ["currently requires a Public Alpha access code"],
+    mustNotContain: [],
   },
   {
     path: "/discover",
@@ -31,27 +31,27 @@ const checks = [
   },
   {
     path: "/create",
-    mustContain: ["No access code", "Account &amp; credits", "credits"],
-    mustNotContain: ["currently requires a Public Alpha access code"],
+    mustContain: ["Create with HavnAI", "Credits", "Library"],
+    mustNotContain: [],
   },
   {
     path: "/music",
-    mustContain: ["No invite code or operator key is needed", "Music"],
-    mustNotContain: ["currently requires a Public Alpha access code"],
+    mustContain: ["Make a little noise", "Listen to community music"],
+    mustNotContain: [],
   },
   {
     path: "/video-studio",
-    mustContain: ["No invite code or operator key is needed", "Video"],
-    mustNotContain: ["currently requires a Public Alpha access code"],
+    mustContain: ["Video Studio", "Video"],
+    mustNotContain: [],
   },
   {
     path: "/pricing",
-    mustContain: ["Credits", "Credit packages"],
+    mustContain: ["Credits", "No wallet needed"],
     mustNotContain: ["MetaMask is required to buy credits"],
   },
   {
     path: "/library",
-    mustContain: ["Collection", "New creation"],
+    mustContain: ["Collection", "Create"],
     mustNotContain: ["Connect MetaMask to continue"],
   },
   {
@@ -67,6 +67,14 @@ const checks = [
 ];
 
 const failures = [];
+const launchGateCopy = [
+  "currently requires a Public Alpha access code",
+  "No invite code or operator key is needed",
+  "No access code needed",
+  "No access code",
+  "invite code",
+  "operator key",
+];
 
 function checkUrl(path) {
   const url = new URL(path, `${baseUrl}/`);
@@ -100,7 +108,7 @@ for (const device of devices) {
       const body = await response.text();
       const protectedPreview = isVercelProtection(response, body);
       const missing = check.mustContain.filter((text) => !body.includes(text));
-      const forbidden = check.mustNotContain.filter((text) => body.includes(text));
+      const forbidden = [...check.mustNotContain, ...launchGateCopy].filter((text) => body.includes(text));
       const accessibleControls = hasAccessibleName(body, "button") || hasAccessibleName(body, "a") || !/(<button\b|<a\b)/i.test(body);
       const ok = response.status >= 200 && response.status < 300 && !protectedPreview && missing.length === 0 && forbidden.length === 0 && accessibleControls;
       const result = { device: device.name, path: check.path, status: response.status, ok, protectedPreview, missing, forbidden, accessibleControls };

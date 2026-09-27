@@ -43,7 +43,9 @@ describe("Studio workspaces", () => {
     expect(container.querySelector<HTMLInputElement>('.music-advanced input[placeholder="Random"]')!.value).toBe("24");
     expect(button("Create song").disabled).toBe(false);
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Leave studio"]')!.click());
-    expect(container.textContent).toContain("No invite code or operator key is needed");
+    expect(container.textContent).toContain("Use your HavnAI account to keep creations, credits, and receipts together.");
+    expect(container.textContent).not.toContain("invite code");
+    expect(container.textContent).not.toContain("operator key");
     expect(container.querySelector<HTMLInputElement>("#studio-access-key")).toBeNull();
     expect(sessionStorage.getItem("havnai_studio_key")).toBeNull();
     expect(JSON.parse(localStorage.getItem("havnai_music_studio_form_v1")!).lyrics).toBe("My chorus");
@@ -52,7 +54,9 @@ describe("Studio workspaces", () => {
   it("presents signed-out studios as account access instead of key-gated access", async () => {
     sessionStorage.clear();
     await act(async () => root.render(<MusicStudioPage />));
-    expect(container.textContent).toContain("No invite code or operator key is needed");
+    expect(container.textContent).toContain("Use your HavnAI account to keep creations, credits, and receipts together.");
+    expect(container.textContent).not.toContain("invite code");
+    expect(container.textContent).not.toContain("operator key");
     expect(container.textContent).not.toContain("Studio access key");
     expect(container.textContent).not.toContain("requires an access key");
     expect(container.querySelector<HTMLInputElement>("#studio-access-key")).toBeNull();

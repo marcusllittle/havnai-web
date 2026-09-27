@@ -2846,7 +2846,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                   <div className="studio-account-content">
                 <div className="invite-panel">
                   <div className="invite-badge is-ok">
-                    No access code needed
+                    Account launch access
                   </div>
                   {credits && credits.credits_enabled && (
                     <div className="invite-quota">
@@ -2871,7 +2871,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                     </button>
                   </div>
                   <p className="generator-help" style={{ marginTop: "0.75rem" }}>
-                    Public launch access uses your account and credits.
+                    Start from your HavnAI account and credits.
                   </p>
                 </div>
 

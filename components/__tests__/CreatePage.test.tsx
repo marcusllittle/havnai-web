@@ -93,8 +93,9 @@ describe("Create page model availability", () => {
     await act(async () => root.render(<CreatePage />));
 
     expect(container.textContent).toContain("Account & credits");
-    expect(container.textContent).toContain("No access code needed");
-    expect(container.textContent).toContain("Public launch access uses your account and credits.");
+    expect(container.textContent).toContain("Account launch access");
+    expect(container.textContent).toContain("Start from your HavnAI account and credits.");
+    expect(container.textContent).not.toContain("No access code needed");
     expect(container.textContent).not.toContain("No access code added");
     expect(container.textContent).not.toContain("currently requires a Public Alpha access code");
   });
