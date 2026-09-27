@@ -9,8 +9,8 @@ import { fetchAnalyticsOverview, type AnalyticsOverview } from "../lib/havnai";
 
 const creativeTools = [
   { title: "Image & video", description: "Find the picture in your head. Give it light, texture, and movement.", href: "/create", image: "/create/amber-still-life.webp", alt: "Amber glass bottle in warm light on travertine", icon: ImagePlus, label: "Open the creator", access: "" },
-  { title: "Video Studio", description: "Start with a still. Direct what happens in the next few seconds.", href: "/video-studio", image: "/create/coastal-light.webp", alt: "Sunlit Mediterranean coastline", icon: Film, label: "Explore Video Studio", access: "Studio key required" },
-  { title: "Music Studio", description: "A mood, a lyric, a rhythm. Turn the feeling into your next song.", href: "/music", image: "/music-default-cover.png", alt: "", icon: AudioLines, label: "Explore Music Studio", access: "Studio key required" },
+  { title: "Video Studio", description: "Start with a still. Direct what happens in the next few seconds.", href: "/video-studio", image: "/create/coastal-light.webp", alt: "Sunlit Mediterranean coastline", icon: Film, label: "Explore Video Studio", access: "Account sign-in" },
+  { title: "Music Studio", description: "A mood, a lyric, a rhythm. Turn the feeling into your next song.", href: "/music", image: "/music-default-cover.png", alt: "", icon: AudioLines, label: "Explore Music Studio", access: "Account sign-in" },
 ];
 
 const footerGroups = [
