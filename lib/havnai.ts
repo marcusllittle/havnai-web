@@ -1,7 +1,6 @@
 import { getMusicReadSession, clearMusicReadSession, type MusicReadSession } from "./musicReadSession";
 import { cachedMusicLibrary, clearMusicLibraryCache } from "./musicLibraryCache";
 import type { NextPage } from "next";
-import { getInviteCode } from "./invite";
 import { BrowserProvider, getAddress } from "ethers";
 import {
   ensureInjectedProvider,
@@ -643,17 +642,10 @@ export function resolveAssetUrl(path: string | undefined | null): string | undef
   return `${getApiBase()}${path}`;
 }
 
-function buildHeaders(includeInvite = false): HeadersInit {
-  const headers: HeadersInit = {
+function buildHeaders(_legacyInvite = false): HeadersInit {
+  return {
     "Content-Type": "application/json",
   };
-  if (includeInvite) {
-    const invite = getInviteCode();
-    if (invite) {
-      headers["X-INVITE-CODE"] = invite;
-    }
-  }
-  return headers;
 }
 
 async function parseErrorResponse(res: Response): Promise<HavnaiApiError> {

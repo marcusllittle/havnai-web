@@ -55,7 +55,7 @@ const content = {
     faqs: [
       { question: "Can I generate a video from text alone?", answer: "That depends on the available model and workflow. Some workflows require a starting image; Create shows that requirement before you can submit." },
       { question: "What should I put in a motion prompt?", answer: "Describe the subject and scene, then one clear action or camera move. Add lighting and atmosphere, and say what should remain consistent." },
-      { question: "How is Video Studio different?", answer: "Video Studio is a separate workspace for source-image video workflows and requires a studio key. The main Create workspace uses the session and capacity shown there." },
+      { question: "How is Video Studio different?", answer: "Video Studio is a separate account workspace for source-image video workflows. The main Create workspace uses the session and capacity shown there." },
       { question: "Why might generation be unavailable?", answer: "Video needs a compatible model and available GPU capacity. Create shows availability, required inputs, and any account requirements before you submit." },
     ],
   },
@@ -88,7 +88,7 @@ export function GenerationLanding({ kind }: { kind: Kind }) {
         <div className="product-ideas">{page.ideas.map(idea => <Link key={idea.title} className="product-idea" href={createHref(kind, idea.prompt)}><div className="product-idea-art"><Image src={idea.art} alt={idea.alt} fill sizes="(max-width: 760px) calc(100vw - 32px), (max-width: 1328px) 47vw, 630px" /></div><div className="product-idea-copy"><span>{idea.label}</span><h3>{idea.title}</h3><p>{idea.prompt}</p><strong>Start with this prompt <ArrowRight size={16} aria-hidden="true" /></strong></div></Link>)}</div>
         <p className="product-caption">Illustrative AI artwork. Results vary by prompt, model, and available settings.{kind === "video" ? " These stills are scene inspiration, not example video outputs." : ""}</p>
       </section>
-      {kind === "video" && <aside className="product-studio"><div><span className="product-eyebrow">Another way to work</span><h2>Have a studio key?</h2><p>Open the dedicated Video Studio to work from a source image.</p></div><Link className="product-secondary" href="/video-studio">Explore Video Studio <ArrowUpRight size={16} aria-hidden="true" /></Link></aside>}
+      {kind === "video" && <aside className="product-studio"><div><span className="product-eyebrow">Another way to work</span><h2>Use the account studio.</h2><p>Sign in to open the dedicated Video Studio and work from a source image.</p></div><Link className="product-secondary" href="/video-studio">Explore Video Studio <ArrowUpRight size={16} aria-hidden="true" /></Link></aside>}
       <section className="product-faq" aria-labelledby="questions-title"><div><span className="product-eyebrow">Good to know</span><h2 id="questions-title">Before your first generation.</h2><Link href="/how-it-works">See how HavnAI works <ArrowRight size={15} aria-hidden="true" /></Link></div><div>{page.faqs.map(faq => <details key={faq.question}><summary>{faq.question}</summary><p>{faq.answer}</p></details>)}</div></section>
       <section className="product-outro"><div><span className="product-eyebrow">Your next idea</span><h2>{kind === "image" ? "See where a prompt takes you." : "Start with a single scene."}</h2></div><Link className="product-primary" href={createHref(kind)}>{page.action} <ArrowUpRight size={17} aria-hidden="true" /></Link></section>
     </main>
