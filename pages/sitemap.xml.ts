@@ -1,6 +1,6 @@
 import type { GetServerSideProps } from "next";
 import { absoluteUrl } from "../lib/seo";
-import { CREDIT_REFUND_PATH, CREDIT_TERMS_PATH } from "../lib/creditPolicies";
+import { CREDIT_REFUND_PATH, CREDIT_TERMS_PATH, PLATFORM_TERMS_PATH, PRIVACY_PATH } from "../lib/creditPolicies";
 
 const routes = [
   "/",
@@ -14,6 +14,8 @@ const routes = [
   "/marketplace",
   "/pricing",
   "/nodes",
+  PLATFORM_TERMS_PATH,
+  PRIVACY_PATH,
   CREDIT_TERMS_PATH,
   CREDIT_REFUND_PATH,
   "/support",
