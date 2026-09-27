@@ -57,6 +57,14 @@ const PAGE_SOCIAL_IMAGES: Record<string, SocialImageConfig> = {
     image: "/astra/scenes/spaceport_hub.png",
     alt: "JoinHavn GPU node network preview",
   },
+  "/terms": {
+    image: "/astra/scenes/nebula_runway_briefing.png",
+    alt: "JoinHavn terms preview with sci-fi mission artwork",
+  },
+  "/privacy": {
+    image: "/astra/scenes/spaceport_hub.png",
+    alt: "JoinHavn privacy preview with spaceport artwork",
+  },
 };
 
 export type SeoConfig = {
