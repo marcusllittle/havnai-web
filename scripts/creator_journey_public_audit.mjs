@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const baseUrl = (process.env.HAVNAI_WEB_BASE_URL || process.argv[2] || "https://joinhavn.io").replace(/\/$/, "");
+const vercelShareToken = process.env.HAVNAI_VERCEL_SHARE_TOKEN || "";
 
 const devices = [
   {
@@ -67,14 +68,28 @@ const checks = [
 
 const failures = [];
 
+function checkUrl(path) {
+  const url = new URL(path, `${baseUrl}/`);
+  if (vercelShareToken) url.searchParams.set("_vercel_share", vercelShareToken);
+  return url;
+}
+
 function hasAccessibleName(html, tag) {
   const re = new RegExp(`<${tag}\\b[^>]*(aria-label=|>\\s*[^<\\s])`, "i");
   return re.test(html);
 }
 
+function isVercelProtection(response, body) {
+  const location = response.headers.get("location") || "";
+  return location.includes("vercel.com/sso-api")
+    || body.includes("<title>Login – Vercel")
+    || body.includes("<title>Login - Vercel")
+    || body.includes("Vercel Authentication");
+}
+
 for (const device of devices) {
   for (const check of checks) {
-    const url = `${baseUrl}${check.path}`;
+    const url = checkUrl(check.path);
     try {
       const response = await fetch(url, {
         headers: {
@@ -83,11 +98,12 @@ for (const device of devices) {
         },
       });
       const body = await response.text();
+      const protectedPreview = isVercelProtection(response, body);
       const missing = check.mustContain.filter((text) => !body.includes(text));
       const forbidden = check.mustNotContain.filter((text) => body.includes(text));
       const accessibleControls = hasAccessibleName(body, "button") || hasAccessibleName(body, "a") || !/(<button\b|<a\b)/i.test(body);
-      const ok = response.status >= 200 && response.status < 300 && missing.length === 0 && forbidden.length === 0 && accessibleControls;
-      const result = { device: device.name, path: check.path, status: response.status, ok, missing, forbidden, accessibleControls };
+      const ok = response.status >= 200 && response.status < 300 && !protectedPreview && missing.length === 0 && forbidden.length === 0 && accessibleControls;
+      const result = { device: device.name, path: check.path, status: response.status, ok, protectedPreview, missing, forbidden, accessibleControls };
       console.log(JSON.stringify(result));
       if (!ok) failures.push(result);
     } catch (error) {
