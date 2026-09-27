@@ -7,11 +7,14 @@ async function importHavnaiFresh() {
 
 describe("operator worker API helpers", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     delete process.env.NEXT_PUBLIC_API_BASE_URL;
     delete process.env.NEXT_PUBLIC_HAVNAI_API_BASE;
   });
 
   afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
     vi.unstubAllGlobals();
   });
 
