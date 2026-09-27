@@ -331,7 +331,7 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
         <SiteHeader />
         {accountId ? <main className="account-auth-page"><h1>Video Studio</h1><p role={error ? "alert" : "status"}>{error || "Loading your video studio…"}</p>
           {error && <button onClick={() => void connectStudio(access)}>Try again</button>}</main>
-          : <StudioAccessGate kind="video" accessKey={studioKey} onChange={setStudioKey} onSubmit={unlockStudio} checking={checkingAccess} error={error} />}
+          : <StudioAccessGate kind="video" error={error} />}
       </>
     );
   }

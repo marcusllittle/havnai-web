@@ -89,6 +89,16 @@ describe("Create page model availability", () => {
     expect(container.querySelector<HTMLTextAreaElement>("#prompt")!.value).toBe("Keep my scene");
   });
 
+  it("presents public launch access as account and credits instead of invite-required", async () => {
+    await act(async () => root.render(<CreatePage />));
+
+    expect(container.textContent).toContain("Account & credits");
+    expect(container.textContent).toContain("No access code needed");
+    expect(container.textContent).toContain("Public launch access uses your account and credits.");
+    expect(container.textContent).not.toContain("No access code added");
+    expect(container.textContent).not.toContain("currently requires a Public Alpha access code");
+  });
+
   it("reviews a template before applying and submits its image settings only on Generate", async () => {
     walletState.activeWallet = "0x1111111111111111111111111111111111111111";
     router.query = { workflow: "17", prompt: "My existing draft" };

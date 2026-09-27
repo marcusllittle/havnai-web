@@ -24,7 +24,8 @@
 .studio-entry-form label { font-size: 12px; margin-bottom: 9px; color: #d9e0e6; }
 .studio-entry-form input { min-height: 50px; min-width: 0; padding: 12px; border-radius: 10px; border: 1px solid #ffffff29; background: #0b1218; color: #edf1f5; font: inherit; font-size: 16px; }
 .studio-entry-form .studio-entry-help { font-size: 11px; margin: 10px 0 22px; }
-.studio-entry-form button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 48px; padding: 12px 18px; border: 0; border-radius: 10px; background: var(--studio-accent); color: #1d2833; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.studio-entry-form button,
+.studio-entry-form .studio-entry-primary { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 48px; padding: 12px 18px; border: 0; border-radius: 10px; background: var(--studio-accent); color: #1d2833; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
 .studio-entry-form button:disabled { opacity: .5; cursor: default; }
 .studio-entry-form > a { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; margin-top: 14px; color: var(--studio-muted); font-size: 12px; text-decoration: none; }
 .studio-entry-form .studio-entry-error { margin: 0 0 16px; padding: 12px; border-radius: 9px; background: #392627; color: #ffbfb9; overflow-wrap: anywhere; }

@@ -2324,6 +2324,9 @@ export type GalleryListingStatus = "active" | "sold" | "delisted";
 export interface GalleryListing {
   id: number;
   job_id: string;
+  owner_account_id?: string;
+  seller_account_id?: string;
+  creator_account_id?: string;
   seller_wallet: string;
   owner_wallet: string;
   title: string;
@@ -2430,6 +2433,9 @@ function normalizeGalleryListing(raw: any): GalleryListing {
   return {
     id: Number(raw?.id || 0),
     job_id: String(raw?.job_id || ""),
+    owner_account_id: raw?.owner_account_id ? String(raw.owner_account_id) : undefined,
+    seller_account_id: raw?.seller_account_id ? String(raw.seller_account_id) : undefined,
+    creator_account_id: raw?.creator_account_id ? String(raw.creator_account_id) : undefined,
     seller_wallet: String(raw?.seller_wallet || ""),
     owner_wallet: String(raw?.owner_wallet || raw?.seller_wallet || ""),
     title: String(raw?.title || ""),
@@ -2464,6 +2470,10 @@ function normalizeGalleryListing(raw: any): GalleryListing {
     created_at: Number(raw?.created_at || 0),
     updated_at: Number(raw?.updated_at || 0),
   };
+}
+
+function isAccountBackedGalleryListing(listing: GalleryListing): boolean {
+  return Boolean(listing.owner_account_id || listing.seller_account_id || listing.creator_account_id);
 }
 
 function normalizeGalleryPurchase(raw: any): GalleryPurchaseRecord {
@@ -2514,9 +2524,12 @@ export async function fetchGalleryBrowse(
   });
   if (!res.ok) throw await parseErrorResponse(res);
   const data = await res.json();
+  const rawListings = Array.isArray(data?.listings) ? data.listings : [];
+  const listings = rawListings.map(normalizeGalleryListing).filter(isAccountBackedGalleryListing);
+  const filteredLegacyRows = rawListings.length - listings.length;
   return {
-    listings: Array.isArray(data?.listings) ? data.listings.map(normalizeGalleryListing) : [],
-    total: Number(data?.total || 0),
+    listings,
+    total: filteredLegacyRows > 0 ? listings.length : Number(data?.total || 0),
     limit: Number(data?.limit || 0),
     offset: Number(data?.offset || 0),
     sort: String(data?.sort || opts.sort || "newest"),

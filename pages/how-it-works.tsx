@@ -12,7 +12,7 @@ const steps = [
 const faqs = [
   { q: "Where do I find my generated work?", a: "Collection shows generation history from this browser and, when available, jobs associated with your wallet. Open a result to inspect it or download it. Music has its own library." },
   { q: "Do I have to put my work on the marketplace?", a: "No. Publishing a finished result is a separate action. You can review and download your available results without creating a gallery listing." },
-  { q: "What do I need before generating?", a: "Create shows available models and access requirements. Open Access & credits to review your wallet, credits, or access code. Some models also require a source image." },
+  { q: "What do I need before generating?", a: "Create shows available models and account requirements. Open Account & credits to review your wallet and credit balance. Some models also require a source image." },
   { q: "How does the GPU network fit in?", a: "Node operators provide the compute that runs generation jobs. The network pages show reported capacity and activity; availability can change while nodes and models come online or go offline." },
 ];
 

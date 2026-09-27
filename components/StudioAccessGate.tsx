@@ -1,15 +1,11 @@
 import React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowUpRight, AudioLines, Film, KeyRound } from "lucide-react";
+import { ArrowUpRight, AudioLines, Film, UserRound } from "lucide-react";
 
-export function StudioAccessGate({ kind, accessKey, onChange, onSubmit, checking, error }: {
+export function StudioAccessGate({ kind, error = "" }: {
   kind: "music" | "video";
-  accessKey: string;
-  onChange: (value: string) => void;
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
-  checking: boolean;
-  error: string;
+  error?: string;
 }) {
   const music = kind === "music";
   return (
@@ -23,17 +19,16 @@ export function StudioAccessGate({ kind, accessKey, onChange, onSubmit, checking
             <small>{music ? "From an idea to an original song." : "AI-made inspiration · bring your own starting image."}</small>
           </div>
         </div>
-        <form className="studio-entry-form" onSubmit={onSubmit}>
-          <span className="studio-entry-eyebrow"><KeyRound size={14} aria-hidden="true" /> Studio access</span>
+        <div className="studio-entry-form">
+          <span className="studio-entry-eyebrow"><UserRound size={14} aria-hidden="true" /> Account studio</span>
           <h1>Your {music ? "sound" : "scene"} starts here.</h1>
-          <p>{music ? "Describe a mood, write a lyric, or start with a rhythm. Make it your own in Music Studio." : "Turn a still image into a short clip. Direct the movement, choose your frame, and bring the scene to life."}</p>
-          <label htmlFor="studio-access-key">Studio access key</label>
-          <input id="studio-access-key" type="password" autoComplete="current-password" value={accessKey} onChange={event => onChange(event.target.value)} required aria-describedby="studio-access-help" />
-          <p id="studio-access-help" className="studio-entry-help">This studio currently requires an access key from its operator.</p>
+          <p>{music ? "Sign in to describe a mood, write a lyric, or start with a rhythm. Your songs stay with your account." : "Sign in to turn a still image into a short clip. Your renders stay with your account."}</p>
+          <p id="studio-access-help" className="studio-entry-help">No invite code or operator key is needed for launch access.</p>
           {error && <p className="studio-entry-error" role="alert">{error}</p>}
-          <button type="submit" disabled={checking || !accessKey.trim()}>{checking ? "Opening studio…" : `Open ${music ? "Music" : "Video"} Studio`}<ArrowUpRight size={16} aria-hidden="true" /></button>
+          <Link className="studio-entry-primary" href="/sign-in">Sign in<ArrowUpRight size={16} aria-hidden="true" /></Link>
+          <Link href="/sign-up">Create account <ArrowUpRight size={14} aria-hidden="true" /></Link>
           <Link href={music ? "/discover" : "/create"}>{music ? "Explore community music" : "Open the image & video creator"} <ArrowUpRight size={14} aria-hidden="true" /></Link>
-        </form>
+        </div>
       </section>
     </main>
   );
