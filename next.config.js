@@ -3,19 +3,26 @@ const API_BASE =
     .replace(/\/$/, "");
 
 const isDev = process.env.NODE_ENV !== "production";
+const clerkDomains = [
+  "https://clerk.joinhavn.io",
+  "https://*.clerk.accounts.dev",
+  "https://*.clerk.dev",
+  "https://accounts.google.com",
+];
 
 const cspReportOnly = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
-  "form-action 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://va.vercel-scripts.com`,
+  `form-action 'self' ${clerkDomains.join(" ")}`,
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://va.vercel-scripts.com ${clerkDomains.join(" ")}`,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https:",
   "media-src 'self' data: blob: https:",
-  "connect-src 'self' https://api.joinhavn.io https://astra.joinhavn.io https://metamask-sdk.api.cx.metamask.io wss://metamask-sdk.api.cx.metamask.io https://mm-sdk-analytics.api.cx.metamask.io https://va.vercel-scripts.com",
+  `connect-src 'self' https://api.joinhavn.io https://astra.joinhavn.io https://metamask-sdk.api.cx.metamask.io wss://metamask-sdk.api.cx.metamask.io https://mm-sdk-analytics.api.cx.metamask.io https://va.vercel-scripts.com ${clerkDomains.join(" ")}`,
+  `frame-src 'self' ${clerkDomains.join(" ")}`,
   "worker-src 'self' blob:",
 ].join("; ");
 
