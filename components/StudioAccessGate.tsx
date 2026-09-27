@@ -23,7 +23,7 @@ export function StudioAccessGate({ kind, error = "" }: {
           <span className="studio-entry-eyebrow"><UserRound size={14} aria-hidden="true" /> Account studio</span>
           <h1>Your {music ? "sound" : "scene"} starts here.</h1>
           <p>{music ? "Sign in to describe a mood, write a lyric, or start with a rhythm. Your songs stay with your account." : "Sign in to turn a still image into a short clip. Your renders stay with your account."}</p>
-          <p id="studio-access-help" className="studio-entry-help">No invite code or operator key is needed for launch access.</p>
+          <p id="studio-access-help" className="studio-entry-help">Use your HavnAI account to keep creations, credits, and receipts together.</p>
           {error && <p className="studio-entry-error" role="alert">{error}</p>}
           <Link className="studio-entry-primary" href="/sign-in">Sign in<ArrowUpRight size={16} aria-hidden="true" /></Link>
           <Link href="/sign-up">Create account <ArrowUpRight size={14} aria-hidden="true" /></Link>
