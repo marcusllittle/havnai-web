@@ -1,0 +1,55 @@
+{
+  "schema": "havn-28-delete-ui-evidence.v1",
+  "generated_at": "2026-09-27T08:31:00Z",
+  "source": {
+    "repository": "marcusllittle/havnai-web",
+    "branch": "codex/havn-28-delete-ui-evidence",
+    "base_branch": "feat/havn-11-commercial-accounts",
+    "base_commit": "dc2285e"
+  },
+  "ui_contract": {
+    "remove_from_collection": "Existing reversible hide/remove-from-view action; must not be presented as deletion.",
+    "delete_artifact": "Owner-only soft-delete action with explicit confirmation.",
+    "confirmation_copy_required": [
+      "artifact disappears from public/user surfaces immediately",
+      "owner has a 30-day recovery window",
+      "receipts, ledgers, audit records, and anchored references are retained",
+      "physical storage is reclaimed only after purge eligibility",
+      "restored artifacts return to private visibility only and require explicit republish/relist/re-add actions"
+    ],
+    "interaction_requirements": [
+      "duplicate-click and pending delete operations are guarded",
+      "delete failure exposes recoverable state",
+      "deleted creations can be restored privately",
+      "refresh/latest-page behavior does not resurrect deleted rows"
+    ]
+  },
+  "verification": {
+    "command": "npm test -- components/__tests__/AccountCollection.test.tsx components/__tests__/AccountMusic.test.tsx components/__tests__/DeletedCreations.test.tsx",
+    "result": "3 test files passed, 19 tests passed, duration 12.92s"
+  },
+  "covered_behaviors": [
+    "account collection delete confirmation",
+    "duplicate-click and pending delete guard",
+    "account/no-wallet delete behavior",
+    "music delete policy path",
+    "delete failure recovery state",
+    "deleted-creations private restore behavior",
+    "recovery deadline rendering",
+    "pagination of older deleted items",
+    "restore clears deleted rows",
+    "refresh/latest-page behavior"
+  ],
+  "paired_core_evidence": {
+    "core_pr": "https://github.com/marcusllittle/havnai-core/pull/125",
+    "artifact": "docs/evidence/havn-15-artifact-lifecycle-core-evidence-20260927.json",
+    "result": "43 focused backend/API/storage tests passed"
+  },
+  "remaining_live_acceptance": [
+    "Production/prod-like signed-in browser flow must delete and restore an owned artifact through the UI.",
+    "Refresh/reopen must not resurrect deleted content in library, public, marketplace, playlist, media, or download surfaces.",
+    "Cross-account browser access must remain denied after delete/restore.",
+    "This evidence does not replace live browser acceptance or an explicit waiver."
+  ],
+  "scope_note": "This is focused web test evidence for HAVN-28. It does not declare HAVN-15 Done."
+}
