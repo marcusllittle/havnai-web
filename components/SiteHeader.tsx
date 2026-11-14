@@ -64,9 +64,10 @@ export function SiteHeader() {
           {group("Network")}
           {group("Your Havn")}
         </nav>
-        <div className="nav-wallet">{account.configured
-          ? <AccountSessionButton />
-          : <WalletButton />}</div>
+        <div className="nav-wallet">
+          {account.configured && <AccountSessionButton />}
+          <WalletButton />
+        </div>
       </div>
     </header>
   );
