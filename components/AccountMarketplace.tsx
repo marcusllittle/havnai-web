@@ -8,6 +8,17 @@ import { browseAccountMarket, marketCredits, marketPreview, pendingMarketIntent,
   type AccountMarketListing, type MarketPage, type MarketReceipt } from "../lib/accountMarketplace";
 
 type View = "browse" | "owned" | "receipts";
+
+function revealSelection(element: HTMLElement | null, focusTarget: HTMLElement | null = element) {
+  if (!element) return;
+  const headerHeight = document.querySelector(".site-header")?.getBoundingClientRect().height || 0;
+  element.style.scrollMarginTop = `${Math.ceil(headerHeight) + 16}px`;
+  focusTarget?.focus({ preventScroll: true });
+  // A selection may be a whole catalog away. Jump directly, including when
+  // reduced motion is requested, rather than animate through every listing.
+  element.scrollIntoView({ block: "start", behavior: "instant" });
+}
+
 export function AccountMarketplace({ listJob }: { listJob?: string }) {
   const account = useAccount();
   return <AccountMarketplaceWorkspace key={account.account?.id || (account.signedIn ? "loading-account" : "guest")} listJob={listJob} />;
@@ -20,6 +31,12 @@ function AccountMarketplaceWorkspace({ listJob }: { listJob?: string }) {
   const [page, setPage] = useState(0); const [revision, setRevision] = useState(0);
   const [listings, setListings] = useState<AccountMarketListing[]>([]); const [receipts, setReceipts] = useState<MarketReceipt[]>([]);
   const [total, setTotal] = useState(0); const [selected, setSelected] = useState<AccountMarketListing | null>(null);
+  const selectionTrigger = useRef<HTMLButtonElement>(null);
+  const selectedDetails = useRef<HTMLElement>(null);
+  const selectedHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (selected) revealSelection(selectedDetails.current, selectedHeading.current);
+  }, [selected]);
   const [loading, setLoading] = useState(true); const [error, setError] = useState("");
   const [errorAction, setErrorAction] = useState<"fund_credits" | "reload_marketplace" | "open_collection" | "review_pending_request" | "">("");
   const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
@@ -129,12 +146,18 @@ function AccountMarketplaceWorkspace({ listJob }: { listJob?: string }) {
           : <button type="button" onClick={() => setRevision(value => value + 1)}>Reload marketplace</button>}</p>}
         {needsAccount ? <p>{auth.loading ? "Loading your account..." : <>Sign in to see your listings and receipts. <Link href="/sign-in?redirect_url=%2Fmarketplace">Sign in</Link></>}</p>
           : loading ? <p role="status">Loading marketplace...</p> : !error && total === 0 ? <p>No {view === "receipts" ? "marketplace receipts" : "listings"} to show yet.</p> : null}
-        <div className="marketplace-gallery-grid">{listings.map(item => <button type="button" key={item.id} className="marketplace-gallery-card" onClick={() => setSelected(item)}>
+        <div className="marketplace-gallery-grid">{listings.map(item => <button type="button" key={item.id} className="marketplace-gallery-card" onClick={event => {
+          selectionTrigger.current = event.currentTarget;
+          // A second activation of the same card should reveal its details again.
+          setSelected({ ...item });
+        }}>
           <div className="marketplace-gallery-media">{(original(item) || marketPreview(item)) && <img src={original(item) || marketPreview(item)} alt={item.title} loading="lazy" />}</div>
           <div className="marketplace-gallery-body"><h2>{item.title}</h2><p>{marketCredits(item.price_units)} credits</p><span>{item.status}</span></div>
         </button>)}</div>
         {receipts.length > 0 && <ul>{receipts.map(receipt => <li key={receipt.id}><h2>{receipt.title}</h2><p>{receipt.direction === "purchase" ? "Paid" : "Received"} {marketCredits(receipt.price_units)} credits · {new Date(receipt.created_at * 1000).toLocaleString()}</p><p>Receipt: {receipt.id}</p></li>)}</ul>}
-        {selected && <section className="market-account" aria-label="Selected creation"><button type="button" onClick={() => setSelected(null)}>Close details</button><h2>{selected.title}</h2><p>{selected.description}</p><p>{marketCredits(selected.price_units)} credits</p>
+        {selected && <section ref={selectedDetails} className="market-account market-selected-details" aria-label="Selected creation"><button type="button" onClick={() => {
+          setSelected(null); revealSelection(selectionTrigger.current);
+        }}>Close details</button><h2 ref={selectedHeading} tabIndex={-1}>{selected.title}</h2><p>{selected.description}</p><p>{marketCredits(selected.price_units)} credits</p>
           {original(selected) ? <><a href={original(selected)} download>Download original</a>{selected.status === "active" ? <button type="button" disabled={busy} onClick={() => void act("delist")}>Remove listing</button>
             : selected.job_id && <button type="button" disabled={busy || Boolean(pending)} onClick={() => setListingDraft({ jobId: selected.job_id!, title: selected.title, price: String(selected.price_units / 1000) })}>Relist creation</button>}</>
             : account ? <><p>This purchase pays the seller and moves the creation to your Collection.</p><button type="button" disabled={busy || Boolean(pending) || Boolean(recoveryError)} onClick={() => void act("purchase")}>Buy for {marketCredits(selected.price_units)} credits</button><Link href="/pricing">Get credits</Link></>

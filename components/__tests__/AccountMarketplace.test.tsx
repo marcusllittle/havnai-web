@@ -11,16 +11,52 @@ const item = { id: 4, title: "Quiet coast", description: "Morning light", price_
   status: "active", preview_url: "/v2/marketplace/listings/4/preview", created_at: 1000 };
 const result = { listing_id: 4, job_id: "job-image", price_units: 1250, sale_id: "sale-one" };
 const fetcher = vi.fn(); let host: HTMLDivElement; let root: Root;
+const scrollIntoView = vi.fn();
+const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
 const button = (text: string) => [...host.querySelectorAll("button")].find(el => el.textContent?.trim() === text)!;
 const render = () => act(async () => { root.render(<AccountMarketplace />); });
 beforeEach(() => {
+  HTMLElement.prototype.scrollIntoView = scrollIntoView;
+  scrollIntoView.mockClear();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.stubGlobal("fetch", fetcher);
   sessionStorage.clear(); auth.account = { id: "alice" }; auth.signedIn = true;
   auth.request.mockReset().mockResolvedValue(result);
   fetcher.mockReset().mockImplementation(async () => new Response(JSON.stringify({ listings: [item], total: 1, limit: 24, offset: 0 })));
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); sessionStorage.clear(); vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); sessionStorage.clear(); vi.unstubAllGlobals();
+  if (originalScrollIntoView) HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+  else delete HTMLElement.prototype.scrollIntoView;
+});
+
+it.each([390, 768, 1366])("reveals and focuses selected details at %ipx, including repeat activation and close", async width => {
+  vi.stubGlobal("innerWidth", width);
+  auth.account = null; auth.signedIn = false;
+  fetcher.mockImplementation(async () => new Response(JSON.stringify({ listings: Array.from({ length: 24 }, (_, index) => ({ ...item, id: index + 1, title: `Creation ${index + 1}` })), total: 24, limit: 24, offset: 0 })));
+  const header = document.createElement("header"); header.className = "site-header";
+  header.getBoundingClientRect = () => ({ height: 179.2 } as DOMRect);
+  document.body.prepend(header);
+  try {
+    await render();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    const card = host.querySelector<HTMLButtonElement>(".marketplace-gallery-card")!;
+    card.focus();
+    await act(async () => card.click());
+    const details = host.querySelector<HTMLElement>('[aria-label="Selected creation"]')!;
+    expect(details.style.scrollMarginTop).toBe("196px");
+    expect(document.activeElement).toBe(details.querySelector("h2"));
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ block: "start", behavior: "instant" });
+    expect(scrollIntoView.mock.contexts[0]).toBe(details);
+    await act(async () => card.click());
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+    expect(document.activeElement).toBe(details.querySelector("h2"));
+    await act(async () => button("Close details").click());
+    expect(host.querySelector('[aria-label="Selected creation"]')).toBeNull();
+    expect(document.activeElement).toBe(card);
+    expect(scrollIntoView.mock.contexts.at(-1)).toBe(card);
+    expect(auth.request).not.toHaveBeenCalled();
+  } finally { header.remove(); }
+});
 
 it("lets guests browse and directs purchases to sign-in without wallet calls", async () => {
   auth.account = null; auth.signedIn = false;
