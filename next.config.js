@@ -57,6 +57,7 @@ const nextConfig = {
   },
   async redirects() {
     return [
+      { source: "/dashboard", destination: "/api/dashboard", permanent: false },
       {
         source: "/generator",
         destination: "/create",
