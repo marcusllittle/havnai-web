@@ -42,9 +42,10 @@ export function classifyAsset(name: string): Platform | null {
   const lower = name.toLowerCase();
   if (lower.endsWith("-setup.exe") || lower.endsWith(".msi")) return "windows";
   if (lower.endsWith(".dmg")) {
-    // Tauri tags the arch in the filename; treat anything non-Intel as arm so a
-    // future naming change fails toward the more common Mac rather than hiding.
-    return lower.includes("x64") || lower.includes("x86_64") ? "macos-intel" : "macos-arm";
+    // Do not guess an architecture from an unexpected installer name.
+    if (/(?:_|-)(?:x64|x86_64)\.dmg$/.test(lower)) return "macos-intel";
+    if (/(?:_|-)(?:aarch64|arm64)\.dmg$/.test(lower)) return "macos-arm";
+    return null;
   }
   if (lower.endsWith(".deb")) return "linux-deb";
   if (lower.endsWith(".appimage")) return "linux-appimage";
@@ -75,9 +76,9 @@ export function detectPlatform(userAgent: string): Platform | null {
   if (/iphone|ipad|ipod|android/.test(ua)) return null;
   if (ua.includes("windows")) return "windows";
   if (ua.includes("mac os") || ua.includes("macintosh")) {
-    // Browsers still report Intel on Apple Silicon, so this is a coin flip we
-    // resolve toward current hardware; both options stay visible either way.
-    return "macos-arm";
+    // Safari can report Intel on Apple Silicon. Leave both downloads visible
+    // without suggesting the wrong file based on the browser string.
+    return null;
   }
   if (ua.includes("linux") && !ua.includes("android")) return "linux-deb";
   return null;
@@ -128,7 +129,12 @@ export const NodeAppDownload: React.FC = () => {
     {state === "ready" && <>
       <div className="setup-downloads">{sortedOptions.map(option => <a key={option.platform} className={option.platform === detected ? "is-recommended" : undefined} href={option.url}><span>Download for {option.label}</span><small>{humanSize(option.size)}{option.platform === detected ? " / Your system" : ""}</small></a>)}</div>
       {version && <p className="network-caption">Version {version}</p>}
-      <details className="network-disclosure"><summary>Opening the desktop app</summary><p>These builds are not yet signed. On macOS, right-click the app and choose Open. On Windows, choose More info, then Run anyway, if you trust the downloaded release.</p></details>
+      <details className="network-disclosure"><summary>Opening the desktop app</summary>
+        {version === "v0.2.0"
+          ? <p>The v0.2.0 Mac installers are unsigned and may be blocked by Gatekeeper. Use <a href="#quick-install">terminal setup</a> instead. Do not change your Mac security settings.</p>
+          : <p>On macOS, choose the DMG that matches your chip in About This Mac. Drag the app to Applications and open it normally. If macOS blocks it, use <a href="#quick-install">terminal setup</a> instead of changing your security settings.</p>}
+        <p>Windows SmartScreen may warn about an unsigned installer. Confirm the file came from the official release before proceeding.</p>
+      </details>
     </>}
     <p className="network-caption">Windows operators: automated installation requires WSL2. The Windows app does not install the runtime directly.</p>
     <a className="setup-release-link" href={RELEASES_PAGE} target="_blank" rel="noreferrer">View releases on GitHub</a>
