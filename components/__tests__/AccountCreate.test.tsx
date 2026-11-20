@@ -40,6 +40,29 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); localStorage.clear(); sessionStorage.clear(); vi.unstubAllGlobals(); });
 
+it("submits the selected Turbo model with guidance zero and no negative prompt through account serialization", async () => {
+  const publicRead = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => url.endsWith("/models/list")
+    ? { ok: true, json: async () => ({ models: [
+      { name: "Studio SDXL", tier: "A", available: true, pipeline: "sdxl", task_type: "IMAGE_GEN" },
+      { name: "zimage-turbo", tier: "D", available: true, pipeline: "zimage-turbo", task_type: "IMAGE_GEN",
+        image_defaults: { steps: 9, guidance: 0, width: 1024, height: 1024 } },
+    ] }) } : publicRead(url)));
+  await act(async () => root.render(<CreatePage />));
+  await act(async () => button("Model, size & reference").click());
+  await act(async () => {
+    const select = host.querySelector<HTMLSelectElement>("#image-model")!;
+    select.value = "zimage-turbo"; select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => button("Generate image").click());
+  const submissions = state.request.mock.calls.filter(([path]) => path === "/v2/jobs");
+  expect(submissions).toHaveLength(1);
+  const payload = JSON.parse(submissions[0][1].body);
+  expect(payload).toMatchObject({ type: "image", model: "zimage-turbo", steps: 9, guidance: 0, width: 768, height: 768 });
+  expect(payload).not.toHaveProperty("negative_prompt");
+  expect(payload).not.toHaveProperty("wallet");
+});
+
 it("generates once without wallet calls and stores account-only recovery and history", async () => {
   localStorage.setItem("havnai_test_history_v1", JSON.stringify([{ jobId: "legacy", prompt: "Private legacy draft", timestamp: 10 }]));
   await act(async () => root.render(<StrictMode><CreatePage /></StrictMode>));

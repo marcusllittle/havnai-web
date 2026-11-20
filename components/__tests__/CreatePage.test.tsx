@@ -32,9 +32,19 @@ describe("Create page model availability", () => {
 
   function changeInput(selector: string, value: string) {
     const input = container.querySelector<HTMLInputElement>(selector)!;
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    const prototype = input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   }
+
+  function select(selector: string, value: string) {
+    const input = container.querySelector<HTMLSelectElement>(selector)!;
+    input.value = value;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  const turbo = { name: "zimage-turbo", pipeline: "zimage-turbo", task_type: "IMAGE_GEN", available: true,
+    tier: "D", face_swap_available: true, image_defaults: { steps: 9, guidance: 0, width: 1024, height: 1024 } };
 
   beforeEach(() => {
     router.query = {}; router.isReady = true;
@@ -58,6 +68,84 @@ describe("Create page model availability", () => {
     localStorage.clear();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("offers only the exact available Turbo pipeline in Image, never face swap", async () => {
+    catalog = async () => ({ models: [{ ...onlineModels.models[0], face_swap_available: true }, turbo,
+      { ...turbo, name: "offline", available: false }, { ...turbo, name: "unconfirmed", available: undefined },
+      { ...turbo, name: "other", pipeline: "zimage-turbo-experimental" }, { ...turbo, name: "wrong-task", task_type: "VIDEO_GEN" }] });
+    await act(async () => root.render(<CreatePage />));
+    await act(async () => button("Model, size & reference").click());
+    const options = [...container.querySelectorAll<HTMLOptionElement>("#image-model option")];
+    expect(options.map(x => x.value)).toEqual(["Studio SDXL", "zimage-turbo"]);
+    expect(options[1].textContent).toBe("Z-Image Turbo");
+    await act(async () => button("Face swap").click());
+    expect([...container.querySelectorAll<HTMLOptionElement>("#faceswap-model option")].map(x => x.value)).toEqual(["Studio SDXL"]);
+  });
+
+  it("serializes Turbo selection, zero guidance, capped aspect size and no stale negative prompt", async () => {
+    walletState.activeWallet = "0x1111111111111111111111111111111111111111";
+    router.query = { prompt: "A blue coast" };
+    catalog = async () => ({ models: [...onlineModels.models, turbo] });
+    await act(async () => root.render(<CreatePage />));
+    await act(async () => button("Model, size & reference").click());
+    await act(async () => changeInput("#template-negative", "blur"));
+    await act(async () => select("#image-steps", "best"));
+    await act(async () => select("#image-model", "zimage-turbo"));
+    expect(container.querySelector("#template-negative")).toBeNull();
+    expect(container.querySelector<HTMLSelectElement>("#image-steps")!.disabled).toBe(true);
+    expect(container.querySelector<HTMLSelectElement>("#image-steps")!.selectedOptions[0].textContent).toContain("9 steps");
+    await act(async () => select("#image-model", "Studio SDXL"));
+    expect(container.querySelector<HTMLSelectElement>("#image-steps")!.value).toBe("best");
+    expect(container.querySelector<HTMLTextAreaElement>("#template-negative")!.value).toBe("blur");
+    await act(async () => select("#image-model", "zimage-turbo"));
+    await act(async () => select("#image-size-preset", "16x9"));
+    expect(container.querySelector<HTMLSelectElement>("#image-size-preset")!.selectedOptions[0].textContent).toContain("1024x576");
+    await act(async () => button("Generate image").click());
+    const post = vi.mocked(fetch).mock.calls.find(([url, options]) => String(url).endsWith("/submit-job") && options?.method === "POST")!;
+    const body = JSON.parse(String(post[1]!.body));
+    expect(body).toMatchObject({ model: "zimage-turbo", steps: 9, guidance: 0, width: 1024, height: 576 });
+    expect(body).not.toHaveProperty("negative_prompt");
+  });
+
+  it("preserves SDXL references and sizes while excluding them from Turbo requests", async () => {
+    walletState.activeWallet = "0x1111111111111111111111111111111111111111";
+    router.query = { prompt: "A quiet coast" };
+    catalog = async () => ({ models: [...onlineModels.models, turbo] });
+    await act(async () => root.render(<CreatePage />));
+    await act(async () => button("Model, size & reference").click());
+    await act(async () => changeInput("#image-reference-url", "https://example.com/reference.png"));
+    await act(async () => select("#image-size-preset", "16x9"));
+    await act(async () => select("#image-model", "zimage-turbo"));
+    expect(container.querySelector("#image-reference-url")).toBeNull();
+    expect(container.textContent).toContain("settings are saved for SDXL");
+    expect(container.querySelector<HTMLSelectElement>("#image-size-preset")!.value).toBe("turbo-square");
+    expect(container.querySelector<HTMLOptionElement>('#image-size-preset option[value="auto"]')!.textContent).toContain("1024x1024");
+    await act(async () => select("#image-model", "Studio SDXL"));
+    expect(container.querySelector<HTMLInputElement>("#image-reference-url")!.value).toBe("https://example.com/reference.png");
+    expect(container.querySelector<HTMLSelectElement>("#image-size-preset")!.value).toBe("16x9");
+    await act(async () => select("#image-model", "zimage-turbo"));
+    await act(async () => button("Generate image").click());
+    const post = vi.mocked(fetch).mock.calls.find(([url, options]) => String(url).endsWith("/submit-job") && options?.method === "POST")!;
+    const body = JSON.parse(String(post[1]!.body));
+    expect(body).toMatchObject({ model: "zimage-turbo", width: 768, height: 768 });
+    expect(body).not.toHaveProperty("init_image");
+    expect(body).not.toHaveProperty("loras");
+  });
+
+  it("keeps Turbo settings when a template requests SDXL-style overrides", async () => {
+    walletState.activeWallet = "0x1111111111111111111111111111111111111111";
+    router.query = { workflow: "turbo" };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => ({ ok: true, json: async () => url.includes("/workflows/turbo")
+      ? { name: "Turbo scene", category: "Image Generation", config: { model: "zimage-turbo", prompt_template: "A quiet coast", steps: 37, guidance: 8, negative_prompt: "blur" } }
+      : url.endsWith("/models/list") ? { models: [{ ...turbo, image_defaults: undefined }] } : { loras: [] } })));
+    await act(async () => root.render(<CreatePage />));
+    await act(async () => button("Apply template").click());
+    await act(async () => button("Generate image").click());
+    const post = vi.mocked(fetch).mock.calls.find(([url, options]) => String(url).endsWith("/submit-job") && options?.method === "POST")!;
+    const body = JSON.parse(String(post[1]!.body));
+    expect(body).toMatchObject({ model: "zimage-turbo", steps: 9, guidance: 0, width: 768, height: 768 });
+    expect(body).not.toHaveProperty("negative_prompt");
   });
 
   it("opens a linked video prompt without submitting or resetting the edited draft", async () => {

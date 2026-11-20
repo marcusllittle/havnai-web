@@ -38,6 +38,7 @@ export async function submitAccountImage(storage: Storage, account: string, acce
   if (options.referenceFaceUrl && options.initImage) throw new Error("Use either a face reference or an image to refine.");
   const body: Record<string, unknown> = { type: "image", prompt: input.prompt, model: input.model,
     negative_prompt: input.negativePrompt || "" };
+  if (input.model === "zimage-turbo") delete body.negative_prompt;
   for (const key of ["steps", "guidance", "width", "height", "sampler", "seed", "loras"] as const) {
     if (options[key] !== undefined) body[key] = options[key];
   }
