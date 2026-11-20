@@ -155,6 +155,7 @@ type VideoChainProgress = {
   stage: "rendering" | "preparing" | "stitching";
 };
 type ImageSizePreset =
+  | "turbo-square"
   | "auto"
   | "21x9"
   | "16x9"
@@ -414,6 +415,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
   const [modelRuntimeDefaults, setModelRuntimeDefaults] = useState<Record<string, ModelListEntry>>({});
   const [imageQualityPreset, setImageQualityPreset] = useState<ImageQualityPreset>("balanced");
   const [imageSizePreset, setImageSizePreset] = useState<ImageSizePreset>("auto");
+  const [turboImageSizePreset, setTurboImageSizePreset] = useState<ImageSizePreset>("turbo-square");
   const [imageReferenceUrl, setImageReferenceUrl] = useState("");
   const [imageReferenceData, setImageReferenceData] = useState<string | undefined>();
   const [imageReferenceName, setImageReferenceName] = useState<string | undefined>();
@@ -512,6 +514,21 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     : "";
   const selectedImageModelMeta =
     selectedModel ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
+  const isZImageTurboModel = currentPipeline === "zimage-turbo";
+  const selectedImageDefaults = isZImageTurboModel
+    ? { ...selectedImageModelMeta?.image_defaults, steps: 9, guidance: 0,
+        width: selectedImageModelMeta?.image_defaults?.width ?? 1024,
+        height: selectedImageModelMeta?.image_defaults?.height ?? 1024 }
+    : selectedImageModelMeta?.image_defaults;
+  const activeImageSizePreset = isZImageTurboModel ? turboImageSizePreset : imageSizePreset;
+  const imageSizePresets = isZImageTurboModel
+    ? [{ id: "turbo-square" as ImageSizePreset, label: "Square", width: 768, height: 768 }, ...IMAGE_SIZE_PRESETS.map(preset => {
+        if (!preset.width || !preset.height) return preset;
+        const scale = Math.min(1, 1024 / preset.width, 1024 / preset.height);
+        return { ...preset, width: Math.floor(preset.width * scale / 16) * 16,
+          height: Math.floor(preset.height * scale / 16) * 16 };
+      })]
+    : IMAGE_SIZE_PRESETS;
   const selectedVideoModelMeta =
     mode === "video" && selectedModel ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
   const isLtx23Model =
@@ -561,17 +578,17 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
   const imageDefaultsBadge = summarizeDefaultsSource(selectedImageModelMeta?.defaults_source?.image);
   const videoDefaultsBadge = summarizeDefaultsSource(selectedVideoModelMeta?.defaults_source?.video);
   const faceSwapDefaultsBadge = summarizeDefaultsSource(selectedFaceSwapModelMeta?.defaults_source?.face_swap);
-  const imageStepPresets = resolveImageStepPresets(selectedImageModelMeta?.image_defaults);
-  const imageDefaultsSummary = formatImageDefaultsSummary(selectedImageModelMeta?.image_defaults);
+  const imageStepPresets = resolveImageStepPresets(selectedImageDefaults);
+  const imageDefaultsSummary = formatImageDefaultsSummary(selectedImageDefaults);
   const selectedImageSizePreset =
-    IMAGE_SIZE_PRESETS.find((preset) => preset.id === imageSizePreset) || IMAGE_SIZE_PRESETS[0];
+    imageSizePresets.find((preset) => preset.id === activeImageSizePreset) || imageSizePresets[0];
   const selectedImageResolution =
-    imageSizePreset === "auto"
-      ? imageReferenceData || imageReferenceUrl.trim()
+    activeImageSizePreset === "auto"
+      ? !isZImageTurboModel && (imageReferenceData || imageReferenceUrl.trim())
         ? "Reference aspect"
         : formatResolutionLabel(
-            selectedImageModelMeta?.image_defaults?.width,
-            selectedImageModelMeta?.image_defaults?.height
+            selectedImageDefaults?.width,
+            selectedImageDefaults?.height
           )
       : formatResolutionLabel(selectedImageSizePreset.width, selectedImageSizePreset.height);
   const imageReferencePreviewUrl = imageReferenceData || (
@@ -669,9 +686,9 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
           const taskType = String(m.task_type || "").toUpperCase();
           const pipeline = String(m.pipeline || "").toLowerCase();
           if (!(taskType === "IMAGE_GEN" || !taskType)) return false;
-          // Keep generator image model list focused on SDXL models only.
+          // Turbo is an explicit Image-only pipeline, never a face-swap fallback.
           if (m.available !== true) return false;
-          if (!pipeline.includes("sdxl")) return false;
+          if (!pipeline.includes("sdxl") && pipeline !== "zimage-turbo") return false;
           return true;
         });
         const videoModelsData = models.filter((m) => {
@@ -688,7 +705,9 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
         // Transform to dropdown format with tier badges and clean names
         const imageOptions = imageModelsData.map((m) => ({
           id: m.name,
-          label: buildModelOptionLabel(m, String(m.pipeline || "").toUpperCase()),
+          label: String(m.pipeline || "").toLowerCase() === "zimage-turbo"
+            ? "Z-Image Turbo"
+            : buildModelOptionLabel(m, String(m.pipeline || "").toUpperCase()),
         }));
 
         const videoOptions = videoModelsData.map((m) => {
@@ -1129,28 +1148,29 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
   const buildOptions = (): SubmitJobOptions | undefined => {
     const options: SubmitJobOptions = {};
     const seedValue = parseOptionalInt(seed);
-    const modelDefaults = selectedImageModelMeta?.image_defaults || undefined;
-    const sizePreset = imageSizePreset === "auto" ? undefined : selectedImageSizePreset;
+    const modelDefaults = selectedImageDefaults || undefined;
+    const sizePreset = activeImageSizePreset === "auto" ? undefined : selectedImageSizePreset;
     const requestedLoras = buildLoraPayload();
 
     if (!accountAuth && activeWallet) options.wallet = activeWallet;
-    options.steps = imageTemplateSettings?.steps ?? imageStepPresets[imageQualityPreset];
-    if (imageTemplateSettings?.guidance != null) options.guidance = imageTemplateSettings.guidance;
+    options.steps = isZImageTurboModel ? 9 : imageTemplateSettings?.steps ?? imageStepPresets[imageQualityPreset];
+    if (isZImageTurboModel) options.guidance = 0;
+    else if (imageTemplateSettings?.guidance != null) options.guidance = imageTemplateSettings.guidance;
     else if (modelDefaults?.guidance != null) options.guidance = modelDefaults.guidance;
     if (sizePreset?.width != null) options.width = sizePreset.width;
     else if (modelDefaults?.width != null) options.width = modelDefaults.width;
     if (sizePreset?.height != null) options.height = sizePreset.height;
     else if (modelDefaults?.height != null) options.height = modelDefaults.height;
-    if (modelDefaults?.sampler) options.sampler = String(modelDefaults.sampler);
+    if (!isZImageTurboModel && modelDefaults?.sampler) options.sampler = String(modelDefaults.sampler);
     if (seedValue !== undefined) options.seed = seedValue;
     const imageReference = imageReferenceData || imageReferenceUrl.trim();
-    if (imageReference) {
+    if (!isZImageTurboModel && imageReference) {
       options.initImage = imageReference;
       if (imageMaskEnabled && imageMaskData) options.inpaintMask = imageMaskData;
       options.img2imgStrength = IMAGE_PRESERVATION_STRENGTH[imagePreservation];
       options.preserveReferenceAspect = imageSizePreset === "auto";
     }
-    if (requestedLoras.length > 0) options.loras = requestedLoras;
+    if (!isZImageTurboModel && requestedLoras.length > 0) options.loras = requestedLoras;
     if (sfwMode) options.sfwMode = true;
 
     return Object.keys(options).length > 0 ? options : undefined;
@@ -1485,7 +1505,11 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
       setStatusMessage("Select an available image model before generating.");
       return;
     }
-    if (mode === "image" && imageMaskEnabled && !imageMaskData) {
+    if (mode === "image" && isZImageTurboModel && promptAnchor.hasAnchorTag) {
+      setStatusMessage("Identity anchors require an SDXL model. Switch models or remove the anchor tag to use Turbo.");
+      return;
+    }
+    if (mode === "image" && !isZImageTurboModel && imageMaskEnabled && !imageMaskData) {
       setStatusMessage("Paint the image area to edit before generating.");
       return;
     }
@@ -1531,10 +1555,11 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     try {
       if (mode === "image") {
         const options = buildOptions();
+        const imageNegativePrompt = isZImageTurboModel ? undefined : negativePrompt;
         const id = accountAuth && accountAccess
           ? (await submitAccountImage(sessionStorage, accountAuth.id, accountAccess,
-              { prompt: trimmed, model: selectedModel, negativePrompt, options })).id
-          : await submitAutoJob(trimmed, selectedModel || undefined, negativePrompt, options);
+              { prompt: trimmed, model: selectedModel, negativePrompt: imageNegativePrompt, options })).id
+          : await submitAutoJob(trimmed, selectedModel || undefined, imageNegativePrompt, options);
         setJobId(id);
         saveActiveCreateJob({ id, prompt: effectivePrompt, mode: "image", startedAt: Date.now() });
         setStatusMessage("Waiting for available GPU capacity...");
@@ -2221,7 +2246,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                 <div className="studio-prompt-footer">
                   <span>{mode === "video" ? "Describe a scene and how it moves." : mode === "face_swap" ? "Add your images below to get started." : "Describe the subject, mood, and light."}</span>
                 </div>
-                {mode === "image" && advancedOpen && <div><label className="generator-label" htmlFor="template-negative">Negative prompt</label><textarea id="template-negative" className="generator-input" rows={2} value={negativePrompt} onChange={event => setNegativePrompt(event.target.value)} placeholder="What should the result avoid?" /></div>}
+                {mode === "image" && advancedOpen && !isZImageTurboModel && <div><label className="generator-label" htmlFor="template-negative">Negative prompt</label><textarea id="template-negative" className="generator-input" rows={2} value={negativePrompt} onChange={event => setNegativePrompt(event.target.value)} placeholder="What should the result avoid?" /></div>}
 
                 {mode === "face_swap" && (
                   <div className="generator-advanced">
@@ -2378,7 +2403,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                 {mode !== "face_swap" && (
                   <button type="button" className="studio-settings-toggle" onClick={() => setAdvancedOpen(v => !v)} aria-expanded={advancedOpen} aria-controls="studio-settings">
                     <SlidersHorizontal size={16} aria-hidden="true" />
-                    <span>{mode === "video" ? "Video settings & reference" : "Model, size & reference"}</span>
+                    <span>{mode === "video" ? "Video settings & reference" : isZImageTurboModel ? "Model & size" : "Model, size & reference"}</span>
                     <ChevronDown size={16} className={advancedOpen ? "is-open" : ""} aria-hidden="true" />
                   </button>
                 )}
@@ -2404,12 +2429,15 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                       <p className="generator-help">
                         Pick the image model you want to run for this render.
                       </p>
-                      {selectedImageModelMeta?.image_defaults && (
+                      {isZImageTurboModel && <p className="generator-help">Create a new image from your prompt. The first image can take a few minutes while the model loads.</p>}
+                      {isZImageTurboModel && (imageReferenceData || imageReferenceUrl.trim() || loras.some(lora => lora.name.trim())) && <p className="generator-help">Your reference and style settings are saved for SDXL. Turbo will use only your prompt.</p>}
+                      {selectedImageModelMeta?.image_defaults && !isZImageTurboModel && (
                         <p className="generator-help">
                           Using recommended defaults for this model (source: {imageDefaultsBadge})
                           {imageDefaultsSummary ? `: ${imageDefaultsSummary}.` : "."}
                         </p>
                       )}
+                      {!isZImageTurboModel && <>
                       {accountAccess && <AccountIdentityAnchors access={accountAccess} onUse={slug => setPrompt(current =>
                         `[IDENTITY ANCHOR: ${slug}] ${current.replace(/\[\s*identity\s+anchor[^\]]*\]/gi, "").trim()}`)} />}
                       <span className="adv-group-title">Reference image</span>
@@ -2502,6 +2530,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                         <option value="balanced">Balanced</option>
                         <option value="creative">Creative</option>
                       </select>
+                      </>}
                       <span className="adv-group-title">Generation settings</span>
                       <label className="generator-label" htmlFor="image-steps">
                         Steps
@@ -2509,18 +2538,21 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                       <select
                         id="image-steps"
                         className="generator-select"
-                        value={imageTemplateSettings?.steps != null ? "template" : imageQualityPreset}
+                        value={isZImageTurboModel ? "balanced" : imageTemplateSettings?.steps != null ? "template" : imageQualityPreset}
+                        disabled={isZImageTurboModel}
                         onChange={(e) => { if (e.target.value === "template") return; setImageTemplateSettings(current => current ? { ...current, steps: undefined } : null); setImageQualityPreset(e.target.value as ImageQualityPreset); }}
                       >
+                        {isZImageTurboModel ? <option value="balanced">9 steps · Turbo</option> : <>
                         {imageTemplateSettings?.steps != null && <option value="template">{imageTemplateSettings.steps} steps · Template</option>}
                         <option value="fastest">{imageStepPresets.fastest} steps · Fastest</option>
                         <option value="balanced">{imageStepPresets.balanced} steps · Balanced</option>
                         <option value="best">{imageStepPresets.best} steps · Best quality</option>
+                        </>}
                       </select>
                       <p className="generator-help">
-                        Step presets now adapt to the selected model's recommended baseline.
+                        {isZImageTurboModel ? "Turbo uses 9 steps and guidance 0; negative prompts are not used." : "Step presets now adapt to the selected model's recommended baseline."}
                       </p>
-                      {imageTemplateSettings && <div className="studio-template-overrides">
+                      {imageTemplateSettings && !isZImageTurboModel && <div className="studio-template-overrides">
                         <label className="generator-label" htmlFor="template-guidance">Template guidance</label>
                         <input id="template-guidance" type="number" min={0} max={30} step="any" className="generator-input" placeholder="Model default" value={imageTemplateSettings.guidance ?? ""} onChange={event => { const value = event.target.value === "" ? undefined : Number(event.target.value); if (value === undefined || (Number.isFinite(value) && value >= 0 && value <= 30)) setImageTemplateSettings(current => ({ ...current, guidance: value })); }} />
                         <button type="button" onClick={() => setImageTemplateSettings(null)}>Use model defaults for steps &amp; guidance</button>
@@ -2531,13 +2563,13 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                       <select
                         id="image-size-preset"
                         className="generator-select"
-                        value={imageSizePreset}
-                        onChange={(e) => setImageSizePreset(e.target.value as ImageSizePreset)}
+                        value={activeImageSizePreset}
+                        onChange={(e) => (isZImageTurboModel ? setTurboImageSizePreset : setImageSizePreset)(e.target.value as ImageSizePreset)}
                       >
-                        {IMAGE_SIZE_PRESETS.map((preset) => {
+                        {imageSizePresets.map((preset) => {
                           const resolution =
                             preset.id === "auto"
-                              ? selectedImageResolution
+                              ? isZImageTurboModel ? formatResolutionLabel(selectedImageDefaults?.width, selectedImageDefaults?.height) : selectedImageResolution
                               : formatResolutionLabel(preset.width, preset.height);
                           const label =
                             preset.id === "auto"
@@ -2553,9 +2585,9 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                         })}
                       </select>
                       <p className="generator-help">
-                        {imageReferenceData || imageReferenceUrl.trim()
+                        {!isZImageTurboModel && (imageReferenceData || imageReferenceUrl.trim())
                           ? "Auto follows the reference image. Presets crop to the selected aspect ratio."
-                          : "Auto uses the selected model's recommended resolution. Presets use SDXL-safe aspect ratios."}
+                          : isZImageTurboModel ? "Square starts at 768×768, verified on the current worker. Auto uses the catalog default; other sizes are supported but have not been verified on this worker." : "Auto uses the selected model's recommended resolution. Presets use SDXL-safe aspect ratios."}
                       </p>
                       <label className="generator-label" htmlFor="image-seed">
                         Seed (optional)
