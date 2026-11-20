@@ -143,6 +143,7 @@ type ModelListEntry = {
   capabilities?: string[] | null;
   available_modes?: string[] | null;
   video_workflows?: VideoWorkflow[] | null;
+  motion_presets?: { id: string; label: string }[] | null;
 };
 
 type GeneratorMode = "image" | "face_swap" | "video";
@@ -452,6 +453,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
   const [videoReferenceData, setVideoReferenceData] = useState<string | undefined>();
   const [videoReferenceName, setVideoReferenceName] = useState<string | undefined>();
   const [videoInitStrength, setVideoInitStrength] = useState("1");
+  const [motionPreset, setMotionPreset] = useState("");
   const [selectedVideoWorkflowId, setSelectedVideoWorkflowId] = useState("");
   const [faceSourceUrl, setFaceSourceUrl] = useState("");
   const [faceSourceData, setFaceSourceData] = useState<string | undefined>();
@@ -531,6 +533,10 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     : IMAGE_SIZE_PRESETS;
   const selectedVideoModelMeta =
     mode === "video" && selectedModel ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
+  const isWan22Model =
+    mode === "video" &&
+    (String(selectedVideoModelMeta?.pipeline || "").toLowerCase() === "wan22-i2v" ||
+      String(selectedVideoModelMeta?.model_family || "").toLowerCase() === "wan22_i2v");
   const isLtx23Model =
     mode === "video" && selectedVideoModelMeta?.model_family === "ltx23_wangp";
   const supportsLtxReferenceSheet =
@@ -538,6 +544,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     selectedVideoModelMeta?.capabilities?.includes("ingredients_reference_sheet") === true;
   const isLtxVideoModel =
     mode === "video" &&
+    !isWan22Model &&
     !!selectedModel &&
     (String(selectedVideoModelMeta?.model_family || "").toLowerCase() === "ltx_video" ||
       String(selectedVideoModelMeta?.model_family || "").toLowerCase() === "ltx23_wangp" ||
@@ -712,10 +719,14 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
 
         const videoOptions = videoModelsData.map((m) => {
           const taskType = String(m.task_type || "").toUpperCase();
+          const pipeline = String(m.pipeline || "").toLowerCase();
           const isAnimateDiff = taskType === "ANIMATEDIFF";
+          const isWan22 = pipeline === "wan22-i2v" || m.model_family === "wan22_i2v";
           const isLtx23 = m.model_family === "ltx23_wangp";
-          const isLtxVideo = m.model_family === "ltx_video" || isLtx23 || taskType === "LTX_VIDEO_GEN";
-          const typeLabel = isLtx23
+          const isLtxVideo = !isWan22 && (m.model_family === "ltx_video" || isLtx23 || taskType === "LTX_VIDEO_GEN");
+          const typeLabel = isWan22
+            ? "Wan 2.2 I2V · A14B 4-bit"
+            : isLtx23
             ? `LTX-2.3 ${m.model_version || "distilled"} · WanGP`
             : isLtxVideo
               ? `LTX-Video ${m.model_version || "0.9.x"} · DiT`
@@ -1223,6 +1234,9 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     if (selectedVideoWorkflowId) {
       request.workflowId = selectedVideoWorkflowId;
     }
+    if (isWan22Model && motionPreset) {
+      request.motionPreset = motionPreset;
+    }
     if (selectedModel) {
       request.model = selectedModel;
     }
@@ -1524,6 +1538,11 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     if (mode === "video" && videoWorkflowMissingInitImage) {
       setAdvancedOpen(true);
       setStatusMessage(`${selectedVideoWorkflow?.label || "This workflow"} requires an init image.`);
+      return;
+    }
+    if (mode === "video" && isWan22Model && !(videoInitData || videoInitUrl).trim()) {
+      setAdvancedOpen(true);
+      setStatusMessage("Wan 2.2 image-to-video needs a source image.");
       return;
     }
     if (mode === "face_swap" && faceSwapModels.length === 0) {
@@ -2613,7 +2632,9 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                   <div className="generator-advanced">
                     <span className="generator-label">Video settings</span>
                     <p className="generator-help">
-                      {isLtxVideoModel
+                      {isWan22Model
+                        ? "Wan 2.2 14B image-to-video at 4 steps. Use a source image. 480×832 and 81 frames are the 12 GB defaults."
+                        : isLtxVideoModel
                         ? isLtx23Model
                           ? "LTX-2.3 22B distilled image-to-video with native sound through the verified WanGP runtime."
                           : "LTX-Video 0.9.x image-to-video. Available limits come from the verified node runtime."
@@ -2638,6 +2659,29 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                       <p className="generator-help">
                         Using recommended defaults for this model (source: {videoDefaultsBadge}). Leave fields blank to apply them automatically.
                       </p>
+                    )}
+                    {isWan22Model && (selectedVideoModelMeta?.motion_presets || []).length > 0 && (
+                      <>
+                        <label className="generator-label" htmlFor="wan-motion-preset">
+                          Motion preset
+                        </label>
+                        <select
+                          id="wan-motion-preset"
+                          value={motionPreset}
+                          onChange={(e) => setMotionPreset(e.target.value)}
+                          className="generator-select"
+                        >
+                          <option value="">None</option>
+                          {(selectedVideoModelMeta?.motion_presets || []).map((preset) => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.label}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="generator-help">
+                          Subtle portrait motion. Your prompt stays, and the preset is added to it.
+                        </p>
+                      </>
                     )}
                     {videoWorkflows.length > 0 && (
                       <>

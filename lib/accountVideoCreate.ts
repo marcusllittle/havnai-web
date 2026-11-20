@@ -34,6 +34,7 @@ export async function prepareAccountVideo(input: VideoJobRequest & { sourceAsset
   }
   if (input.initImage) body.source_asset_id = await uploadImage(input.initImage, "video-source", access);
   if (input.sourceAssetId) body.source_asset_id = input.sourceAssetId;
+  if (input.motionPreset) body.motion_preset = input.motionPreset;
   // Create's workflow presets populate the numeric controls above.
   return body;
 }
