@@ -56,6 +56,8 @@ export interface V1Capabilities {
     capabilities?: string[];
     declared_capabilities?: string[];
     license_status?: string;
+    model_family?: string;
+    motion_presets?: { id: string; label: string }[];
   }>;
 }
 
@@ -105,6 +107,7 @@ export async function createVideoJob(input: {
   durationSeconds: VideoDuration;
   seed?: number;
   motionStrength: number;
+  motionPreset?: string;
 }, accessKey: StudioAccess, requestKey?: string): Promise<V1Job> {
   return studioRequest("/jobs", accessKey, {
       method: "POST",
@@ -120,6 +123,7 @@ export async function createVideoJob(input: {
         duration_seconds: input.durationSeconds,
         seed: input.seed,
         motion_strength: input.motionStrength,
+        motion_preset: input.motionPreset || undefined,
       }),
     });
 }

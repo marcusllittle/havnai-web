@@ -377,6 +377,7 @@ export interface VideoJobRequest {
   strength?: number;
   workflowId?: string;
   sfwMode?: boolean;
+  motionPreset?: string;
 }
 
 export interface WanVideoStatus {
@@ -859,6 +860,7 @@ export async function submitVideoJob(request: VideoJobRequest): Promise<string> 
   if (request.continuation === true) body.continuation = true;
   if (request.strength != null) body.strength = request.strength;
   if (request.workflowId) body.workflow_id = request.workflowId;
+  if (request.motionPreset) body.motion_preset = request.motionPreset;
   if (request.sfwMode === true) body.sfw_mode = true;
   const res = await fetch(apiUrl("/submit-job"), {
     method: "POST",

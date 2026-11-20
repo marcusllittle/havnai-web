@@ -68,6 +68,7 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
   const [duration, setDuration] = useState<VideoDuration>(5);
   const [seed, setSeed] = useState("");
   const [motion, setMotion] = useState(0.85);
+  const [motionPreset, setMotionPreset] = useState("");
   const [model, setModel] = useState("");
   const [job, setJob] = useState<V1Job | null>(null);
   const [recentJobs, setRecentJobs] = useState<V1Job[]>([]);
@@ -156,6 +157,10 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
   const videoModels = capabilities?.models.filter((item) =>
     item.available && item.capabilities?.includes("image_to_video")
   ) || [];
+  const selectedVideoModel = videoModels.find((item) => item.id === model);
+  const wanMotionPresets = selectedVideoModel?.pipeline === "wan22-i2v" || selectedVideoModel?.model_family === "wan22_i2v"
+    ? selectedVideoModel.motion_presets || []
+    : [];
   const output = mediaUrl(job?.artifacts.find((artifact) => artifact.kind === "video")?.url);
   const normalizedStage = normalizeStage(job?.stage);
   const stageIndex = Math.max(phases.indexOf(normalizedStage), 0);
@@ -264,11 +269,13 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
         durationSeconds: duration,
         seed: seed.trim() ? Number(seed) : undefined,
         motionStrength: motion,
+        motionPreset: motionPreset || undefined,
       };
       const created = accountId && typeof access !== "string" ? await submitAccountJob<V1Job>(window.sessionStorage, accountId, access, "image_to_video", {
         type: "image_to_video", model: input.model, prompt: input.prompt, source_asset_id: input.sourceAssetId,
         audio_asset_id: input.audioAssetId, preset: input.preset, aspect_ratio: input.aspectRatio,
         duration_seconds: input.durationSeconds, seed: input.seed, motion_strength: input.motionStrength,
+        motion_preset: input.motionPreset || undefined,
       }) : await createVideoJob(input, access);
       setJob(created);
       setRecentJobs((current) => mergeJobs(current, created));
@@ -390,7 +397,8 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
             <details className="studio-video-advanced">
               <summary><SlidersHorizontal size={16} aria-hidden="true" /> Model, audio & advanced settings</summary>
               <div className="video-control-section video-option-grid">
-              <label>Model<select required value={model} onChange={(event) => setModel(event.target.value)}>{videoModels.map((item) => <option key={item.id} value={item.id}>{item.id} {item.model_version || item.version ? `(${item.model_version || item.version})` : ""}</option>)}</select></label>
+              <label>Model<select required value={model} onChange={(event) => { setModel(event.target.value); setMotionPreset(""); }}>{videoModels.map((item) => <option key={item.id} value={item.id}>{item.pipeline === "wan22-i2v" || item.model_family === "wan22_i2v" ? "Wan 2.2 I2V · A14B 4-bit" : item.id} {item.model_version || item.version ? `(${item.model_version || item.version})` : ""}</option>)}</select></label>
+              {wanMotionPresets.length > 0 && <label>Motion preset<select value={motionPreset} onChange={(event) => setMotionPreset(event.target.value)}><option value="">None</option>{wanMotionPresets.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</select></label>}
               <label>Optional audio<input type="file" accept="audio/*" onChange={(event) => setAudio(event.target.files?.[0] || null)} /></label>
               <fieldset className="studio-video-preset"><legend>Quality preset</legend><div className="video-segments"><button type="button" aria-pressed={preset === "fast_upscaled"} className={preset === "fast_upscaled" ? "active" : ""} onClick={() => setPreset("fast_upscaled")}>Fast Upscaled</button><button type="button" aria-pressed={preset === "native_quality"} className={preset === "native_quality" ? "active" : ""} onClick={() => setPreset("native_quality")}>Native Quality</button></div></fieldset>
               <label>Seed<input type="number" min={0} value={seed} onChange={(event) => setSeed(event.target.value)} placeholder="Random" /></label>
