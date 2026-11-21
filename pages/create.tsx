@@ -51,6 +51,15 @@ import {
   isVideoWorkflowInitImageMissing,
   type VideoWorkflow,
 } from "../lib/videoWorkflows";
+import {
+  isLtx23Model as recipeIsLtx23,
+  isWan22Model as recipeIsWan22,
+  LTX23_CLIP,
+  ltxSize,
+  videoWaitSeconds,
+  WAN22_CLIP,
+  wanSize,
+} from "../lib/i2vRecipe";
 import { addToLibrary, LibraryItemType } from "../lib/libraryStore";
 import { clearInviteCode, getInviteCode, setInviteCode } from "../lib/invite";
 import { getJobSSE, normalizeLifecycleStatus, SSEEvent } from "../lib/sse";
@@ -449,6 +458,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
   const [videoInitUrl, setVideoInitUrl] = useState("");
   const [videoInitData, setVideoInitData] = useState<string | undefined>();
   const [videoInitName, setVideoInitName] = useState<string | undefined>();
+  const [videoInitSize, setVideoInitSize] = useState({ width: 0, height: 0 });
   const [videoReferenceUrl, setVideoReferenceUrl] = useState("");
   const [videoReferenceData, setVideoReferenceData] = useState<string | undefined>();
   const [videoReferenceName, setVideoReferenceName] = useState<string | undefined>();
@@ -533,12 +543,18 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     : IMAGE_SIZE_PRESETS;
   const selectedVideoModelMeta =
     mode === "video" && selectedModel ? modelRuntimeDefaults[selectedModel.toLowerCase()] : undefined;
-  const isWan22Model =
-    mode === "video" &&
-    (String(selectedVideoModelMeta?.pipeline || "").toLowerCase() === "wan22-i2v" ||
-      String(selectedVideoModelMeta?.model_family || "").toLowerCase() === "wan22_i2v");
-  const isLtx23Model =
-    mode === "video" && selectedVideoModelMeta?.model_family === "ltx23_wangp";
+  const selectedVideoProbe = {
+    id: selectedModel,
+    pipeline: selectedVideoModelMeta?.pipeline,
+    model_family: selectedVideoModelMeta?.model_family || undefined,
+  };
+  const isWan22Model = mode === "video" && recipeIsWan22(selectedVideoProbe);
+  const isLtx23Model = mode === "video" && recipeIsLtx23(selectedVideoProbe);
+  const videoPollSeconds = videoWaitSeconds(selectedVideoProbe);
+  const measuredCreditCost = (fallback: number) => {
+    const cost = selectedVideoModelMeta?.credit_cost;
+    return typeof cost === "number" && Number.isFinite(cost) ? cost : fallback;
+  };
   const supportsLtxReferenceSheet =
     mode === "video" &&
     selectedVideoModelMeta?.capabilities?.includes("ingredients_reference_sheet") === true;
@@ -721,8 +737,8 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
           const taskType = String(m.task_type || "").toUpperCase();
           const pipeline = String(m.pipeline || "").toLowerCase();
           const isAnimateDiff = taskType === "ANIMATEDIFF";
-          const isWan22 = pipeline === "wan22-i2v" || m.model_family === "wan22_i2v";
-          const isLtx23 = m.model_family === "ltx23_wangp";
+          const isWan22 = recipeIsWan22({ id: m.name, pipeline, model_family: m.model_family || undefined });
+          const isLtx23 = recipeIsLtx23({ id: m.name, pipeline, model_family: m.model_family || undefined });
           const isLtxVideo = !isWan22 && (m.model_family === "ltx_video" || isLtx23 || taskType === "LTX_VIDEO_GEN");
           const typeLabel = isWan22
             ? "Wan 2.2 I2V · A14B 4-bit"
@@ -889,6 +905,28 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     selectedModel,
     selectedVideoModelMeta?.video_workflows,
   ]);
+
+  useEffect(() => {
+    const source = (videoInitData || videoInitUrl).trim();
+    if (!source) {
+      setVideoInitSize({ width: 0, height: 0 });
+      return;
+    }
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void readImageDimensions(source)
+        .then((size) => {
+          if (active) setVideoInitSize(size);
+        })
+        .catch(() => {
+          if (active) setVideoInitSize({ width: 0, height: 0 });
+        });
+    }, 150);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [videoInitData, videoInitUrl]);
 
   useEffect(() => {
     const source = (videoInitData || videoInitUrl).trim();
@@ -1219,6 +1257,18 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     if (heightValue !== undefined) request.height = heightValue;
     if (framesValue !== undefined) request.frames = framesValue;
     if (fpsValue !== undefined) request.fps = fpsValue;
+    if (isWan22Model || isLtx23Model) {
+      const measuredSize = isWan22Model
+        ? wanSize(videoInitSize.width, videoInitSize.height)
+        : ltxSize(videoInitSize.width, videoInitSize.height);
+      const clip = isWan22Model ? WAN22_CLIP : LTX23_CLIP;
+      if (stepsValue === undefined) request.steps = clip.steps;
+      if (guidanceValue === undefined) request.guidance = clip.guidance;
+      if (widthValue === undefined) request.width = measuredSize.width;
+      if (heightValue === undefined) request.height = measuredSize.height;
+      if (framesValue === undefined) request.frames = isWan22Model ? 129 : LTX23_CLIP.frames;
+      if (fpsValue === undefined) request.fps = clip.fps;
+    }
     const initImageValue = (initOverride ?? (videoInitData || videoInitUrl).trim()).trim();
     if (initImageValue) {
       request.initImage = initImageValue;
@@ -1306,7 +1356,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
       setJobId(id);
       saveActiveCreateJob({ id, prompt: promptText, mode: "video", startedAt: Date.now() });
       setStatusMessage(`Waiting for available GPU capacity... (${currentIndex + 1}/${total})`);
-      const result = await pollJob(id, promptText, 2400);
+      const result = await pollJob(id, promptText, videoPollSeconds);
       if (!result || !result.videoUrl) {
         setStatusMessage("Clip generation stopped before a video output was returned.");
         setChainProgress(null);
@@ -1569,7 +1619,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     setPollTimedOut(false);
     setLastUsedPrompt(effectivePrompt || "Face swap");
 
-    const totalVideoClips = Math.max(1, Math.min(7, parseOptionalInt(extendChunks) ?? 1));
+    const totalVideoClips = isWan22Model ? 1 : Math.max(1, Math.min(7, parseOptionalInt(extendChunks) ?? 1));
 
     try {
       if (mode === "image") {
@@ -1634,7 +1684,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
           setJobId(id);
           saveActiveCreateJob({ id, prompt: effectivePrompt, mode: "video", startedAt: Date.now() });
           setStatusMessage("Waiting for available GPU capacity...");
-          await pollJob(id, effectivePrompt, 2400);
+          await pollJob(id, effectivePrompt, videoPollSeconds);
         }
       }
     } catch (err: any) {
@@ -1824,7 +1874,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
             if (Number.isFinite(progress) && progress > 0) {
               const stageLabel = stage ? `${stage.charAt(0).toUpperCase()}${stage.slice(1)}` : "Rendering";
               setStatusMessage(`${stageLabel} · ${Math.round(progress)}%`);
-            } else if (elapsed > 300) {
+            } else if (elapsed > (mode === "video" ? 50 * 60 : 300)) {
               setStatusMessage("This render is still running. If the worker stalls, it will be requeued automatically.");
             } else {
               setStatusMessage("Rendering on a HavnAI node...");
@@ -1949,14 +1999,14 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
           const usedPrompt = String(chain.template.prompt || "Video sequence");
           setJobId(job.id); setLastUsedPrompt(usedPrompt);
           saveActiveCreateJob({ id: job.id, prompt: usedPrompt, mode: "video", startedAt: Date.now() });
-          return Boolean(await pollJob(job.id, usedPrompt, 2400, access.signal));
+          return Boolean(await pollJob(job.id, usedPrompt, videoPollSeconds, access.signal));
         },
       });
       controller.signal.throwIfAborted();
       if (outcome.result) {
         const usedPrompt = String(outcome.chain.template.prompt || "Video sequence");
         setJobId(outcome.result.id); setLastUsedPrompt(usedPrompt);
-        const result = await pollJob(outcome.result.id, usedPrompt, 2400, controller.signal);
+        const result = await pollJob(outcome.result.id, usedPrompt, videoPollSeconds, controller.signal);
         controller.signal.throwIfAborted();
         if (result) {
           const stitched = outcome.chain.state === "complete";
@@ -2010,7 +2060,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
       setMode(resumedMode); setJobId(job.id); setLastUsedPrompt(usedPrompt);
       syncPendingImage();
       saveActiveCreateJob({ id: job.id, prompt: usedPrompt, mode: resumedMode, startedAt: Date.now() });
-      await pollJob(job.id, usedPrompt, resumedMode === "video" ? 2400 : 1800);
+      await pollJob(job.id, usedPrompt, resumedMode === "video" ? videoPollSeconds : 1800);
     } catch (reason) {
       if (!accountAccess.signal.aborted) setStatusMessage(reason instanceof Error ? reason.message : "Could not resume this generation request.");
     } finally { operation.current = false; syncPendingImage(); setLoading(false); }
@@ -2020,7 +2070,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     if (!jobId) return;
     setLoading(true);
     try {
-      await pollJob(jobId, lastUsedPrompt || prompt || "Job", mode === "video" ? 2400 : 1800);
+      await pollJob(jobId, lastUsedPrompt || prompt || "Job", mode === "video" ? videoPollSeconds : 1800);
     } finally {
       setLoading(false);
     }
@@ -2060,7 +2110,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
     void pollJob(
       activeJob.id,
       activeJob.prompt,
-      activeJob.mode === "video" ? 2400 : 1800
+      activeJob.mode === "video" ? videoPollSeconds : 1800
     ).finally(() => setLoading(false));
     return () => { activeRecoveryStartedRef.current = false; };
     // Polling intentionally starts once from the job snapshot saved by submission.
@@ -2633,12 +2683,12 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                     <span className="generator-label">Video settings</span>
                     <p className="generator-help">
                       {isWan22Model
-                        ? "Wan 2.2 14B image-to-video at 4 steps. Use a source image. 480×832 and 81 frames are the 12 GB defaults."
+                        ? `Wan 2.2 image-to-video renders in one pass at 480×832, 129 frames, 16 fps, 4 steps, and guidance 1. About 21 to 25 minutes. ${measuredCreditCost(12)} credits.`
+                        : isLtx23Model
+                        ? `LTX-2.3 renders 217 frames at 448×832 with sound, 24 fps, 8 steps, and guidance 1. About 5 minutes when the worker is warm. ${measuredCreditCost(5)} credits.`
                         : isLtxVideoModel
-                        ? isLtx23Model
-                          ? "LTX-2.3 22B distilled image-to-video with native sound through the verified WanGP runtime."
-                          : "LTX-Video 0.9.x image-to-video. Available limits come from the verified node runtime."
-                        : "LTX2 defaults to 16 frames at 8fps (~2s). AnimateDiff can go longer but is heavier."}
+                          ? "LTX-Video 0.9.x image-to-video. Available limits come from the verified node runtime."
+                          : "LTX2 defaults to 16 frames at 8fps (~2s). AnimateDiff can go longer but is heavier."}
                     </p>
                     <label className="generator-label" htmlFor="video-model">
                       Video model
@@ -2884,12 +2934,17 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                       </div>
                     </div>
                     <p className="generator-help">
-                      {isLtxVideoModel
-                        ? isLtx23Model
-                          ? "LTX-2.3 defaults to a 4-second, 97-frame clip at 24fps."
-                          : "LTX-Video 0.9.x: use model defaults unless the verified runtime reports a supported override."
-                        : "AnimateDiff: 16 frames optimal, max 32 (4s @ 8fps). LTX2: max 16 frames (2s @ 8fps). Use multiple clips below for longer videos."}
+                      {isWan22Model
+                        ? "Leave a field blank to use 480×832 (832×480 for a wide source), 129 frames, 16 fps, 4 steps, and guidance 1."
+                        : isLtx23Model
+                        ? "Leave a field blank to use 448×832 (832×448 for a wide source), 217 frames, 24 fps, 8 steps, and guidance 1."
+                        : isLtxVideoModel
+                          ? "LTX-Video 0.9.x: use model defaults unless the verified runtime reports a supported override."
+                          : "AnimateDiff: 16 frames optimal, max 32 (4s @ 8fps). LTX2: max 16 frames (2s @ 8fps). Use multiple clips below for longer videos."}
                     </p>
+                    {isWan22Model ? (
+                      <p className="generator-help">Wan 2.2 renders in one pass.</p>
+                    ) : (
                     <div className="generator-row">
                       <div>
                         <label className="generator-label" htmlFor="extend-chunks">
@@ -2920,6 +2975,7 @@ const TestPage: React.FC<{ accountAuth?: CreateAccount }> = ({ accountAuth }) =>
                         </label>
                       </div>
                     </div>
+                    )}
                     <div className="generator-row">
                       <div>
                         <label className="generator-label" htmlFor="seed">

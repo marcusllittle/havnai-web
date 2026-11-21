@@ -85,6 +85,53 @@ describe("Studio workspaces", () => {
     expect(container.textContent).toContain("Your clip is ready");
   });
 
+  it("submits Wan 2.2 or LTX-2.3 at the measured frame settings", async () => {
+    vi.mocked(fetchVideoCapabilities).mockResolvedValue({
+      models: [
+        { id: "wan22-i2v-a14b", available: true, capabilities: ["image_to_video"], pipeline: "wan22-i2v", model_family: "wan22_i2v", credit_cost: 12 },
+        { id: "ltx23_wangp_distilled", available: true, capabilities: ["image_to_video"], pipeline: "ltx23_wangp", model_family: "ltx23_wangp", credit_cost: 5 },
+      ],
+      nodes: [],
+      video_v2_available: true,
+      video_v2_enabled: true,
+    });
+    vi.mocked(uploadStudioAsset).mockResolvedValue({ id: "source-id", kind: "image", filename: "source.png", sha256: "test" });
+    vi.mocked(createVideoJob).mockResolvedValue({ id: "clip-id", status: "succeeded", stage: "completed", progress: 100, model: "wan22-i2v-a14b", resolved_spec: {}, artifacts: [] });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(["fixture"], { type: "image/png" }) }));
+    await act(async () => root.render(<VideoStudioPage />));
+    expect(container.textContent).toContain("Wan 2.2 I2V");
+    expect(container.textContent).toContain("LTX-2.3");
+    expect(container.textContent).toContain("8 seconds · 129 frames");
+    expect(container.textContent).toContain("5 seconds · 81 frames");
+    expect(container.textContent).toContain("3 seconds");
+    expect(container.textContent).toContain("21 to 25 minutes");
+    expect(container.textContent).toContain("12 credits");
+    const duration = container.querySelectorAll<HTMLSelectElement>("select")[0];
+    expect(duration.value).toBe("8");
+    await act(async () => change("textarea", "A gentle pan"));
+    await act(async () => change(".source-fields input", "/api/static/outputs/source.png"));
+    await act(async () => button("16:9").click());
+    await act(async () => button("Generate clip").click());
+    expect(createVideoJob).toHaveBeenCalledWith(expect.objectContaining({
+      model: "wan22-i2v-a14b", aspectRatio: "16:9", durationSeconds: 8,
+      width: 832, height: 480, frames: 129, fps: 16, steps: 4, guidance: 1,
+    }), "test-only-key");
+    const model = container.querySelectorAll<HTMLSelectElement>("select")[1];
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(model, "ltx23_wangp_distilled");
+      model.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(container.querySelectorAll<HTMLSelectElement>("select")[0].value).toBe("9");
+    expect(container.textContent).toContain("9 seconds · local quality");
+    expect(container.textContent).toContain("217 frames at 448×832");
+    expect(container.textContent).toContain("5 credits");
+    await act(async () => button("Generate clip").click());
+    expect(createVideoJob).toHaveBeenLastCalledWith(expect.objectContaining({
+      model: "ltx23_wangp_distilled", aspectRatio: "16:9", durationSeconds: 9,
+      width: 832, height: 448, frames: 217, fps: 24, steps: 8, guidance: 1,
+    }), "test-only-key");
+  });
+
   it("keeps generation unavailable when the studio has no video capacity", async () => {
     vi.mocked(fetchVideoCapabilities).mockResolvedValue({ models: [], nodes: [], video_v2_available: false, video_v2_enabled: true });
     await act(async () => root.render(<VideoStudioPage />));

@@ -23,7 +23,64 @@ import {
   VideoDuration,
   VideoPreset,
 } from "../lib/videoStudioApi";
+import {
+  isLtx23Model,
+  isWan22Model,
+  LTX23_CLIP,
+  ltxSize,
+  WAN22_CLIP,
+  wanFrames,
+  wanSize,
+  type FrameSize,
+} from "../lib/i2vRecipe";
 
+
+function orientedFrame(base: FrameSize, aspect: VideoAspect): FrameSize {
+  const landscape = base.width > base.height;
+  if (landscape === (aspect === "16:9")) return base;
+  return { width: base.height, height: base.width };
+}
+
+function recipeForModel(
+  model: { id?: string; pipeline?: string; model_family?: string } | undefined,
+  aspect: VideoAspect,
+  duration: VideoDuration,
+  source: FrameSize
+) {
+  const ltx = isLtx23Model(model);
+  const wan = isWan22Model(model);
+  if (!ltx && !wan) return {};
+  const size = orientedFrame(ltx ? ltxSize(source.width, source.height) : wanSize(source.width, source.height), aspect);
+  if (wan) {
+    return {
+      width: size.width,
+      height: size.height,
+      frames: wanFrames(duration),
+      fps: WAN22_CLIP.fps,
+      steps: WAN22_CLIP.steps,
+      guidance: WAN22_CLIP.guidance,
+    };
+  }
+  return {
+    width: size.width,
+    height: size.height,
+    frames: duration >= LTX23_CLIP.durationSeconds ? LTX23_CLIP.frames : duration * LTX23_CLIP.fps + 1,
+    fps: LTX23_CLIP.fps,
+    steps: LTX23_CLIP.steps,
+    guidance: LTX23_CLIP.guidance,
+  };
+}
+
+function videoModelLabel(model: { id: string; pipeline?: string; model_family?: string; model_version?: string; version?: string }) {
+  if (isWan22Model(model)) return "Wan 2.2 I2V";
+  if (isLtx23Model(model)) return "LTX-2.3";
+  const version = model.model_version || model.version;
+  return version ? `${model.id} (${version})` : model.id;
+}
+
+function recipeCreditCost(model: { credit_cost?: number } | undefined, fallback: number) {
+  return typeof model?.credit_cost === "number" && Number.isFinite(model.credit_cost) ? model.credit_cost : fallback;
+}
 
 const finalStates = new Set(["succeeded", "failed", "cancelled", "expired"]);
 const phases = ["queued", "loading", "encoding", "generation", "decoding", "finalizing", "uploading"];
@@ -65,7 +122,9 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
   const [prompt, setPrompt] = useState("");
   const [preset, setPreset] = useState<VideoPreset>("fast_upscaled");
   const [aspect, setAspect] = useState<VideoAspect>("9:16");
-  const [duration, setDuration] = useState<VideoDuration>(5);
+  const [duration, setDuration] = useState<VideoDuration>(8);
+  const [sourceSize, setSourceSize] = useState<FrameSize>({ width: 0, height: 0 });
+  const aspectFromSource = useRef(true);
   const [seed, setSeed] = useState("");
   const [motion, setMotion] = useState(0.85);
   const [motionPreset, setMotionPreset] = useState("");
@@ -91,6 +150,32 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
 
   const sourcePreview = useMemo(() => (source ? URL.createObjectURL(source) : ""), [source]);
   useEffect(() => () => sourcePreview && URL.revokeObjectURL(sourcePreview), [sourcePreview]);
+
+  useEffect(() => {
+    const preview = sourcePreview || sourceUrl.trim();
+    aspectFromSource.current = true;
+    if (!preview) {
+      setSourceSize({ width: 0, height: 0 });
+      return;
+    }
+    let active = true;
+    const timer = window.setTimeout(() => {
+      const image = new window.Image();
+      image.onload = () => {
+        if (!active) return;
+        const width = image.naturalWidth;
+        const height = image.naturalHeight;
+        if (!(width > 0 && height > 0)) return;
+        setSourceSize({ width, height });
+        if (aspectFromSource.current) setAspect(width > height ? "16:9" : "9:16");
+      };
+      image.src = preview;
+    }, 150);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [sourcePreview, sourceUrl]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -158,9 +243,12 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
     item.available && item.capabilities?.includes("image_to_video")
   ) || [];
   const selectedVideoModel = videoModels.find((item) => item.id === model);
-  const wanMotionPresets = selectedVideoModel?.pipeline === "wan22-i2v" || selectedVideoModel?.model_family === "wan22_i2v"
-    ? selectedVideoModel.motion_presets || []
-    : [];
+  const wanMotionPresets = isWan22Model(selectedVideoModel) ? selectedVideoModel?.motion_presets || [] : [];
+  const recipeNote = isWan22Model(selectedVideoModel)
+    ? `Wan 2.2 renders in one pass, about 21 to 25 minutes. ${recipeCreditCost(selectedVideoModel, 12)} credits.`
+    : isLtx23Model(selectedVideoModel)
+      ? `LTX-2.3 is 217 frames at 448×832 with sound, about 5 minutes when warm. ${recipeCreditCost(selectedVideoModel, 5)} credits.`
+      : "";
   const output = mediaUrl(job?.artifacts.find((artifact) => artifact.kind === "video")?.url);
   const normalizedStage = normalizeStage(job?.stage);
   const stageIndex = Math.max(phases.indexOf(normalizedStage), 0);
@@ -184,7 +272,11 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
       const available = value.models.find((item) =>
         item.available && item.capabilities?.includes("image_to_video")
       );
-      if (available) setModel(available.id);
+      if (available) {
+        setModel(available.id);
+        if (isLtx23Model(available)) setDuration(9);
+        else if (isWan22Model(available)) setDuration(8);
+      }
       if (typeof normalizedKey === "string") setStudioKey(normalizedKey);
       setStudioUnlocked(true);
       if (typeof normalizedKey === "string") window.sessionStorage.setItem("havnai_studio_key", normalizedKey);
@@ -259,6 +351,7 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
     try {
       const sourceAsset = await uploadStudioAsset(await resolveSource(), "image", access);
       const audioAsset = audio ? await uploadStudioAsset(audio, "audio", access) : undefined;
+      const recipe = recipeForModel(videoModels.find((item) => item.id === model), aspect, duration, sourceSize);
       const input = {
         model,
         prompt: prompt.trim(),
@@ -270,12 +363,14 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
         seed: seed.trim() ? Number(seed) : undefined,
         motionStrength: motion,
         motionPreset: motionPreset || undefined,
+        ...recipe,
       };
       const created = accountId && typeof access !== "string" ? await submitAccountJob<V1Job>(window.sessionStorage, accountId, access, "image_to_video", {
         type: "image_to_video", model: input.model, prompt: input.prompt, source_asset_id: input.sourceAssetId,
         audio_asset_id: input.audioAssetId, preset: input.preset, aspect_ratio: input.aspectRatio,
         duration_seconds: input.durationSeconds, seed: input.seed, motion_strength: input.motionStrength,
         motion_preset: input.motionPreset || undefined,
+        width: input.width, height: input.height, frames: input.frames, fps: input.fps, steps: input.steps, guidance: input.guidance,
       }) : await createVideoJob(input, access);
       setJob(created);
       setRecentJobs((current) => mergeJobs(current, created));
@@ -391,13 +486,13 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
             </section>
 
             <section className="video-control-section video-option-grid">
-              <fieldset><legend>Frame</legend><div className="video-segments"><button type="button" aria-pressed={aspect === "9:16"} className={aspect === "9:16" ? "active" : ""} onClick={() => setAspect("9:16")}>9:16</button><button type="button" aria-pressed={aspect === "16:9"} className={aspect === "16:9" ? "active" : ""} onClick={() => setAspect("16:9")}>16:9</button></div></fieldset>
-              <label>Duration<select value={duration} onChange={(event) => setDuration(Number(event.target.value) as VideoDuration)}><option value={3}>3 seconds</option><option value={5}>5 seconds</option><option value={8}>8 seconds</option></select></label>
+              <fieldset><legend>Frame</legend><div className="video-segments"><button type="button" aria-pressed={aspect === "9:16"} className={aspect === "9:16" ? "active" : ""} onClick={() => { aspectFromSource.current = false; setAspect("9:16"); }}>9:16</button><button type="button" aria-pressed={aspect === "16:9"} className={aspect === "16:9" ? "active" : ""} onClick={() => { aspectFromSource.current = false; setAspect("16:9"); }}>16:9</button></div></fieldset>
+              <label>Duration<select value={duration} onChange={(event) => setDuration(Number(event.target.value) as VideoDuration)}><option value={3}>3 seconds</option>{isLtx23Model(selectedVideoModel) ? <><option value={5}>5 seconds</option><option value={8}>8 seconds</option><option value={9}>9 seconds · local quality</option></> : <><option value={5}>{isWan22Model(selectedVideoModel) ? "5 seconds · 81 frames" : "5 seconds"}</option><option value={8}>{isWan22Model(selectedVideoModel) ? "8 seconds · 129 frames" : "8 seconds"}</option></>}</select></label>
             </section>
             <details className="studio-video-advanced">
               <summary><SlidersHorizontal size={16} aria-hidden="true" /> Model, audio & advanced settings</summary>
               <div className="video-control-section video-option-grid">
-              <label>Model<select required value={model} onChange={(event) => { setModel(event.target.value); setMotionPreset(""); }}>{videoModels.map((item) => <option key={item.id} value={item.id}>{item.pipeline === "wan22-i2v" || item.model_family === "wan22_i2v" ? "Wan 2.2 I2V · A14B 4-bit" : item.id} {item.model_version || item.version ? `(${item.model_version || item.version})` : ""}</option>)}</select></label>
+              <label>Model<select required value={model} onChange={(event) => { const next = videoModels.find((item) => item.id === event.target.value); setModel(event.target.value); setMotionPreset(""); setDuration(isLtx23Model(next) ? 9 : 8); }}>{videoModels.map((item) => <option key={item.id} value={item.id}>{videoModelLabel(item)}</option>)}</select></label>
               {wanMotionPresets.length > 0 && <label>Motion preset<select value={motionPreset} onChange={(event) => setMotionPreset(event.target.value)}><option value="">None</option>{wanMotionPresets.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</select></label>}
               <label>Optional audio<input type="file" accept="audio/*" onChange={(event) => setAudio(event.target.files?.[0] || null)} /></label>
               <fieldset className="studio-video-preset"><legend>Quality preset</legend><div className="video-segments"><button type="button" aria-pressed={preset === "fast_upscaled"} className={preset === "fast_upscaled" ? "active" : ""} onClick={() => setPreset("fast_upscaled")}>Fast Upscaled</button><button type="button" aria-pressed={preset === "native_quality"} className={preset === "native_quality" ? "active" : ""} onClick={() => setPreset("native_quality")}>Native Quality</button></div></fieldset>
@@ -412,6 +507,7 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
               <button className="video-submit" type="submit" disabled={busy || pendingSubmission || !model || !capabilities?.video_v2_available || !prompt.trim() || (!source && !sourceUrl.trim())}>{busy ? "Submitting..." : "Generate clip"}</button>
               {job && !finalStates.has(job.status) && <button className="video-cancel" type="button" onClick={cancel} disabled={busy} aria-label="Cancel active job">Cancel</button>}
             </div>
+            {recipeNote && <p className="video-recipe-note">{recipeNote}</p>}
           </form>
 
           <section className="video-output" aria-live="polite">

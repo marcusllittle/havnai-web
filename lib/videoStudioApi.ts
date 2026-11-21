@@ -2,7 +2,7 @@ import type { StudioAccess } from "./musicStudioApi";
 
 export type VideoPreset = "fast_upscaled" | "native_quality";
 export type VideoAspect = "9:16" | "16:9";
-export type VideoDuration = 3 | 5 | 8;
+export type VideoDuration = 3 | 5 | 8 | 9;
 
 export interface V1Asset {
   id: string;
@@ -58,6 +58,16 @@ export interface V1Capabilities {
     license_status?: string;
     model_family?: string;
     motion_presets?: { id: string; label: string }[];
+    credit_cost?: number;
+    timeout_seconds?: number;
+    video_defaults?: {
+      width: number;
+      height: number;
+      frames: number;
+      fps: number;
+      steps: number;
+      guidance: number;
+    };
   }>;
 }
 
@@ -108,6 +118,12 @@ export async function createVideoJob(input: {
   seed?: number;
   motionStrength: number;
   motionPreset?: string;
+  width?: number;
+  height?: number;
+  frames?: number;
+  fps?: number;
+  steps?: number;
+  guidance?: number;
 }, accessKey: StudioAccess, requestKey?: string): Promise<V1Job> {
   return studioRequest("/jobs", accessKey, {
       method: "POST",
@@ -124,6 +140,12 @@ export async function createVideoJob(input: {
         seed: input.seed,
         motion_strength: input.motionStrength,
         motion_preset: input.motionPreset || undefined,
+        width: input.width,
+        height: input.height,
+        frames: input.frames,
+        fps: input.fps,
+        steps: input.steps,
+        guidance: input.guidance,
       }),
     });
 }
