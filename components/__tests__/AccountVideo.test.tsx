@@ -89,7 +89,7 @@ it("submits one account-owned clip without reading the legacy studio key or rend
   const submissions = state.request.mock.calls.filter(([path, init]) => path === "/v2/jobs" && init?.method === "POST");
   expect(submissions).toHaveLength(1);
   const sent = JSON.parse(submissions[0][1].body);
-  expect(sent).toMatchObject({ type: "image_to_video", prompt: "A slow pan", source_asset_id: "source-one", duration_seconds: 5 });
+  expect(sent).toMatchObject({ type: "image_to_video", prompt: "A slow pan", source_asset_id: "source-one", duration_seconds: 8 });
   expect(sent).not.toHaveProperty("wallet");
   expect(submissions[0][1].headers["Idempotency-Key"]).toBeTruthy();
   expect(host.querySelector("video")?.getAttribute("src")).toBe("/api/account-media/artifact-video");

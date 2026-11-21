@@ -1552,6 +1552,13 @@ main,
   font-size: 0.82rem;
 }
 
+.video-recipe-note {
+  margin: 0.85rem 0 0;
+  color: #9ba8b0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 .video-frame {
   width: 100%;
   max-height: 68vh;
