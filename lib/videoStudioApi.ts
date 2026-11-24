@@ -17,6 +17,7 @@ export interface V1Artifact {
   url?: string;
   filename: string;
   sha256: string;
+  metadata?: { metrics?: { native_audio?: boolean } };
 }
 
 export interface V1Job {
@@ -67,6 +68,7 @@ export interface V1Capabilities {
       fps: number;
       steps: number;
       guidance: number;
+      audio?: boolean;
     };
   }>;
 }

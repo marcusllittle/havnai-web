@@ -26,50 +26,13 @@ import {
 import {
   isLtx23Model,
   isWan22Model,
-  LTX23_CLIP,
-  ltxSize,
-  WAN22_CLIP,
-  wanFrames,
-  wanSize,
+  modelAudioNotice,
+  qualityModesDistinct,
+  resultAudioNotice,
+  studioClipSettings,
+  WAN_SINGLE_QUALITY_HINT,
   type FrameSize,
 } from "../lib/i2vRecipe";
-
-
-function orientedFrame(base: FrameSize, aspect: VideoAspect): FrameSize {
-  const landscape = base.width > base.height;
-  if (landscape === (aspect === "16:9")) return base;
-  return { width: base.height, height: base.width };
-}
-
-function recipeForModel(
-  model: { id?: string; pipeline?: string; model_family?: string } | undefined,
-  aspect: VideoAspect,
-  duration: VideoDuration,
-  source: FrameSize
-) {
-  const ltx = isLtx23Model(model);
-  const wan = isWan22Model(model);
-  if (!ltx && !wan) return {};
-  const size = orientedFrame(ltx ? ltxSize(source.width, source.height) : wanSize(source.width, source.height), aspect);
-  if (wan) {
-    return {
-      width: size.width,
-      height: size.height,
-      frames: wanFrames(duration),
-      fps: WAN22_CLIP.fps,
-      steps: WAN22_CLIP.steps,
-      guidance: WAN22_CLIP.guidance,
-    };
-  }
-  return {
-    width: size.width,
-    height: size.height,
-    frames: duration >= LTX23_CLIP.durationSeconds ? LTX23_CLIP.frames : duration * LTX23_CLIP.fps + 1,
-    fps: LTX23_CLIP.fps,
-    steps: LTX23_CLIP.steps,
-    guidance: LTX23_CLIP.guidance,
-  };
-}
 
 function videoModelLabel(model: { id: string; pipeline?: string; model_family?: string; model_version?: string; version?: string }) {
   if (isWan22Model(model)) return "Wan 2.2 I2V";
@@ -244,11 +207,18 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
   ) || [];
   const selectedVideoModel = videoModels.find((item) => item.id === model);
   const wanMotionPresets = isWan22Model(selectedVideoModel) ? selectedVideoModel?.motion_presets || [] : [];
+  const distinctQuality = qualityModesDistinct(selectedVideoModel);
+  const activePreset: VideoPreset = distinctQuality ? preset : "fast_upscaled";
+  const clipSettings = studioClipSettings(selectedVideoModel, aspect, duration, sourceSize, activePreset);
   const recipeNote = isWan22Model(selectedVideoModel)
     ? `Wan 2.2 renders in one pass, about 21 to 25 minutes. ${recipeCreditCost(selectedVideoModel, 12)} credits.`
     : isLtx23Model(selectedVideoModel)
-      ? `LTX-2.3 is 217 frames at 448×832 with sound, about 5 minutes when warm. ${recipeCreditCost(selectedVideoModel, 5)} credits.`
+      ? activePreset === "native_quality"
+        ? `LTX-2.3 native quality renders at ${clipSettings.width}×${clipSettings.height} with 8 steps and no upscale. About 5 minutes when warm. ${recipeCreditCost(selectedVideoModel, 5)} credits.`
+        : `LTX-2.3 is 217 frames at 448×832 with sound, about 5 minutes when warm. ${recipeCreditCost(selectedVideoModel, 5)} credits.`
       : "";
+  const selectedModelAudioNotice = modelAudioNotice(selectedVideoModel, Boolean(audio));
+  const clipAudioNotice = resultAudioNotice(job);
   const output = mediaUrl(job?.artifacts.find((artifact) => artifact.kind === "video")?.url);
   const normalizedStage = normalizeStage(job?.stage);
   const stageIndex = Math.max(phases.indexOf(normalizedStage), 0);
@@ -351,13 +321,15 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
     try {
       const sourceAsset = await uploadStudioAsset(await resolveSource(), "image", access);
       const audioAsset = audio ? await uploadStudioAsset(audio, "audio", access) : undefined;
-      const recipe = recipeForModel(videoModels.find((item) => item.id === model), aspect, duration, sourceSize);
+      const selected = videoModels.find((item) => item.id === model);
+      const submittedPreset: VideoPreset = qualityModesDistinct(selected) ? preset : "fast_upscaled";
+      const recipe = studioClipSettings(selected, aspect, duration, sourceSize, submittedPreset);
       const input = {
         model,
         prompt: prompt.trim(),
         sourceAssetId: sourceAsset.id,
         audioAssetId: audioAsset?.id,
-        preset,
+        preset: submittedPreset,
         aspectRatio: aspect,
         durationSeconds: duration,
         seed: seed.trim() ? Number(seed) : undefined,
@@ -492,10 +464,10 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
             <details className="studio-video-advanced">
               <summary><SlidersHorizontal size={16} aria-hidden="true" /> Model, audio & advanced settings</summary>
               <div className="video-control-section video-option-grid">
-              <label>Model<select required value={model} onChange={(event) => { const next = videoModels.find((item) => item.id === event.target.value); setModel(event.target.value); setMotionPreset(""); setDuration(isLtx23Model(next) ? 9 : 8); }}>{videoModels.map((item) => <option key={item.id} value={item.id}>{videoModelLabel(item)}</option>)}</select></label>
+              <label>Model<select required value={model} onChange={(event) => { const next = videoModels.find((item) => item.id === event.target.value); setModel(event.target.value); setMotionPreset(""); setDuration(isLtx23Model(next) ? 9 : 8); if (!qualityModesDistinct(next)) setPreset("fast_upscaled"); }}>{videoModels.map((item) => <option key={item.id} value={item.id}>{videoModelLabel(item)}</option>)}</select></label>
               {wanMotionPresets.length > 0 && <label>Motion preset<select value={motionPreset} onChange={(event) => setMotionPreset(event.target.value)}><option value="">None</option>{wanMotionPresets.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</select></label>}
               <label>Optional audio<input type="file" accept="audio/*" onChange={(event) => setAudio(event.target.files?.[0] || null)} /></label>
-              <fieldset className="studio-video-preset"><legend>Quality preset</legend><div className="video-segments"><button type="button" aria-pressed={preset === "fast_upscaled"} className={preset === "fast_upscaled" ? "active" : ""} onClick={() => setPreset("fast_upscaled")}>Fast Upscaled</button><button type="button" aria-pressed={preset === "native_quality"} className={preset === "native_quality" ? "active" : ""} onClick={() => setPreset("native_quality")}>Native Quality</button></div></fieldset>
+              <fieldset className="studio-video-preset"><legend>Quality preset</legend><div className="video-segments"><button type="button" aria-pressed={activePreset === "fast_upscaled"} className={activePreset === "fast_upscaled" ? "active" : ""} onClick={() => setPreset("fast_upscaled")}>Fast Upscaled</button><button type="button" aria-pressed={activePreset === "native_quality"} className={activePreset === "native_quality" ? "active" : ""} disabled={!distinctQuality} title={distinctQuality ? undefined : WAN_SINGLE_QUALITY_HINT} onClick={() => setPreset("native_quality")}>Native Quality</button></div>{!distinctQuality && <p className="video-recipe-note">{WAN_SINGLE_QUALITY_HINT}</p>}</fieldset>
               <label>Seed<input type="number" min={0} value={seed} onChange={(event) => setSeed(event.target.value)} placeholder="Random" /></label>
               <label className="motion-control" htmlFor="video-source-preservation">Source preservation <output>{motion.toFixed(2)}</output><input id="video-source-preservation" type="range" min={0.1} max={1} step={0.05} value={motion} onChange={(event) => setMotion(Number(event.target.value))} /></label>
               </div>
@@ -507,6 +479,7 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
               <button className="video-submit" type="submit" disabled={busy || pendingSubmission || !model || !capabilities?.video_v2_available || !prompt.trim() || (!source && !sourceUrl.trim())}>{busy ? "Submitting..." : "Generate clip"}</button>
               {job && !finalStates.has(job.status) && <button className="video-cancel" type="button" onClick={cancel} disabled={busy} aria-label="Cancel active job">Cancel</button>}
             </div>
+            {selectedModelAudioNotice && <p className="video-recipe-note" role="status">{selectedModelAudioNotice}</p>}
             {recipeNote && <p className="video-recipe-note">{recipeNote}</p>}
           </form>
 
@@ -516,6 +489,7 @@ function VideoWorkspace({ accountId, request }: { accountId?: string; request?: 
               <Link href="/account/deleted">Deleted creations<ArrowUpRight size={15} aria-hidden="true" /></Link>
             </div>}
             {deleteNotice && <p role="status">{deleteNotice}</p>}
+            {clipAudioNotice && <p className="video-recipe-note" role="status">{clipAudioNotice}</p>}
             {!job && !sourcePreview ? <div className="studio-video-inspiration"><div><Image src="/create/coastal-light.webp" alt="Sunlit Mediterranean coast" fill sizes="(max-width: 760px) 100vw, 700px" /><span>AI-made inspiration · still image</span></div><h2>Every scene starts somewhere.</h2><p>Choose your starting frame and describe the motion. Your clip will appear here.</p></div> : <div className={`video-frame aspect-${frameAspect.replace(":", "-")}`}>
               {output ? <video src={output} controls playsInline /> : sourcePreview ? <img src={sourcePreview} alt="Video source" /> : <div className="video-empty">No active render</div>}
             </div>}

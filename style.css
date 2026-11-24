@@ -1496,6 +1496,11 @@ main,
   font-weight: 700;
 }
 
+.video-segments button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .motion-control {
   grid-column: 1 / -1;
   grid-template-columns: 1fr auto !important;
