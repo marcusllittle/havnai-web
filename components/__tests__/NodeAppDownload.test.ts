@@ -24,6 +24,9 @@ describe("classifyAsset", () => {
   it("ignores assets that are not installers", () => {
     expect(classifyAsset("SHA256SUMS.txt")).toBeNull();
     expect(classifyAsset("source.tar.gz")).toBeNull();
+    expect(classifyAsset("HavnAI Node_0.2.0.dmg")).toBeNull();
+    expect(classifyAsset("HavnAI Node_0.2.0_arm64.dmg")).toBe("macos-arm");
+    expect(classifyAsset("HavnAI Node_0.2.0_x86_64.dmg")).toBe("macos-intel");
   });
 });
 
@@ -53,7 +56,6 @@ describe("toDownloadOptions", () => {
 describe("detectPlatform", () => {
   it("recognises the common desktop systems", () => {
     expect(detectPlatform("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe("windows");
-    expect(detectPlatform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")).toBe("macos-arm");
     expect(detectPlatform("Mozilla/5.0 (X11; Linux x86_64)")).toBe("linux-deb");
   });
 
@@ -63,6 +65,7 @@ describe("detectPlatform", () => {
 
   it("keeps all platforms available when the device is unrecognised", () => {
     expect(detectPlatform("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)")).toBeNull();
+    expect(detectPlatform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")).toBeNull();
   });
 
   it("does not mistake iOS's Mac OS compatibility text for a desktop", () => {
