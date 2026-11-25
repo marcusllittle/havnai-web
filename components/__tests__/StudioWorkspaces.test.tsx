@@ -88,8 +88,8 @@ describe("Studio workspaces", () => {
   it("submits Wan 2.2 or LTX-2.3 at the measured frame settings", async () => {
     vi.mocked(fetchVideoCapabilities).mockResolvedValue({
       models: [
-        { id: "wan22-i2v-a14b", available: true, capabilities: ["image_to_video"], pipeline: "wan22-i2v", model_family: "wan22_i2v", credit_cost: 12 },
-        { id: "ltx23_wangp_distilled", available: true, capabilities: ["image_to_video"], pipeline: "ltx23_wangp", model_family: "ltx23_wangp", credit_cost: 5 },
+        { id: "wan22-i2v-a14b", available: true, capabilities: ["image_to_video"], declared_capabilities: ["image_to_video"], pipeline: "wan22-i2v", model_family: "wan22_i2v", credit_cost: 12 },
+        { id: "ltx23_wangp_distilled", available: true, capabilities: ["image_to_video", "native_audio"], declared_capabilities: ["image_to_video", "native_audio"], pipeline: "ltx23_wangp", model_family: "ltx23_wangp", credit_cost: 5, video_defaults: { width: 448, height: 832, frames: 217, fps: 24, steps: 8, guidance: 1, audio: true } },
       ],
       nodes: [],
       video_v2_available: true,
@@ -130,6 +130,48 @@ describe("Studio workspaces", () => {
       model: "ltx23_wangp_distilled", aspectRatio: "16:9", durationSeconds: 9,
       width: 832, height: 448, frames: 217, fps: 24, steps: 8, guidance: 1,
     }), "test-only-key");
+    expect(container.textContent).not.toContain("does not generate audio");
+    const details = container.querySelector<HTMLDetailsElement>(".studio-video-advanced")!;
+    await act(async () => details.querySelector("summary")!.click());
+    await act(async () => button("Native Quality").click());
+    expect(container.textContent).toContain("native quality renders at 1280×704");
+    expect(container.textContent).toContain("no upscale");
+    await act(async () => button("Generate clip").click());
+    expect(createVideoJob).toHaveBeenLastCalledWith(expect.objectContaining({
+      model: "ltx23_wangp_distilled", preset: "native_quality",
+      width: 1280, height: 704, frames: 217, fps: 24, steps: 8, guidance: 1,
+    }), "test-only-key");
+    const wanModel = container.querySelectorAll<HTMLSelectElement>("select")[1];
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(wanModel, "wan22-i2v-a14b");
+      wanModel.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const native = button("Native Quality");
+    expect(native.disabled).toBe(true);
+    expect(container.textContent).toContain("Native Quality is not available");
+    await act(async () => native.click());
+    await act(async () => button("Generate clip").click());
+    expect(createVideoJob).toHaveBeenLastCalledWith(expect.objectContaining({
+      model: "wan22-i2v-a14b", preset: "fast_upscaled",
+      width: 832, height: 480, frames: 129, fps: 16, steps: 4, guidance: 1,
+    }), "test-only-key");
+  });
+
+  it("shows when audio was requested but the clip does not include it", async () => {
+    vi.mocked(fetchVideoCapabilities).mockResolvedValue({
+      models: [{ id: "ltx23_wangp_distilled", available: true, capabilities: ["image_to_video", "native_audio"], declared_capabilities: ["native_audio"], pipeline: "ltx23_wangp", model_family: "ltx23_wangp", video_defaults: { width: 448, height: 832, frames: 217, fps: 24, steps: 8, guidance: 1, audio: true } }],
+      nodes: [],
+      video_v2_available: true,
+      video_v2_enabled: true,
+    });
+    vi.mocked(fetchV1Jobs).mockResolvedValue([{
+      id: "silent-clip", status: "succeeded", stage: "completed", progress: 100, model: "ltx23_wangp_distilled",
+      resolved_spec: { parameters: { audio_asset_id: "uploaded-track" } },
+      artifacts: [{ id: "video-1", kind: "video", filename: "clip.mp4", sha256: "abc", metadata: { metrics: { native_audio: false } } }],
+    }]);
+    await act(async () => root.render(<VideoStudioPage />));
+    expect(container.textContent).toContain("Audio was requested, but this clip does not include it.");
+    expect(container.textContent).not.toContain("does not generate audio");
   });
 
   it("keeps generation unavailable when the studio has no video capacity", async () => {

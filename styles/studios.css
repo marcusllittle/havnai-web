@@ -92,6 +92,7 @@
 .studio-workspace-video .video-segments { height: 46px; border-radius: 9px; border-color: var(--studio-line); }
 .studio-workspace-video .video-segments button { min-height: 44px; background: #10161d; color: var(--studio-muted); }
 .studio-workspace-video .video-segments button.active { background: #2c3b49; color: #d1e3f6; font-weight: 500; }
+.studio-workspace-video .video-segments button:disabled { opacity: 0.45; cursor: not-allowed; }
 .studio-video-advanced { margin: -10px 0 15px; }
 .studio-video-advanced summary { display: flex; align-items: center; gap: 8px; min-height: 48px; color: var(--studio-muted); font-size: 12px; cursor: pointer; list-style: none; }
 .studio-video-advanced summary::after { content: "+"; margin-left: auto; font-size: 18px; }
